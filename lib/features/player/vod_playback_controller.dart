@@ -49,10 +49,12 @@ class VodPlaybackController extends ChangeNotifier {
         }
       }),
       engine.duration.listen((d) {
-        if (d > Duration.zero) {
-          _duration = d;
-          _markOpened();
-        }
+        // Al reabrir, media_kit emite duración 0: se ignora. La posición
+        // pendiente se aplica solo con la duración válida de la apertura
+        // actual (con la anterior, el salto se perdía antes de cargar).
+        if (d <= Duration.zero) return;
+        _duration = d;
+        _markOpened();
         _maybeResume();
       }),
       engine.completed.listen((done) {
@@ -151,9 +153,11 @@ class VodPlaybackController extends ChangeNotifier {
     final url = _url;
     if (_disposed || url == null) return;
     _cancelTimers();
-    _generation++;
+    final generation = ++_generation;
     _started = false;
     _hasPlayed = false;
+    // Duración de la apertura anterior: no sirve para esta.
+    _duration = Duration.zero;
     _setStatus(
       _attempt == 0
           ? VodPlaybackStatus.connecting
@@ -163,6 +167,9 @@ class VodPlaybackController extends ChangeNotifier {
     try {
       await engine.open(url);
     } on Object catch (e) {
+      // Fallo tardío de una apertura anterior (p. ej. el episodio que ya se
+      // cambió): no debe reconectar el contenido actual.
+      if (generation != _generation) return;
       AppLogger.w('No se pudo abrir el video', e);
       _reconnect('open');
     }

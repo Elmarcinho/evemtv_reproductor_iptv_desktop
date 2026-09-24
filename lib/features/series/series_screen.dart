@@ -6,6 +6,7 @@ import '../../domain/entities/favorite.dart';
 import '../../domain/entities/vod.dart';
 import '../catalog/catalog_providers.dart';
 import '../catalog/catalog_screen.dart';
+import '../favorites/favorites.dart';
 
 class SeriesScreen extends StatelessWidget {
   const SeriesScreen({super.key});
@@ -30,6 +31,7 @@ class SeriesScreen extends StatelessWidget {
           context.push(AppRoutes.seriesDetail, extra: series),
       favoriteKind: FavoriteKind.series,
       fromFavorite: (f) => f.toSeries(),
+      resolvedFavoritesProvider: resolvedSeriesFavoritesProvider,
       idOf: (s) => s.id,
       favoritesEmptyMessage:
           'Todavía no tienes series favoritas.\n'

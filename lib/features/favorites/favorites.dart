@@ -4,9 +4,10 @@ import '../../core/logging/app_logger.dart';
 import '../../data/providers.dart';
 import '../../domain/entities/favorite.dart';
 import '../../domain/entities/live.dart';
-import '../../domain/entities/source_credentials.dart';
 import '../../domain/entities/vod.dart';
 import '../auth/application/session.dart';
+import '../catalog/catalog_providers.dart';
+import '../live/live_providers.dart';
 
 /// Id de la categoría virtual "Favoritos" en En vivo, Películas y Series.
 const String favoritesCategoryId = '__favoritos__';
@@ -30,7 +31,75 @@ final favoriteIdsProvider = Provider.family<Set<String>, FavoriteKind>((
   return {for (final f in list) f.itemId};
 });
 
-/// Agregar y quitar favoritos del perfil activo.
+/// Completa los favoritos con los datos del catálogo (logo, póster,
+/// puntaje), buscándolos en la lista de su categoría. Esas listas ya quedan
+/// en memoria durante la sesión, así que no se repiten descargas. Si algo
+/// no se encuentra, se usa el favorito tal cual (sin imagen).
+Future<List<T>> _resolve<T>(
+  Ref ref,
+  List<Favorite> favorites,
+  Future<List<T>> Function(String categoryId) loadCategory,
+  String Function(T item) idOf,
+  T Function(Favorite favorite) fallback,
+) async {
+  final byId = <String, T>{};
+  final categories = {for (final f in favorites) ?f.categoryId};
+  for (final categoryId in categories) {
+    try {
+      for (final item in await loadCategory(categoryId)) {
+        byId[idOf(item)] = item;
+      }
+    } on Object catch (e) {
+      // La imagen es opcional: una categoría que falla no bloquea la lista.
+      AppLogger.w('No se pudieron completar favoritos', e);
+    }
+  }
+  return [for (final f in favorites) byId[f.itemId] ?? fallback(f)];
+}
+
+final resolvedLiveFavoritesProvider =
+    FutureProvider.autoDispose<List<LiveChannel>>((ref) async {
+      final favorites = await ref.watch(
+        favoritesProvider(FavoriteKind.live).future,
+      );
+      return _resolve(
+        ref,
+        favorites,
+        (id) => ref.watch(liveChannelsProvider(id).future),
+        (c) => c.id,
+        (f) => f.toChannel(),
+      );
+    });
+
+final resolvedMovieFavoritesProvider =
+    FutureProvider.autoDispose<List<VodItem>>((ref) async {
+      final favorites = await ref.watch(
+        favoritesProvider(FavoriteKind.movie).future,
+      );
+      return _resolve(
+        ref,
+        favorites,
+        (id) => ref.watch(vodItemsProvider(id).future),
+        (m) => m.id,
+        (f) => f.toMovie(),
+      );
+    });
+
+final resolvedSeriesFavoritesProvider =
+    FutureProvider.autoDispose<List<SeriesItem>>((ref) async {
+      final favorites = await ref.watch(
+        favoritesProvider(FavoriteKind.series).future,
+      );
+      return _resolve(
+        ref,
+        favorites,
+        (id) => ref.watch(seriesItemsProvider(id).future),
+        (s) => s.id,
+        (f) => f.toSeries(),
+      );
+    });
+
+/// Agregar y quitar favoritos del perfil activo. No se guarda ninguna URL.
 class FavoritesService {
   FavoritesService(this._ref);
 
@@ -43,8 +112,8 @@ class FavoritesService {
       kind: FavoriteKind.live,
       itemId: c.id,
       name: c.name,
+      categoryId: c.categoryId,
       number: c.number,
-      imageUrl: safeImageUrl(c.logoUrl),
       addedAt: DateTime.now(),
     ),
   );
@@ -56,7 +125,7 @@ class FavoritesService {
       kind: FavoriteKind.movie,
       itemId: m.id,
       name: m.name,
-      imageUrl: safeImageUrl(m.posterUrl),
+      categoryId: m.categoryId,
       containerExtension: m.containerExtension,
       year: m.year,
       addedAt: DateTime.now(),
@@ -70,7 +139,7 @@ class FavoritesService {
       kind: FavoriteKind.series,
       itemId: s.id,
       name: s.name,
-      imageUrl: safeImageUrl(s.posterUrl),
+      categoryId: s.categoryId,
       year: s.year,
       addedAt: DateTime.now(),
     ),
@@ -92,27 +161,25 @@ class FavoritesService {
     }
     AppLogger.event('favorite.toggle', {'kind': kind, 'added': !isFavorite});
   }
-
-  /// La URL de la imagen solo se guarda si no revela el servidor ni las
-  /// credenciales de la sesión: la base local no debe guardar el host del
-  /// panel (spec de seguridad). Si no, el favorito se muestra con un ícono.
-  String? safeImageUrl(String? url) {
-    if (url == null) return null;
-    final uri = Uri.tryParse(url);
-    final credentials = _ref.read(sessionProvider)?.credentials;
-    if (uri == null || credentials == null) return null;
-    final serverHost = switch (credentials) {
-      XtreamCredentials(:final server) => server.host,
-      M3uCredentials(:final playlist) => playlist.host,
-    };
-    if (uri.host.toLowerCase() == serverHost.toLowerCase()) return null;
-    for (final secret in credentials.secrets) {
-      if (secret.length >= 3 && url.contains(secret)) return null;
-    }
-    return url;
-  }
 }
 
 final favoritesServiceProvider = Provider<FavoritesService>(
   FavoritesService.new,
 );
+
+/// Lista a mostrar: la versión completada con el catálogo si ya está lista
+/// y corresponde a los mismos favoritos; si no, la básica al instante.
+List<T> preferResolved<T>(
+  List<Favorite> favorites,
+  List<T>? resolved,
+  String Function(T item) idOf,
+  T Function(Favorite favorite) fallback,
+) {
+  if (resolved != null &&
+      resolved.length == favorites.length &&
+      Iterable<int>.generate(favorites.length)
+          .every((i) => idOf(resolved[i]) == favorites[i].itemId)) {
+    return resolved;
+  }
+  return [for (final f in favorites) fallback(f)];
+}

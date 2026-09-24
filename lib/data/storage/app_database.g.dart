@@ -615,12 +615,12 @@ class $FavoritesTable extends Favorites
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _imageUrlMeta = const VerificationMeta(
-    'imageUrl',
+  static const VerificationMeta _categoryIdMeta = const VerificationMeta(
+    'categoryId',
   );
   @override
-  late final GeneratedColumn<String> imageUrl = GeneratedColumn<String>(
-    'image_url',
+  late final GeneratedColumn<String> categoryId = GeneratedColumn<String>(
+    'category_id',
     aliasedName,
     true,
     type: DriftSqlType.string,
@@ -672,7 +672,7 @@ class $FavoritesTable extends Favorites
     kind,
     itemId,
     name,
-    imageUrl,
+    categoryId,
     number,
     containerExtension,
     year,
@@ -714,10 +714,10 @@ class $FavoritesTable extends Favorites
     } else if (isInserting) {
       context.missing(_nameMeta);
     }
-    if (data.containsKey('image_url')) {
+    if (data.containsKey('category_id')) {
       context.handle(
-        _imageUrlMeta,
-        imageUrl.isAcceptableOrUnknown(data['image_url']!, _imageUrlMeta),
+        _categoryIdMeta,
+        categoryId.isAcceptableOrUnknown(data['category_id']!, _categoryIdMeta),
       );
     }
     if (data.containsKey('number')) {
@@ -776,9 +776,9 @@ class $FavoritesTable extends Favorites
         DriftSqlType.string,
         data['${effectivePrefix}name'],
       )!,
-      imageUrl: attachedDatabase.typeMapping.read(
+      categoryId: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
-        data['${effectivePrefix}image_url'],
+        data['${effectivePrefix}category_id'],
       ),
       number: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
@@ -813,7 +813,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
   final FavoriteKind kind;
   final String itemId;
   final String name;
-  final String? imageUrl;
+  final String? categoryId;
   final int? number;
   final String? containerExtension;
   final int? year;
@@ -823,7 +823,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
     required this.kind,
     required this.itemId,
     required this.name,
-    this.imageUrl,
+    this.categoryId,
     this.number,
     this.containerExtension,
     this.year,
@@ -840,8 +840,8 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
     }
     map['item_id'] = Variable<String>(itemId);
     map['name'] = Variable<String>(name);
-    if (!nullToAbsent || imageUrl != null) {
-      map['image_url'] = Variable<String>(imageUrl);
+    if (!nullToAbsent || categoryId != null) {
+      map['category_id'] = Variable<String>(categoryId);
     }
     if (!nullToAbsent || number != null) {
       map['number'] = Variable<int>(number);
@@ -862,9 +862,9 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
       kind: Value(kind),
       itemId: Value(itemId),
       name: Value(name),
-      imageUrl: imageUrl == null && nullToAbsent
+      categoryId: categoryId == null && nullToAbsent
           ? const Value.absent()
-          : Value(imageUrl),
+          : Value(categoryId),
       number: number == null && nullToAbsent
           ? const Value.absent()
           : Value(number),
@@ -888,7 +888,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
       ),
       itemId: serializer.fromJson<String>(json['itemId']),
       name: serializer.fromJson<String>(json['name']),
-      imageUrl: serializer.fromJson<String?>(json['imageUrl']),
+      categoryId: serializer.fromJson<String?>(json['categoryId']),
       number: serializer.fromJson<int?>(json['number']),
       containerExtension: serializer.fromJson<String?>(
         json['containerExtension'],
@@ -907,7 +907,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
       ),
       'itemId': serializer.toJson<String>(itemId),
       'name': serializer.toJson<String>(name),
-      'imageUrl': serializer.toJson<String?>(imageUrl),
+      'categoryId': serializer.toJson<String?>(categoryId),
       'number': serializer.toJson<int?>(number),
       'containerExtension': serializer.toJson<String?>(containerExtension),
       'year': serializer.toJson<int?>(year),
@@ -920,7 +920,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
     FavoriteKind? kind,
     String? itemId,
     String? name,
-    Value<String?> imageUrl = const Value.absent(),
+    Value<String?> categoryId = const Value.absent(),
     Value<int?> number = const Value.absent(),
     Value<String?> containerExtension = const Value.absent(),
     Value<int?> year = const Value.absent(),
@@ -930,7 +930,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
     kind: kind ?? this.kind,
     itemId: itemId ?? this.itemId,
     name: name ?? this.name,
-    imageUrl: imageUrl.present ? imageUrl.value : this.imageUrl,
+    categoryId: categoryId.present ? categoryId.value : this.categoryId,
     number: number.present ? number.value : this.number,
     containerExtension: containerExtension.present
         ? containerExtension.value
@@ -944,7 +944,9 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
       kind: data.kind.present ? data.kind.value : this.kind,
       itemId: data.itemId.present ? data.itemId.value : this.itemId,
       name: data.name.present ? data.name.value : this.name,
-      imageUrl: data.imageUrl.present ? data.imageUrl.value : this.imageUrl,
+      categoryId: data.categoryId.present
+          ? data.categoryId.value
+          : this.categoryId,
       number: data.number.present ? data.number.value : this.number,
       containerExtension: data.containerExtension.present
           ? data.containerExtension.value
@@ -961,7 +963,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
           ..write('kind: $kind, ')
           ..write('itemId: $itemId, ')
           ..write('name: $name, ')
-          ..write('imageUrl: $imageUrl, ')
+          ..write('categoryId: $categoryId, ')
           ..write('number: $number, ')
           ..write('containerExtension: $containerExtension, ')
           ..write('year: $year, ')
@@ -976,7 +978,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
     kind,
     itemId,
     name,
-    imageUrl,
+    categoryId,
     number,
     containerExtension,
     year,
@@ -990,7 +992,7 @@ class FavoriteRow extends DataClass implements Insertable<FavoriteRow> {
           other.kind == this.kind &&
           other.itemId == this.itemId &&
           other.name == this.name &&
-          other.imageUrl == this.imageUrl &&
+          other.categoryId == this.categoryId &&
           other.number == this.number &&
           other.containerExtension == this.containerExtension &&
           other.year == this.year &&
@@ -1002,7 +1004,7 @@ class FavoritesCompanion extends UpdateCompanion<FavoriteRow> {
   final Value<FavoriteKind> kind;
   final Value<String> itemId;
   final Value<String> name;
-  final Value<String?> imageUrl;
+  final Value<String?> categoryId;
   final Value<int?> number;
   final Value<String?> containerExtension;
   final Value<int?> year;
@@ -1013,7 +1015,7 @@ class FavoritesCompanion extends UpdateCompanion<FavoriteRow> {
     this.kind = const Value.absent(),
     this.itemId = const Value.absent(),
     this.name = const Value.absent(),
-    this.imageUrl = const Value.absent(),
+    this.categoryId = const Value.absent(),
     this.number = const Value.absent(),
     this.containerExtension = const Value.absent(),
     this.year = const Value.absent(),
@@ -1025,7 +1027,7 @@ class FavoritesCompanion extends UpdateCompanion<FavoriteRow> {
     required FavoriteKind kind,
     required String itemId,
     required String name,
-    this.imageUrl = const Value.absent(),
+    this.categoryId = const Value.absent(),
     this.number = const Value.absent(),
     this.containerExtension = const Value.absent(),
     this.year = const Value.absent(),
@@ -1041,7 +1043,7 @@ class FavoritesCompanion extends UpdateCompanion<FavoriteRow> {
     Expression<String>? kind,
     Expression<String>? itemId,
     Expression<String>? name,
-    Expression<String>? imageUrl,
+    Expression<String>? categoryId,
     Expression<int>? number,
     Expression<String>? containerExtension,
     Expression<int>? year,
@@ -1053,7 +1055,7 @@ class FavoritesCompanion extends UpdateCompanion<FavoriteRow> {
       if (kind != null) 'kind': kind,
       if (itemId != null) 'item_id': itemId,
       if (name != null) 'name': name,
-      if (imageUrl != null) 'image_url': imageUrl,
+      if (categoryId != null) 'category_id': categoryId,
       if (number != null) 'number': number,
       if (containerExtension != null) 'container_extension': containerExtension,
       if (year != null) 'year': year,
@@ -1067,7 +1069,7 @@ class FavoritesCompanion extends UpdateCompanion<FavoriteRow> {
     Value<FavoriteKind>? kind,
     Value<String>? itemId,
     Value<String>? name,
-    Value<String?>? imageUrl,
+    Value<String?>? categoryId,
     Value<int?>? number,
     Value<String?>? containerExtension,
     Value<int?>? year,
@@ -1079,7 +1081,7 @@ class FavoritesCompanion extends UpdateCompanion<FavoriteRow> {
       kind: kind ?? this.kind,
       itemId: itemId ?? this.itemId,
       name: name ?? this.name,
-      imageUrl: imageUrl ?? this.imageUrl,
+      categoryId: categoryId ?? this.categoryId,
       number: number ?? this.number,
       containerExtension: containerExtension ?? this.containerExtension,
       year: year ?? this.year,
@@ -1105,8 +1107,8 @@ class FavoritesCompanion extends UpdateCompanion<FavoriteRow> {
     if (name.present) {
       map['name'] = Variable<String>(name.value);
     }
-    if (imageUrl.present) {
-      map['image_url'] = Variable<String>(imageUrl.value);
+    if (categoryId.present) {
+      map['category_id'] = Variable<String>(categoryId.value);
     }
     if (number.present) {
       map['number'] = Variable<int>(number.value);
@@ -1133,7 +1135,7 @@ class FavoritesCompanion extends UpdateCompanion<FavoriteRow> {
           ..write('kind: $kind, ')
           ..write('itemId: $itemId, ')
           ..write('name: $name, ')
-          ..write('imageUrl: $imageUrl, ')
+          ..write('categoryId: $categoryId, ')
           ..write('number: $number, ')
           ..write('containerExtension: $containerExtension, ')
           ..write('year: $year, ')
@@ -1618,7 +1620,7 @@ typedef $$FavoritesTableCreateCompanionBuilder = FavoritesCompanion Function({
   required FavoriteKind kind,
   required String itemId,
   required String name,
-  Value<String?> imageUrl,
+  Value<String?> categoryId,
   Value<int?> number,
   Value<String?> containerExtension,
   Value<int?> year,
@@ -1630,7 +1632,7 @@ typedef $$FavoritesTableUpdateCompanionBuilder = FavoritesCompanion Function({
   Value<FavoriteKind> kind,
   Value<String> itemId,
   Value<String> name,
-  Value<String?> imageUrl,
+  Value<String?> categoryId,
   Value<int?> number,
   Value<String?> containerExtension,
   Value<int?> year,
@@ -1685,8 +1687,8 @@ class $$FavoritesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get imageUrl => $composableBuilder(
-    column: $table.imageUrl,
+  ColumnFilters<String> get categoryId => $composableBuilder(
+    column: $table.categoryId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1758,8 +1760,8 @@ class $$FavoritesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get imageUrl => $composableBuilder(
-    column: $table.imageUrl,
+  ColumnOrderings<String> get categoryId => $composableBuilder(
+    column: $table.categoryId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -1825,8 +1827,10 @@ class $$FavoritesTableAnnotationComposer
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
 
-  GeneratedColumn<String> get imageUrl =>
-      $composableBuilder(column: $table.imageUrl, builder: (column) => column);
+  GeneratedColumn<String> get categoryId => $composableBuilder(
+    column: $table.categoryId,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get number =>
       $composableBuilder(column: $table.number, builder: (column) => column);
@@ -1898,7 +1902,7 @@ class $$FavoritesTableTableManager
                 Value<FavoriteKind> kind = const Value.absent(),
                 Value<String> itemId = const Value.absent(),
                 Value<String> name = const Value.absent(),
-                Value<String?> imageUrl = const Value.absent(),
+                Value<String?> categoryId = const Value.absent(),
                 Value<int?> number = const Value.absent(),
                 Value<String?> containerExtension = const Value.absent(),
                 Value<int?> year = const Value.absent(),
@@ -1909,7 +1913,7 @@ class $$FavoritesTableTableManager
                 kind: kind,
                 itemId: itemId,
                 name: name,
-                imageUrl: imageUrl,
+                categoryId: categoryId,
                 number: number,
                 containerExtension: containerExtension,
                 year: year,
@@ -1922,7 +1926,7 @@ class $$FavoritesTableTableManager
                 required FavoriteKind kind,
                 required String itemId,
                 required String name,
-                Value<String?> imageUrl = const Value.absent(),
+                Value<String?> categoryId = const Value.absent(),
                 Value<int?> number = const Value.absent(),
                 Value<String?> containerExtension = const Value.absent(),
                 Value<int?> year = const Value.absent(),
@@ -1933,7 +1937,7 @@ class $$FavoritesTableTableManager
                 kind: kind,
                 itemId: itemId,
                 name: name,
-                imageUrl: imageUrl,
+                categoryId: categoryId,
                 number: number,
                 containerExtension: containerExtension,
                 year: year,

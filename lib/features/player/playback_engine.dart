@@ -29,6 +29,24 @@ class MediaKitEngine implements PlaybackEngine {
 
   final Player player;
 
+  /// Propiedades de mpv que se fijan al crear el reproductor.
+  ///
+  /// - `tls-verify=yes`: mpv trae la verificación de certificados
+  ///   DESACTIVADA por defecto. Sin esto, un intermediario con un
+  ///   certificado falso recibiría las URLs con credenciales. La validación
+  ///   de Dio no cubre las conexiones de mpv.
+  /// - User-Agent propio y neutral; cortes detectados en 15 s.
+  static Map<String, String> mpvProperties({String? caFile}) => {
+    'tls-verify': 'yes',
+    'tls-ca-file': ?caFile,
+    'user-agent': AppConfig.userAgent,
+    'network-timeout': '15',
+  };
+
+  /// Certificados raíz para mpv, si la plataforma los necesita (ver
+  /// `tls_ca_bundle.dart`). Se fija una vez al arrancar.
+  static String? caFile;
+
   static Future<MediaKitEngine> create() async {
     final player = Player(
       configuration: const PlayerConfiguration(
@@ -38,10 +56,18 @@ class MediaKitEngine implements PlaybackEngine {
       ),
     );
     final platform = player.platform;
-    if (platform is NativePlayer) {
-      // User-Agent propio y neutral, y cortes detectados en 15 s.
-      await platform.setProperty('user-agent', AppConfig.userAgent);
-      await platform.setProperty('network-timeout', '15');
+    if (platform is! NativePlayer) {
+      await player.dispose();
+      throw StateError('Plataforma no soportada');
+    }
+    for (final entry in mpvProperties(caFile: caFile).entries) {
+      await platform.setProperty(entry.key, entry.value);
+    }
+    // Comprobación: si mpv no aceptó la verificación TLS, no se reproduce.
+    final verify = await platform.getProperty('tls-verify');
+    if (verify != 'yes') {
+      await player.dispose();
+      throw StateError('mpv no activó la verificación TLS');
     }
     return MediaKitEngine._(player);
   }
@@ -64,8 +90,21 @@ class MediaKitEngine implements PlaybackEngine {
   @override
   Stream<Duration> get duration => player.stream.duration;
 
+  /// Abre [url] SIN `player.open`: media_kit 1.2.6 escribe la lista de
+  /// reproducción (con la URL completa, credenciales incluidas) en un
+  /// archivo temporal y lo borra 5 s después. Aquí la URL va directo a mpv
+  /// como argumento de `loadfile`, sin tocar el disco. `stop()` y `play()`
+  /// mantienen el estado interno de media_kit igual que `open`.
   @override
-  Future<void> open(Uri url) => player.open(Media(url.toString()));
+  Future<void> open(Uri url) async {
+    await player.stop();
+    await (player.platform! as NativePlayer).command([
+      'loadfile',
+      url.toString(),
+      'replace',
+    ]);
+    await player.play();
+  }
 
   @override
   Future<void> seek(Duration position) => player.seek(position);

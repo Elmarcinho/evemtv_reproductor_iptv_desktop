@@ -39,7 +39,11 @@ class _LiveSource extends FakeSource {
   }
 
   @override
-  Future<List<EpgEntry>> shortEpg(LiveChannel channel, {int limit = 4}) async {
+  Future<List<EpgEntry>> shortEpg(
+    LiveChannel channel, {
+    int limit = 4,
+    bool Function()? isCancelled,
+  }) async {
     final now = DateTime.now();
     return [
       EpgEntry(

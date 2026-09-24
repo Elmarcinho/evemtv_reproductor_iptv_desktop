@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderListenable;
 import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
@@ -46,6 +47,7 @@ class CatalogScreen<T> extends ConsumerStatefulWidget {
     required this.onOpen,
     required this.favoriteKind,
     required this.fromFavorite,
+    required this.resolvedFavoritesProvider,
     required this.idOf,
     required this.favoritesEmptyMessage,
     this.icon = Icons.movie_outlined,
@@ -64,6 +66,9 @@ class CatalogScreen<T> extends ConsumerStatefulWidget {
   /// Favoritos: categoría fija "Favoritos" y marca ★ en los pósters.
   final FavoriteKind favoriteKind;
   final T Function(Favorite favorite) fromFavorite;
+
+  /// Favoritos completados con el catálogo (imágenes, puntaje).
+  final ProviderListenable<AsyncValue<List<T>>> resolvedFavoritesProvider;
   final String Function(T item) idOf;
   final String favoritesEmptyMessage;
 
@@ -195,7 +200,12 @@ class _CatalogScreenState<T> extends ConsumerState<CatalogScreen<T>> {
         ? ref
               .watch(favoritesProvider(widget.favoriteKind))
               .whenData(
-                (list) => [for (final f in list) widget.fromFavorite(f)],
+                (list) => preferResolved(
+                  list,
+                  ref.watch(widget.resolvedFavoritesProvider).value,
+                  widget.idOf,
+                  widget.fromFavorite,
+                ),
               )
         : ref.watch(provider);
     final favoriteIds = ref.watch(favoriteIdsProvider(widget.favoriteKind));

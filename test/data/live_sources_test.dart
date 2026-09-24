@@ -194,7 +194,7 @@ void main() {
         'Canal Dos, con coma',
         'Nombre por atributo',
         'Canal con EXTGRP',
-        'sin-extinf',
+        'Canal sin nombre',
         'Película Ficticia',
         'Episodio Ficticio',
         'Canal Uno repetido',
@@ -256,7 +256,7 @@ void main() {
         'Canal Dos, con coma',
         'Nombre por atributo',
         'Canal con EXTGRP',
-        'sin-extinf',
+        'Canal sin nombre',
       ]);
       expect(await source.liveChannels(categoryId: 'Noticias'), hasLength(1));
       // La lista se descarga una sola vez por sesión.

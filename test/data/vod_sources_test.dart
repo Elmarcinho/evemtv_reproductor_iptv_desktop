@@ -243,7 +243,8 @@ void main() {
         'Otra Película',
       ]);
       expect(movies.first.year, 2022);
-      expect(movies.first.containerExtension, 'mkv');
+      // En M3U no se deriva nada de la URL (tampoco la extensión).
+      expect(movies.first.containerExtension, isNull);
       expect(movies.first.id, startsWith('m3u:'));
       expect(
         source.movieStream(movies.first).urls.single.toString(),

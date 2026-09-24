@@ -25,8 +25,13 @@ abstract interface class ContentSource {
   Future<List<LiveChannel>> liveChannels({String? categoryId});
 
   /// Programa actual y siguientes de un canal (EPG corta). Lista vacía si la
-  /// fuente no tiene guía para ese canal.
-  Future<List<EpgEntry>> shortEpg(LiveChannel channel, {int limit = 4});
+  /// fuente no tiene guía para ese canal. [isCancelled] se consulta antes
+  /// de hacer la petición: si ya nadie la necesita, no se hace.
+  Future<List<EpgEntry>> shortEpg(
+    LiveChannel channel, {
+    int limit = 4,
+    bool Function()? isCancelled,
+  });
 
   /// URLs para reproducir un canal. [allowedFormats] son los formatos que
   /// permite la cuenta (`allowed_output_formats`); vacío = desconocidos.
@@ -59,4 +64,8 @@ abstract interface class ContentSource {
   Future<SeriesDetail> seriesDetail(SeriesItem series);
 
   PlaybackCandidates episodeStream(Episode episode);
+
+  /// Libera la fuente al terminar la sesión: cancela el trabajo pendiente
+  /// para que no siga haciendo peticiones con credenciales anteriores.
+  void dispose();
 }

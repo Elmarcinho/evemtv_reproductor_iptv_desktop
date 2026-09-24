@@ -93,12 +93,14 @@ abstract final class M3uParser {
 
   static M3uEntry _entry(Uri url, _Pending? info, String? extgrp) {
     final attrs = info?.attributes ?? const <String, String>{};
-    final name =
-        _clean(info?.title) ?? _clean(attrs['tvg-name']) ?? _nameFromUrl(url);
+    final title = _clean(info?.title) ?? _clean(attrs['tvg-name']);
+    final kind = guessKind(url, title);
     return M3uEntry(
-      name: name,
+      // Sin título: nombre genérico. NUNCA algo derivado de la URL (el
+      // último segmento puede ser un token), ni en pantalla ni en favoritos.
+      name: title ?? untitled(kind),
       url: url,
-      kind: guessKind(url),
+      kind: kind,
       group: _clean(attrs['group-title']) ?? extgrp,
       logoUrl: _httpUri(attrs['tvg-logo'])?.toString(),
       tvgId: _clean(attrs['tvg-id']),
@@ -137,16 +139,36 @@ abstract final class M3uParser {
 
   /// Deduce si es vivo, película o serie por la URL (rutas estilo Xtream o
   /// extensión de archivo de video).
-  static M3uKind guessKind(Uri url) {
+  ///
+  /// Un nombre de episodio (`S01E02`, `1x02`) indica serie aunque la ruta no
+  /// tenga `/series/`, salvo que la URL sea claramente de vivo (`/live/`,
+  /// `.m3u8`, `.ts`).
+  static M3uKind guessKind(Uri url, [String? name]) {
     final path = url.path.toLowerCase();
     if (path.contains('/series/')) return M3uKind.series;
-    if (path.contains('/movie/')) return M3uKind.movie;
     final dot = path.lastIndexOf('.');
-    if (dot >= 0 && _vodExtensions.contains(path.substring(dot + 1))) {
-      return M3uKind.movie;
+    final ext = dot < 0 ? '' : path.substring(dot + 1);
+    final looksLive = path.contains('/live/') || ext == 'm3u8' || ext == 'ts';
+    if (name != null && !looksLive && episodePattern.hasMatch(name.trim())) {
+      return M3uKind.series;
     }
+    if (path.contains('/movie/')) return M3uKind.movie;
+    if (_vodExtensions.contains(ext)) return M3uKind.movie;
     return M3uKind.live;
   }
+
+  /// `Nombre S01E02`, `Nombre - S1 E2 - Título`, `Nombre 1x02`.
+  /// Grupos: 1 serie, 2/4 temporada, 3/5 episodio, 6 título.
+  static final RegExp episodePattern = RegExp(
+    r'^(.*?)[\s._\-–|:]*(?:[Ss](\d{1,2})[\s._-]*[Ee](\d{1,4})|(\d{1,2})x(\d{1,4}))\b[\s._\-–|:]*(.*)$',
+  );
+
+  /// Nombre genérico para entradas sin título.
+  static String untitled(M3uKind kind) => switch (kind) {
+    M3uKind.live => 'Canal sin nombre',
+    M3uKind.movie => 'Película sin título',
+    M3uKind.series => 'Serie sin título',
+  };
 
   static Uri? _streamUri(String line) {
     final uri = Uri.tryParse(line);
@@ -169,20 +191,6 @@ abstract final class M3uParser {
   static String? _clean(String? value) {
     final text = value?.trim();
     return (text == null || text.isEmpty) ? null : text;
-  }
-
-  /// Último segmento sin extensión. Nunca la URL completa (puede tener
-  /// credenciales).
-  static String _nameFromUrl(Uri url) {
-    final String? last;
-    try {
-      last = url.pathSegments.where((s) => s.isNotEmpty).lastOrNull;
-    } on FormatException {
-      return 'Canal sin nombre';
-    }
-    if (last == null) return 'Canal sin nombre';
-    final dot = last.lastIndexOf('.');
-    return dot > 0 ? last.substring(0, dot) : last;
   }
 }
 

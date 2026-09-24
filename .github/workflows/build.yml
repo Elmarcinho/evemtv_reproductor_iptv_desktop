@@ -19,6 +19,9 @@ concurrency:
 
 env:
   FLUTTER_VERSION: '3.47.5'
+  # Video de prueba (sintético) servido por HTTPS con certificado válido,
+  # del commit exacto: prueba (b) de integration_test/playback_tls_test.dart.
+  TLS_VALID_URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/integration_test/assets/tls_probe.mkv
 
 jobs:
   analyze-test:
@@ -32,7 +35,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y clang cmake ninja-build pkg-config \
-            libgtk-3-dev libmpv-dev libsecret-1-dev
+            libgtk-3-dev libmpv-dev libsecret-1-dev xvfb
 
       - uses: subosito/flutter-action@v2
         with:
@@ -57,6 +60,14 @@ jobs:
       - name: Compilar Linux
         run: flutter build linux --release
 
+      # mpv real: rechaza certificados no confiables, acepta los válidos y
+      # no deja la URL en archivos temporales. (La prueba del almacén seguro
+      # no corre aquí: el runner no tiene un llavero activo.)
+      - name: TLS y archivos temporales de mpv
+        run: >
+          xvfb-run -a flutter test integration_test/playback_tls_test.dart
+          -d linux --dart-define=TLS_VALID_URL=${{ env.TLS_VALID_URL }}
+
   build-windows:
     name: Compilar Windows
     runs-on: windows-latest
@@ -75,8 +86,10 @@ jobs:
       - name: Compilar Windows
         run: flutter build windows --release
 
-      - name: Almacén seguro real (DPAPI)
-        run: flutter test integration_test -d windows
+      - name: Almacén seguro real (DPAPI), TLS y temporales de mpv
+        run: >
+          flutter test integration_test -d windows
+          --dart-define=TLS_VALID_URL=${{ env.TLS_VALID_URL }}
 
   build-macos:
     name: Compilar macOS
@@ -105,5 +118,7 @@ jobs:
 
       # Valida que el Keychain funcione con firma ad-hoc (sin Team ID), con
       # usesDataProtectionKeychain: false, igual que en la app.
-      - name: Keychain real con firma ad-hoc
-        run: flutter test integration_test -d macos
+      - name: Keychain real con firma ad-hoc, TLS y temporales de mpv
+        run: >
+          flutter test integration_test -d macos
+          --dart-define=TLS_VALID_URL=${{ env.TLS_VALID_URL }}

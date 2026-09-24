@@ -75,5 +75,10 @@ final sessionProvider = NotifierProvider<SessionController, Session?>(
 final contentSourceProvider = Provider<ContentSource?>((ref) {
   final session = ref.watch(sessionProvider);
   if (session == null) return null;
-  return ref.watch(contentSourceFactoryProvider).create(session.credentials);
+  final source = ref
+      .watch(contentSourceFactoryProvider)
+      .create(session.credentials);
+  // Al cambiar o terminar la sesión: cancela la cola pendiente (EPG).
+  ref.onDispose(source.dispose);
+  return source;
 });

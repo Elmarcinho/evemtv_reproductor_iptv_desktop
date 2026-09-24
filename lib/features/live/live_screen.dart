@@ -241,7 +241,14 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     final channels = isFavorites
         ? ref
               .watch(favoritesProvider(FavoriteKind.live))
-              .whenData((list) => [for (final f in list) f.toChannel()])
+              .whenData(
+                (list) => preferResolved(
+                  list,
+                  ref.watch(resolvedLiveFavoritesProvider).value,
+                  (c) => c.id,
+                  (f) => f.toChannel(),
+                ),
+              )
         : ref.watch(liveChannelsProvider(categoryId));
     return channels.when(
       loading: () => const LoadingView(message: 'Cargando canales…'),

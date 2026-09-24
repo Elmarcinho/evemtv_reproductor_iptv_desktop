@@ -35,11 +35,6 @@ class M3uCatalog {
   /// Id de canal, película o episodio → URL del stream.
   final Map<String, Uri> urls;
 
-  /// `Nombre S01E02`, `Nombre - S1 E2 - Título`, `Nombre 1x02`.
-  static final RegExp _episodePattern = RegExp(
-    r'^(.*?)[\s._\-–|:]*(?:[Ss](\d{1,2})[\s._-]*[Ee](\d{1,4})|(\d{1,2})x(\d{1,4}))\b[\s._\-–|:]*(.*)$',
-  );
-
   static final RegExp _yearPattern = RegExp(r'[\(\[](\d{4})[\)\]]');
 
   static M3uCatalog build(M3uPlaylist playlist) {
@@ -84,7 +79,6 @@ class M3uCatalog {
               name: entry.name,
               posterUrl: entry.logoUrl,
               categoryId: categoryOf(entry, vodCategories),
-              containerExtension: _extension(entry.url),
               year: _year(entry.name),
             ),
           );
@@ -107,7 +101,6 @@ class M3uCatalog {
               season: parsed.season ?? 1,
               number: parsed.episode ?? builder.count + 1,
               title: parsed.title ?? entry.name,
-              containerExtension: _extension(entry.url),
             ),
           );
       }
@@ -137,7 +130,7 @@ class M3uCatalog {
   /// Si no reconoce el patrón, todo el nombre es la serie.
   static ({String show, int? season, int? episode, String? title})
   parseEpisodeName(String name) {
-    final m = _episodePattern.firstMatch(name.trim());
+    final m = M3uParser.episodePattern.firstMatch(name.trim());
     if (m == null) {
       return (show: name.trim(), season: null, episode: null, title: null);
     }
@@ -149,14 +142,6 @@ class M3uCatalog {
       episode: int.tryParse(m.group(3) ?? m.group(5) ?? ''),
       title: (title == null || title.isEmpty) ? null : title,
     );
-  }
-
-  static String? _extension(Uri url) {
-    final path = url.path;
-    final dot = path.lastIndexOf('.');
-    if (dot < 0) return null;
-    final ext = path.substring(dot + 1).toLowerCase();
-    return RegExp(r'^[a-z0-9]{1,5}$').hasMatch(ext) ? ext : null;
   }
 
   static int? _year(String name) {

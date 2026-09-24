@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/logging/app_logger.dart';
+import '../../core/utils/task_pool.dart';
 import '../../domain/entities/live.dart';
 import '../auth/application/session.dart';
 
@@ -31,20 +32,30 @@ final liveChannelsProvider = FutureProvider.family<List<LiveChannel>, String?>((
 });
 
 /// EPG corta de un canal. Es informativa: si falla, lista vacía (la fila
-/// simplemente no muestra programa). Se guarda 5 minutos tras dejar de
-/// usarse para no repetir peticiones al hacer scroll.
+/// simplemente no muestra programa). Lo obtenido se guarda 5 minutos tras
+/// dejar de usarse para no repetir peticiones al hacer scroll.
 final shortEpgProvider = FutureProvider.autoDispose
     .family<List<EpgEntry>, LiveChannel>((ref, channel) async {
       final source = ref.watch(contentSourceProvider);
       if (source == null) return const [];
-      final link = ref.keepAlive();
-      final timer = Timer(const Duration(minutes: 5), link.close);
-      ref.onDispose(timer.cancel);
+      // Si la fila deja de verse antes de que le toque el turno, la
+      // petición se descarta (evita colas largas al recorrer la lista).
+      var disposed = false;
+      ref.onDispose(() => disposed = true);
       try {
-        return await source.shortEpg(channel);
+        final result = await source.shortEpg(
+          channel,
+          isCancelled: () => disposed,
+        );
+        // Solo lo obtenido se conserva 5 minutos.
+        final link = ref.keepAlive();
+        final timer = Timer(const Duration(minutes: 5), link.close);
+        ref.onDispose(timer.cancel);
+        return result;
+      } on TaskCancelledException {
+        return const [];
       } on Object catch (e) {
         AppLogger.w('EPG corta no disponible', e);
-        link.close();
         return const [];
       }
     });

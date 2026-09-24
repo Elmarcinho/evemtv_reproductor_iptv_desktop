@@ -80,8 +80,16 @@ class M3uSource implements ContentSource {
       _filter((await _catalog()).channels, categoryId, (c) => c.categoryId);
 
   @override
-  Future<List<EpgEntry>> shortEpg(LiveChannel channel, {int limit = 4}) async =>
-      const [];
+  Future<List<EpgEntry>> shortEpg(
+    LiveChannel channel, {
+    int limit = 4,
+    bool Function()? isCancelled,
+  }) async => const [];
+
+  /// No hay trabajo en segundo plano que cancelar: el catálogo se libera
+  /// junto con la fuente.
+  @override
+  void dispose() {}
 
   @override
   PlaybackCandidates liveStream(

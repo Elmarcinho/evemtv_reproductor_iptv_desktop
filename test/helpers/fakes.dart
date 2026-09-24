@@ -134,11 +134,22 @@ class InMemoryFavoritesRepository implements FavoritesRepository {
   final _changes = StreamController<void>.broadcast();
 
   @override
-  Stream<List<Favorite>> watch(int profileId, FavoriteKind kind) async* {
-    yield List.of(_data[(profileId, kind)] ?? const []);
-    await for (final _ in _changes.stream) {
-      yield List.of(_data[(profileId, kind)] ?? const []);
-    }
+  Stream<List<Favorite>> watch(int profileId, FavoriteKind kind) {
+    List<Favorite> snapshot() => List.of(_data[(profileId, kind)] ?? const []);
+    StreamSubscription<void>? changes;
+    late final StreamController<List<Favorite>> controller;
+    controller = StreamController<List<Favorite>>(
+      onListen: () {
+        controller.add(snapshot());
+        // Suscripción inmediata: no se pierde ningún cambio.
+        changes = _changes.stream.listen((_) => controller.add(snapshot()));
+      },
+      onCancel: () async {
+        await changes?.cancel();
+        await controller.close();
+      },
+    );
+    return controller.stream;
   }
 
   @override

@@ -27,8 +27,7 @@ class AppSettings extends Table {
   Set<Column<Object>> get primaryKey => {key};
 }
 
-/// Favoritos por perfil. Sin URLs de stream ni credenciales: la imagen solo
-/// se guarda si no revela el servidor (ver `FavoritesService`).
+/// Favoritos por perfil. Sin ninguna URL (ni de stream ni de imagen).
 @DataClassName('FavoriteRow')
 class Favorites extends Table {
   IntColumn get profileId =>
@@ -36,7 +35,7 @@ class Favorites extends Table {
   TextColumn get kind => textEnum<FavoriteKind>()();
   TextColumn get itemId => text()();
   TextColumn get name => text()();
-  TextColumn get imageUrl => text().nullable()();
+  TextColumn get categoryId => text().nullable()();
   IntColumn get number => integer().nullable()();
   TextColumn get containerExtension => text().nullable()();
   IntColumn get year => integer().nullable()();
@@ -52,15 +51,24 @@ class Favorites extends Table {
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
-  /// 1: perfiles y preferencias. 2: favoritos.
+  /// 1: perfiles y preferencias. 2: favoritos. 3: favoritos sin URL de
+  /// imagen y con categoría (la imagen se resuelve desde el catálogo).
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
     onUpgrade: (m, from, to) async {
-      if (from < 2) await m.createTable(favorites);
+      if (from < 2) {
+        await m.createTable(favorites);
+      } else if (from < 3) {
+        // Recrea la tabla: se descarta la columna image_url (y sus URLs) y
+        // se agrega category_id. Los favoritos se conservan.
+        await m.alterTable(
+          TableMigration(favorites, newColumns: [favorites.categoryId]),
+        );
+      }
     },
     // Necesario para que funcione el borrado en cascada por perfil.
     beforeOpen: (details) async {

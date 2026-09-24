@@ -83,8 +83,15 @@ class FakeSource implements ContentSource {
   Future<List<LiveChannel>> liveChannels({String? categoryId}) =>
       throw UnimplementedError();
   @override
-  Future<List<EpgEntry>> shortEpg(LiveChannel channel, {int limit = 4}) =>
-      throw UnimplementedError();
+  Future<List<EpgEntry>> shortEpg(
+    LiveChannel channel, {
+    int limit = 4,
+    bool Function()? isCancelled,
+  }) => throw UnimplementedError();
+
+  var disposed = false;
+  @override
+  void dispose() => disposed = true;
 
   @override
   Future<List<ContentCategory>> vodCategories() => throw UnimplementedError();

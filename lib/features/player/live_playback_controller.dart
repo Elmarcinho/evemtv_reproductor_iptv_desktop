@@ -43,6 +43,7 @@ class LivePlaybackController extends ChangeNotifier {
     _subscriptions.addAll([
       engine.playing.listen((playing) {
         _isPlaying = playing;
+        if (!playing) _stableTimer?.cancel();
         _onPlaying(playing);
       }),
       engine.position.listen((p) {
@@ -177,7 +178,7 @@ class LivePlaybackController extends ChangeNotifier {
     AppLogger.event('player.open', {
       'kind': 'live',
       'channel': channel.id,
-      'format': _formatOf(url),
+      'format': formatLabel(url),
       'attempt': _attempt,
     });
     try {
@@ -193,18 +194,33 @@ class LivePlaybackController extends ChangeNotifier {
     if (!playing || !_opened || _status == LivePlaybackStatus.failed) return;
     _stallTimer?.cancel();
     _setStatus(LivePlaybackStatus.playing);
+    _armStable();
+  }
+
+  /// El contador de intentos vuelve a cero solo tras [stableAfter] de
+  /// reproducción EFECTIVA y continua: cualquier carga o pausa lo reinicia.
+  /// Así, un canal que alterna 15 s bien y 15 s trabado no puede reintentar
+  /// indefinidamente.
+  void _armStable() {
     _stableTimer?.cancel();
+    if (!_isPlaying || _isBuffering || !_opened) return;
     _stableTimer = Timer(stableAfter, () => _attempt = 0);
   }
 
+  bool _isBuffering = false;
+
   void _onBuffering(bool buffering) {
+    _isBuffering = buffering;
     if (_status == LivePlaybackStatus.failed) return;
     _stallTimer?.cancel();
     if (buffering) {
+      _stableTimer?.cancel();
       final generation = _generation;
       _stallTimer = Timer(stallTimeout, () {
         if (generation == _generation) _reconnect('stall');
       });
+    } else if (_status == LivePlaybackStatus.playing) {
+      _armStable();
     }
   }
 
@@ -268,10 +284,21 @@ class LivePlaybackController extends ChangeNotifier {
     _setStatus(LivePlaybackStatus.failed);
   }
 
-  static String _formatOf(Uri url) {
+  /// Formatos que se registran en los logs. Conjunto CERRADO: nada que
+  /// venga de la URL (p. ej. `auth.php/usuario/clave`) puede llegar al log.
+  static const Set<String> _knownFormats = {
+    'm3u8', 'ts', 'mp4', 'mkv', 'avi', 'mov', 'webm', 'flv', 'mpd', //
+  };
+
+  /// Formato del stream para el log: la extensión del último segmento si es
+  /// uno de [_knownFormats]; si no, `otro`.
+  @visibleForTesting
+  static String formatLabel(Uri url) {
     final path = url.path;
-    final dot = path.lastIndexOf('.');
-    return dot < 0 ? 'otro' : path.substring(dot + 1);
+    final last = path.substring(path.lastIndexOf('/') + 1).toLowerCase();
+    final dot = last.lastIndexOf('.');
+    final ext = dot < 0 ? '' : last.substring(dot + 1);
+    return _knownFormats.contains(ext) ? ext : 'otro';
   }
 
   void _setStatus(LivePlaybackStatus status) {

@@ -56,16 +56,23 @@ class XtreamSource implements ContentSource {
       );
 
   @override
-  Future<List<EpgEntry>> shortEpg(LiveChannel channel, {int limit = 4}) =>
-      _epgPool.run(
-        () async => XtreamLiveParser.shortEpg(
-          await _client.get(
-            'get_short_epg',
-            params: {'stream_id': channel.id, 'limit': '$limit'},
-            maxRetries: 0,
-          ),
-        ),
-      );
+  Future<List<EpgEntry>> shortEpg(
+    LiveChannel channel, {
+    int limit = 4,
+    bool Function()? isCancelled,
+  }) => _epgPool.run(
+    isCancelled: isCancelled,
+    () async => XtreamLiveParser.shortEpg(
+      await _client.get(
+        'get_short_epg',
+        params: {'stream_id': channel.id, 'limit': '$limit'},
+        maxRetries: 0,
+      ),
+    ),
+  );
+
+  @override
+  void dispose() => _epgPool.cancelAll();
 
   @override
   PlaybackCandidates liveStream(

@@ -312,17 +312,45 @@ Solo compila y prueba; el empaquetado y la publicación son de la Fase 5.
 ## 11. Favoritos (adelantado de la Fase 4)
 
 - Canales, películas y series, **por perfil**, en la tabla `favorites` de
-  drift (esquema v2, con migración desde v1 que conserva los datos). Se
-  borran al cerrar sesión o eliminar el perfil (en la misma transacción y,
-  además, con borrado en cascada).
+  drift. Se borran al cerrar sesión o eliminar el perfil (en la misma
+  transacción y, además, con borrado en cascada).
 - Se marcan con ★ en el panel del canal y en las fichas; se ven en la
-  categoría fija **Favoritos** de En vivo, Películas y Series, y los
-  elementos marcados llevan una ★.
-- Se guarda lo mínimo para mostrar y reproducir sin volver a descargar el
-  catálogo: id, nombre, número de canal, extensión del archivo y año. **Nunca
-  la URL del stream.**
-- **Imágenes:** los logos y pósters suelen estar en el mismo servidor del
-  panel, y la base no debe guardar su host (sección 4). La URL de la imagen
-  solo se guarda si no apunta al servidor ni contiene credenciales; si no,
-  el favorito se muestra con un ícono genérico.
+  categoría fija **Favoritos** de En vivo, Películas y Series.
+- Se guarda lo mínimo: id, nombre, categoría, número de canal, extensión y
+  año. **Ninguna URL**, ni de stream ni de imagen: los logos y pósters
+  suelen estar en el servidor del panel o llevar tokens (incluso
+  codificados), y ningún filtro puede garantizar que no contengan
+  credenciales. La imagen se resuelve en memoria desde la lista de la
+  categoría del favorito, que ya queda cacheada durante la sesión.
+- Esquema: v2 creó la tabla; v3 descarta la columna `image_url` (y las URLs
+  que hubiera) y agrega `category_id`, conservando los favoritos.
+
+## 12. Revisión de las Fases 2 y 3: reglas adicionales
+
+- **TLS en mpv:** mpv trae `tls-verify=no` por defecto y la validación de
+  Dio no cubre sus conexiones. Se fija `tls-verify=yes` al crear cada
+  reproductor y se comprueba que quedó activa (si no, no se reproduce). El
+  workflow prueba en Linux, Windows y macOS con el mpv real que un
+  certificado autofirmado se rechaza **sin que llegue la petición** y que un
+  HTTPS válido sigue reproduciendo (`integration_test/playback_tls_test.dart`).
+- **Sin archivos temporales con la URL:** `player.open` de media_kit 1.2.6
+  escribe la lista (con la URL y sus credenciales) en un archivo temporal y
+  lo borra 5 s después. Se abre con `loadfile` directo a mpv, sin tocar el
+  disco; `stop()`/`play()` mantienen el estado de media_kit. La misma prueba
+  de integración verifica que no queda nada en el directorio temporal.
+- **Nada derivado de las URLs** llega a logs, pantalla ni base: el formato
+  del log sale de un conjunto cerrado (`m3u8`, `ts`, `mp4`…; si no, `otro`);
+  las entradas M3U sin título reciben un nombre genérico ("Canal sin
+  nombre", "Película sin título"); en M3U tampoco se deriva la extensión.
+- **Cola de EPG cancelable:** además del límite de 4 simultáneas, cada
+  petición en espera se descarta si su fila ya no se ve, y al terminar la
+  sesión la fuente cancela toda la cola (`ContentSource.dispose`).
+- **Vivo, "estable":** el contador de reintentos vuelve a cero solo tras
+  30 s de reproducción continua; carga o pausa reinician la cuenta.
+- **VOD:** la posición pendiente se aplica con la duración de la apertura
+  actual (media_kit emite 0 al reabrir); un fallo tardío de una apertura
+  anterior no reinicia el contenido actual.
+- **Series:** en M3U se reconocen por el nombre (`S01E02`, `1x02`) aunque la
+  ruta no tenga `/series/` (salvo URLs claramente de vivo). En Xtream, una
+  lista de listas sin `season` toma las temporadas declaradas.
 

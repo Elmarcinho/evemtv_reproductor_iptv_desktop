@@ -6,6 +6,7 @@ import '../../domain/entities/favorite.dart';
 import '../../domain/entities/vod.dart';
 import '../catalog/catalog_providers.dart';
 import '../catalog/catalog_screen.dart';
+import '../favorites/favorites.dart';
 
 class MoviesScreen extends StatelessWidget {
   const MoviesScreen({super.key});
@@ -29,6 +30,7 @@ class MoviesScreen extends StatelessWidget {
           context.push(AppRoutes.movieDetail, extra: movie),
       favoriteKind: FavoriteKind.movie,
       fromFavorite: (f) => f.toMovie(),
+      resolvedFavoritesProvider: resolvedMovieFavoritesProvider,
       idOf: (m) => m.id,
       favoritesEmptyMessage:
           'Todavía no tienes películas favoritas.\n'

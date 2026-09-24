@@ -118,11 +118,20 @@ abstract final class XtreamVodParser {
         }
       }
     } else {
+      // Lista de listas: cada lista interna es una temporada. Si sus
+      // episodios no traen `season`, se toma la i-ésima temporada declarada
+      // en `seasons` (o i + 1 si no hay declaradas), para no mezclarlas.
+      final declared = seasonMeta.keys.toList()..sort();
+      var listIndex = 0;
       for (final item in JsonRead.list(episodes)) {
         if (item is List) {
+          final fallback = listIndex < declared.length
+              ? declared[listIndex]
+              : listIndex + 1;
           for (final raw in item) {
-            addEpisode(raw, null);
+            addEpisode(raw, fallback);
           }
+          listIndex++;
         } else {
           addEpisode(item, null);
         }

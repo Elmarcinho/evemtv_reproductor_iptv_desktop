@@ -7,7 +7,6 @@ import 'package:evemtv/data/storage/drift_repositories.dart';
 import 'package:evemtv/domain/entities/favorite.dart';
 import 'package:evemtv/domain/entities/live.dart';
 import 'package:evemtv/domain/entities/profile.dart';
-import 'package:evemtv/domain/entities/source_credentials.dart';
 import 'package:evemtv/domain/entities/vod.dart';
 import 'package:evemtv/features/auth/application/session.dart';
 import 'package:evemtv/features/favorites/favorites.dart';
@@ -15,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../helpers/fakes.dart';
+import '../player/live_playback_controller_test.dart' show FakeSource;
 
 Favorite fav(FavoriteKind kind, String id, {DateTime? at}) => Favorite(
   kind: kind,
@@ -101,7 +101,7 @@ void main() {
         'kind',
         'item_id',
         'name',
-        'image_url',
+        'category_id',
         'number',
         'container_extension',
         'year',
@@ -110,7 +110,7 @@ void main() {
     });
   });
 
-  test('migración: una base v1 existente gana la tabla de favoritos', () async {
+  test('migración: una base v1 existente gana la tabla de favoritos (v3)', () async {
     final executor = NativeDatabase.memory(
       setup: (raw) {
         // Esquema tal como lo dejaba la versión 1.
@@ -140,92 +140,163 @@ void main() {
         .add(profile.id, fav(FavoriteKind.live, '1'));
     expect(await db.select(db.favorites).get(), hasLength(1));
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 2);
+    expect(version.data.values.single, 3);
+  });
+
+  test('migración v2 → v3: descarta las URLs de imagen y conserva los favoritos', () async {
+    final executor = NativeDatabase.memory(
+      setup: (raw) {
+        raw.execute(
+          'CREATE TABLE profiles (id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, '
+          'name TEXT NOT NULL, type TEXT NOT NULL, created_at INTEGER NOT NULL, '
+          'last_used_at INTEGER NULL);',
+        );
+        raw.execute(
+          'CREATE TABLE app_settings (key TEXT NOT NULL, value TEXT NOT NULL, '
+          'PRIMARY KEY (key));',
+        );
+        // Tabla de favoritos tal como la dejaba la versión 2.
+        raw.execute(
+          'CREATE TABLE favorites (profile_id INTEGER NOT NULL REFERENCES '
+          'profiles (id) ON DELETE CASCADE, kind TEXT NOT NULL, item_id TEXT '
+          'NOT NULL, name TEXT NOT NULL, image_url TEXT NULL, number INTEGER '
+          'NULL, container_extension TEXT NULL, year INTEGER NULL, added_at '
+          'INTEGER NOT NULL, PRIMARY KEY (profile_id, kind, item_id));',
+        );
+        raw.execute(
+          "INSERT INTO profiles (name, type, created_at) VALUES ('A', 'xtream', 0);",
+        );
+        raw.execute(
+          "INSERT INTO favorites VALUES (1, 'movie', '501', 'Película', "
+          "'http://img.example.org/p.jpg?password=claveDemo', NULL, 'mkv', 2021, 0);",
+        );
+        raw.execute('PRAGMA user_version = 2;');
+      },
+    );
+    final db = AppDatabase(executor);
+    addTearDown(db.close);
+    final rows = await db.select(db.favorites).get();
+    expect(rows.single.itemId, '501');
+    expect(rows.single.containerExtension, 'mkv');
+    expect(rows.single.categoryId, isNull);
+    final columns = await db
+        .customSelect("SELECT name FROM pragma_table_info('favorites')")
+        .get();
+    expect(
+      columns.map((r) => r.data['name']),
+      isNot(contains('image_url')),
+      reason: 'la columna (y sus URLs) se descarta',
+    );
   });
 
   group('FavoritesService', () {
-    ProviderContainer container(SourceCredentials credentials) {
-      final c = ProviderContainer.test(
+    late ProviderContainer c;
+    late _CatalogSource source;
+
+    setUp(() {
+      source = _CatalogSource();
+      c = ProviderContainer.test(
         overrides: [
-          sessionProvider.overrideWith(() => FixedSession(credentials)),
+          sessionProvider.overrideWith(FixedSession.new),
           favoritesRepositoryProvider.overrideWithValue(
             InMemoryFavoritesRepository(),
           ),
+          contentSourceProvider.overrideWithValue(source),
         ],
       );
-      return c;
-    }
-
-    final xtream = XtreamCredentials(
-      server: Uri.parse('http://panel.example.com:8080'),
-      username: 'usuarioDemo',
-      password: 'claveDemo',
-    );
-
-    test('imágenes: no se guardan si revelan el servidor o credenciales', () {
-      final service = container(xtream).read(favoritesServiceProvider);
-      expect(
-        service.safeImageUrl('http://img.example.org/logo.png'),
-        'http://img.example.org/logo.png',
-      );
-      expect(
-        service.safeImageUrl('http://panel.example.com:8080/i/1.png'),
-        isNull,
-      );
-      expect(service.safeImageUrl('http://PANEL.example.com/i/1.png'), isNull);
-      expect(
-        service.safeImageUrl('http://img.example.org/usuarioDemo/logo.png'),
-        isNull,
-      );
-      expect(service.safeImageUrl(null), isNull);
-
-      final m3u = container(
-        M3uCredentials(
-          playlist: Uri.parse('http://lista.example.net/get.php?token=abc123'),
-        ),
-      ).read(favoritesServiceProvider);
-      expect(m3u.safeImageUrl('http://lista.example.net/logo.png'), isNull);
-      expect(m3u.safeImageUrl('http://cdn.example.org/x.png?t=abc123'), isNull);
-      expect(m3u.safeImageUrl('http://cdn.example.org/x.png'), isNotNull);
     });
 
-    test('alternar agrega y quita, con los datos para reproducir', () async {
-      final c = container(xtream);
-      final sub = c.listen(favoriteIdsProvider(FavoriteKind.movie), (_, _) {});
-      final subLive = c.listen(favoritesProvider(FavoriteKind.live), (_, _) {});
+    test('guarda categoría y datos para reproducir, ninguna URL', () async {
+      final sub = c.listen(favoritesProvider(FavoriteKind.movie), (_, _) {});
       addTearDown(sub.close);
-      addTearDown(subLive.close);
-      final service = c.read(favoritesServiceProvider);
       const movie = VodItem(
         id: '501',
         name: 'Película Ficticia',
+        categoryId: 'e',
         containerExtension: 'mkv',
         year: 2021,
-        posterUrl: 'http://panel.example.com:8080/p.jpg',
+        posterUrl: 'http://img.example.org/p.jpg?password=claveDemo',
       );
-      await service.toggleMovie(movie);
-      await c.read(favoritesProvider(FavoriteKind.movie).future);
+      await c.read(favoritesServiceProvider).toggleMovie(movie);
       await Future<void>.delayed(Duration.zero);
       final saved = c.read(favoritesProvider(FavoriteKind.movie)).value!.single;
+      expect(saved.categoryId, 'e');
       expect(saved.containerExtension, 'mkv');
-      expect(saved.year, 2021);
-      expect(saved.imageUrl, isNull, reason: 'apuntaba al servidor');
-      expect(saved.toMovie().containerExtension, 'mkv');
-      expect(c.read(favoriteIdsProvider(FavoriteKind.movie)), {'501'});
+      expect(saved.toMovie().posterUrl, isNull);
 
-      await service.toggleMovie(movie);
+      await c.read(favoritesServiceProvider).toggleMovie(movie);
       await Future<void>.delayed(Duration.zero);
-      expect(c.read(favoriteIdsProvider(FavoriteKind.movie)), isEmpty);
+      expect(c.read(favoritesProvider(FavoriteKind.movie)).value, isEmpty);
+    });
 
-      await service.toggleChannel(
-        const LiveChannel(id: '101', name: 'Canal', number: 7),
+    test('las imágenes se resuelven desde el catálogo en memoria', () async {
+      final sub = c.listen(resolvedLiveFavoritesProvider, (_, _) {});
+      addTearDown(sub.close);
+      await c
+          .read(favoritesServiceProvider)
+          .toggleChannel(
+            const LiveChannel(id: '1', name: 'Uno', categoryId: 'n'),
+          );
+      await c
+          .read(favoritesServiceProvider)
+          .toggleChannel(
+            const LiveChannel(id: '404', name: 'Ya no está', categoryId: 'n'),
+          );
+      // Espera a que la lista resuelta incluya los dos favoritos.
+      var resolved = <LiveChannel>[];
+      for (var i = 0; i < 50 && resolved.length < 2; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+        resolved = await c.read(resolvedLiveFavoritesProvider.future);
+      }
+      final byId = {for (final ch in resolved) ch.id: ch};
+      expect(byId['1']!.logoUrl, 'http://img.example.org/uno.png');
+      expect(byId['404']!.logoUrl, isNull, reason: 'sin catálogo: sin imagen');
+      expect(source.requested, ['n'], reason: 'una descarga por categoría');
+    });
+
+    test('preferResolved usa la versión completa solo si coincide', () {
+      final favorites = [
+        fav(FavoriteKind.live, 'a'),
+        fav(FavoriteKind.live, 'b'),
+      ];
+      const full = [
+        LiveChannel(
+          id: 'a',
+          name: 'A',
+          logoUrl: 'http://img.example.org/a.png',
+        ),
+        LiveChannel(id: 'b', name: 'B'),
+      ];
+      expect(
+        preferResolved(favorites, full, (c) => c.id, (f) => f.toChannel()),
+        same(full),
       );
-      await Future<void>.delayed(Duration.zero);
-      final channel = c
-          .read(favoritesProvider(FavoriteKind.live))
-          .value!
-          .single;
-      expect(channel.toChannel().number, 7);
+      expect(
+        preferResolved(
+          favorites,
+          full.sublist(0, 1),
+          (c) => c.id,
+          (f) => f.toChannel(),
+        ).map((c) => c.logoUrl),
+        [null, null],
+      );
     });
   });
+}
+
+class _CatalogSource extends FakeSource {
+  final requested = <String?>[];
+
+  @override
+  Future<List<LiveChannel>> liveChannels({String? categoryId}) async {
+    requested.add(categoryId);
+    return const [
+      LiveChannel(
+        id: '1',
+        name: 'Uno',
+        logoUrl: 'http://img.example.org/uno.png',
+      ),
+      LiveChannel(id: '2', name: 'Dos'),
+    ];
+  }
 }
