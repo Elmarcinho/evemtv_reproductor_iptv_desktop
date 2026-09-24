@@ -12,12 +12,13 @@ typedef LogSink = void Function(LogLevel level, String message);
 
 /// Logger de la app. Todo pasa por [Redactor] antes de salir.
 ///
-/// Regla: no pasar aquí cuerpos de respuesta, JSON crudo ni excepciones
-/// completas del servidor. Para errores de red, convertir primero a
-/// [AppFailure] y registrar esa. Aun así, este logger se defiende:
+/// Primera barrera: nunca registrar URLs, cuerpos de respuesta, JSON crudo ni
+/// textos externos. Usar [event] con campos propios (acción, stream_id,
+/// formato, código HTTP). Los errores de red se convierten a [AppFailure]
+/// antes de registrarse. Aun así, este logger se defiende:
 /// - [AppFailure]: solo su [AppFailure.logDescription].
-/// - Otros errores: en release solo el tipo; en debug, el texto redactado y
-///   recortado a [maxErrorLength] caracteres.
+/// - Otros errores (Dio, mpv, etc.): en release solo el tipo; en debug, el
+///   texto pasa por el redactor y se recorta a [maxErrorLength] caracteres.
 ///
 /// No envía nada fuera del equipo (sin telemetría). En release solo se
 /// registran advertencias y errores, sin stack traces.
@@ -43,6 +44,28 @@ class AppLogger {
 
   static void e(String message, [Object? error, StackTrace? stackTrace]) =>
       _log(LogLevel.error, message, error, stackTrace);
+
+  /// Forma preferida de registrar: un evento propio con campos armados por
+  /// nuestro código. Ejemplo:
+  ///
+  /// ```dart
+  /// AppLogger.event('xtream.request', {'action': 'get_live_streams', 'http': 200});
+  /// AppLogger.event('player.open', {'kind': 'live', 'stream_id': 123, 'format': 'ts'});
+  /// ```
+  ///
+  /// Nunca pasar URLs, cuerpos de respuesta ni textos externos como valores.
+  /// Los valores de tipo `String` igual pasan por el redactor.
+  static void event(
+    String name, [
+    Map<String, Object?> fields = const {},
+    LogLevel level = LogLevel.info,
+  ]) {
+    final buffer = StringBuffer(name);
+    fields.forEach((key, value) {
+      buffer.write(' $key=${value is Enum ? value.name : value}');
+    });
+    _log(level, buffer.toString());
+  }
 
   static void _log(
     LogLevel level,

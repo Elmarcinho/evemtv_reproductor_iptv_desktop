@@ -80,24 +80,74 @@ de lectura tolerantes, reforzadas por `strict-casts` en
 - **Linux:** requiere un llavero activo (GNOME Keyring o KWallet). Si no hay,
   se muestra un error claro y **no** se guarda nada en texto plano.
 
-## 5. Logs y errores
+## 5. Logs, errores y modelo de amenaza
 
-- **Primera barrera:** no registrar nunca cuerpos de respuesta, JSON crudo ni
-  excepciones completas del servidor. Los errores de red se convierten a
-  `AppFailure` antes de registrarse.
-- **Segunda barrera:** `Redactor` enmascara credenciales en todo lo que llega
-  al logger. Primero reemplaza los secretos conocidos, luego decodifica
-  (`%xx`, `\/`, `\uXXXX`) y al final aplica los patrones (rutas Xtream, pares
-  clave/valor en query, formularios, JSON y `usuario:clave@host`).
-- Los secretos de menos de 3 caracteres se enmascaran solo como palabra
-  completa: reemplazar cada aparición de una contraseña `"1"` destruiría el
-  log. Dentro de una URL igual quedan cubiertos por los patrones.
-- `AppFailure.message` es siempre un texto fijo en español. El detalle
-  técnico va en `detail` (armado por nuestro código) y solo al logger.
-- La pantalla roja de error de Flutter se reemplaza por un texto fijo, también
-  en debug.
-- En release solo se registran advertencias y errores, sin stack traces, y de
-  los errores que no son `AppFailure` solo se registra el tipo.
+### Modelo de amenaza
+
+- **Los logs son locales.** Salen por la consola de desarrollo (debug) o por
+  `dart:developer` (release). No se escriben a archivos compartidos ni se
+  envían a ningún servicio: no hay telemetría, analytics ni reportes de
+  errores remotos.
+- **Qué se protege:** que las credenciales (usuario, contraseña, URL del
+  servidor, URL M3U) terminen en un texto que el usuario copie al pedir ayuda
+  (issue en GitHub, foro, captura de pantalla) o que quede en la salida de la
+  consola.
+- **Fuera de alcance:** un atacante con acceso a la sesión del usuario o a su
+  equipo. Ese atacante puede leer el almacén seguro del sistema abierto por
+  la app o inspeccionar la memoria del proceso; el redactor no pretende
+  defender contra eso.
+
+### Primera barrera: no registrar datos externos
+
+- El código **nunca** registra URLs, cuerpos de respuesta, JSON crudo ni
+  textos externos. Se registran eventos propios y estructurados con
+  `AppLogger.event('xtream.request', {'action': …, 'http': 401})`: tipo de
+  acción, `stream_id`, formato, código HTTP.
+- Los errores de red se convierten a `AppFailure` antes de registrarse. De un
+  `AppFailure` se registra solo el tipo, el `detail` (armado por nuestro
+  código) y el tipo de la causa, nunca su texto.
+- Mensajes de Dio, mpv y otros errores externos: en release **solo el tipo**;
+  en debug pasan por la segunda barrera y se recortan a 300 caracteres.
+- `AppFailure.message` es siempre un texto fijo en español. La pantalla roja
+  de error de Flutter se reemplaza por un texto fijo, también en debug.
+- En release solo se registran advertencias y errores, sin stack traces.
+
+### Segunda barrera: `Redactor`
+
+Simple a propósito. **No decodifica la entrada** (decodificar rompía los
+límites de los campos y creaba casos nuevos cada vez).
+
+1. **Secretos registrados** (usuario, contraseña, URL del perfil activo). Al
+   registrarse se generan sus variantes: literal, percent-encoding de
+   componente y de query en mayúsculas y minúsculas, doble codificación de
+   cada una, escape JSON (`\"`, `\\`, `\n`…) combinado con `\/` y con
+   `\uXXXX` (mayúsculas o minúsculas), y la forma con `\uXXXX` para todo
+   símbolo. Se reemplazan todas, de la más larga a la más corta.
+2. **Secretos cortos** (menos de 3 caracteres): solo como token completo. El
+   límite izquierdo es el inicio del texto, un carácter no alfanumérico, una
+   secuencia `%XX` completa o un escape JSON; nunca una posición dentro de
+   `%XX`.
+3. **Patrones por formato**, cada uno sin decodificar: rutas Xtream (normal,
+   `\/` y `%2F`), query y formularios (claves con letras codificadas como
+   `%70assword`; el valor llega hasta `&`, `#`, espacio o comilla), JSON y
+   `esquema://usuario:clave@`.
+
+### Riesgo residual aceptado
+
+El redactor **no** garantiza cubrir:
+
+- Codificaciones triples o superiores, base64, u otras transformaciones de un
+  secreto no registrado.
+- Claves sensibles con separadores codificados (`%26password%3D…`) o dentro
+  de JSON escapado dentro de otro string, si el valor no es un secreto
+  registrado.
+- Credenciales de un perfil que no es el activo (sus secretos no están
+  registrados).
+- Secretos de 1–2 caracteres pegados a otro texto alfanumérico.
+
+Se acepta porque la primera barrera impide que esos textos lleguen al logger
+y porque los logs no salen del equipo. Si en el futuro se agregan logs en
+archivo o exportación de diagnósticos, este riesgo debe revisarse.
 
 ## 6. Motor de video con inicialización diferida
 

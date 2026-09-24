@@ -1,142 +1,221 @@
 import 'dart:convert';
 
-/// Enmascara credenciales en cualquier texto antes de que llegue a un log.
+/// Segunda barrera contra fugas de credenciales en los logs.
 ///
-/// Es la **segunda barrera**: la primera es no registrar nunca cuerpos de
-/// respuesta, JSON crudo ni excepciones completas del servidor.
+/// La primera barrera es no registrar nunca URLs, cuerpos de respuesta ni
+/// textos externos crudos (ver `AppLogger.event`). Este redactor cubre lo que
+/// se escape a esa regla. Modelo de amenaza y riesgo residual aceptado:
+/// `docs/decisiones.md`.
 ///
-/// Orden de trabajo (importa, ver [redact]):
-/// 1. Secretos registrados sobre el texto original (incluye sus variantes
-///    codificadas para URL).
-/// 2. Decodificación tolerante (`%xx`, `\/`, `\uXXXX`), repetida para cubrir
-///    doble codificación.
-/// 3. Secretos registrados otra vez, ya sobre el texto decodificado.
-/// 4. Patrones genéricos: rutas Xtream, pares clave/valor sensibles (query,
-///    formularios, JSON, mapas de Dart) y `usuario:clave@host`.
+/// Diseño deliberadamente simple: **nunca decodifica la entrada**.
+/// 1. Cada secreto registrado se expande al registrarse en sus
+///    representaciones habituales (literal, percent-encoding en mayúsculas y
+///    minúsculas, doble codificación, escape JSON con `\uXXXX` y barras
+///    escapadas) y se reemplazan todas, de la más larga a la más corta.
+/// 2. Después se aplican patrones independientes por formato (rutas Xtream,
+///    query/formulario, JSON, credenciales en la URL), también sin decodificar.
 class Redactor {
   Redactor._();
 
   static const String mask = '***';
 
-  /// Secretos con menos caracteres se enmascaran solo como "palabra"
-  /// completa (rodeados de caracteres no alfanuméricos): reemplazar cada
-  /// aparición de una contraseña "1" destruiría el log sin aportar nada.
+  /// Secretos más cortos se reemplazan solo como token completo: reemplazar
+  /// cada aparición de una contraseña "1" destruiría el log.
   static const int shortSecretLength = 3;
 
-  static final Map<String, RegExp> _secrets = <String, RegExp>{};
+  /// Variante → expresión compilada, ordenadas de la más larga a la más corta.
+  static final Map<String, RegExp> _secretPatterns = <String, RegExp>{};
+  static List<RegExp> _ordered = const [];
 
-  /// Rutas de reproducción `/live|movie|series|timeshift/usuario/clave/`.
-  static final RegExp _streamPath = RegExp(
-    r'/(live|movie|series|timeshift)/[^/\s?#]+/[^/\s?#]+/',
+  /// Límite izquierdo de un token: inicio del texto, un carácter que no es
+  /// alfanumérico ni `%` ni `\`, o justo después de una secuencia completa
+  /// `%XX`, un escape JSON (`\n`, `\\`, `\"`, `\/`…) o un `\uXXXX`. Así un
+  /// secreto corto nunca empieza dentro de una secuencia `%XX`.
+  static const String _tokenStart =
+      r'(?:^|(?<=[^A-Za-z0-9%\\])|(?<=%[0-9A-Fa-f]{2})'
+      r'|(?<=\\[nrtbf"\\/])|(?<=\\u[0-9A-Fa-f]{4}))';
+  static const String _tokenEnd = r'(?![A-Za-z0-9])';
+
+  static const List<String> _sensitiveKeys = [
+    'username',
+    'password',
+    'passwd',
+    'pass',
+    'pwd',
+    'user',
+    'token',
+    'auth',
+    'key',
+  ];
+
+  static const String _streamKinds = '(live|movie|series|timeshift)';
+
+  /// `/live/u/p/`, sin decodificar.
+  static final RegExp _pathPlain = RegExp(
+    '/$_streamKinds/[^/\\s?#"\'\\\\]+/[^/\\s?#"\'\\\\]+/',
     caseSensitive: false,
   );
 
-  /// Clave sensible con su valor, con o sin comillas, separada por `=` o `:`.
-  /// Cubre `?password=x`, `password=x` (formulario), `"password":"x"`,
-  /// `"password": 123` y `{password: x}`.
-  static final RegExp _sensitivePair = RegExp(
-    r'''(["']?)\b(username|password|passwd|pass|pwd|user|token|auth|key)\1(\s*[:=]\s*)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^&#\s,;}\])]*)''',
+  /// `\/live\/u\/p\/` (barras escapadas de JSON).
+  static final RegExp _pathJson = RegExp(
+    r'\\/'
+    '$_streamKinds'
+    r'\\/(?:(?!\\/)[^\s"])+\\/(?:(?!\\/)[^\s"])+\\/',
     caseSensitive: false,
   );
 
-  /// `esquema://usuario:clave@host` o `esquema://usuario@host`.
+  /// `%2Flive%2Fu%2Fp%2F` (mayúsculas o minúsculas).
+  static final RegExp _pathEncoded = RegExp(
+    '%2F$_streamKinds%2F(?:(?!%2F)[^\\s/?#&"\'])+%2F(?:(?!%2F)[^\\s/?#&"\'])+%2F',
+    caseSensitive: false,
+  );
+
+  /// Query o formulario: `?password=…`, `&user=…`, `password=…` al inicio o
+  /// tras un espacio. La clave puede venir con letras codificadas
+  /// (`%70assword`). El valor llega hasta `&`, `#`, espacio o comilla: `,`
+  /// `;` y `)` son parte del valor.
+  static final RegExp _queryPair = RegExp(
+    '((?:^|[?&\\s])(?:${_sensitiveKeys.map(_encodableKey).join('|')})=)'
+    '[^&#\\s"\']*',
+    caseSensitive: false,
+  );
+
+  /// JSON: `"password": "…"` (con escapes) o `"password": 123`.
+  static final RegExp _jsonPair = RegExp(
+    '("(?:${_sensitiveKeys.join('|')})"\\s*:\\s*)'
+    r'("(?:[^"\\]|\\.)*"|[^,}\]\s]+)',
+    caseSensitive: false,
+  );
+
+  /// `esquema://usuario:clave@`, también con `:\/\/` o `%3A%2F%2F`.
   static final RegExp _userInfo = RegExp(
-    r'([a-z][a-z0-9+.\-]*://)[^/@\s]+@',
+    r'([a-z][a-z0-9+.\-]*(?::\/\/|:\\\/\\\/|%3A%2F%2F))[^/@\s"\\]+@',
     caseSensitive: false,
   );
 
-  static final RegExp _percentRun = RegExp(r'(?:%[0-9a-fA-F]{2})+');
-  static final RegExp _unicodeEscape = RegExp(r'\\u([0-9a-fA-F]{4})');
+  /// `username` → `(?:u|%75)(?:s|%73)…` para aceptar letras codificadas.
+  static String _encodableKey(String key) => key.codeUnits
+      .map(
+        (c) =>
+            '(?:${String.fromCharCode(c)}|%${c.toRadixString(16).padLeft(2, '0')})',
+      )
+      .join();
 
   /// Registra un valor que nunca debe aparecer en logs (usuario, contraseña,
-  /// URL del perfil activo). Se guardan también sus variantes codificadas.
+  /// URL del perfil activo) junto con todas sus variantes.
   static void registerSecret(String? value) {
     if (value == null || value.isEmpty) return;
-    final variants = <String>{
-      value,
-      if (value.trim().isNotEmpty) value.trim(),
-      Uri.encodeComponent(value),
-      Uri.encodeQueryComponent(value),
-      value.replaceAll(' ', '+'),
-    };
-    for (final v in variants) {
-      if (v.isEmpty) continue;
-      _secrets[v] = RegExp(
-        v.length < shortSecretLength
-            ? '(?<![A-Za-z0-9])${RegExp.escape(v)}(?![A-Za-z0-9])'
-            : RegExp.escape(v),
+    final short = value.length < shortSecretLength;
+    for (final variant in variantsOf(value)) {
+      final escaped = RegExp.escape(variant);
+      _secretPatterns[variant] = RegExp(
+        short ? '$_tokenStart$escaped$_tokenEnd' : escaped,
       );
     }
+    final keys = _secretPatterns.keys.toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+    _ordered = [for (final k in keys) _secretPatterns[k]!];
   }
 
   /// Olvida todos los secretos registrados (al cerrar sesión o cambiar perfil).
-  static void clearSecrets() => _secrets.clear();
-
-  /// Devuelve [input] con todas las credenciales conocidas enmascaradas.
-  ///
-  /// El resultado puede quedar decodificado (`%2F` → `/`); para un log es
-  /// aceptable y además más legible.
-  static String redact(String input) {
-    if (input.isEmpty) return input;
-    // Secretos primero: si un patrón corta un valor con espacios, el resto
-    // del secreto ya no coincidiría y se filtraría.
-    var out = _replaceSecrets(input);
-    out = _decode(out);
-    out = _replaceSecrets(out);
-    return out
-        .replaceAllMapped(_streamPath, (m) => '/${m[1]}/$mask/$mask/')
-        .replaceAllMapped(_sensitivePair, _maskPair)
-        .replaceAllMapped(_userInfo, (m) => '${m[1]}$mask@');
+  static void clearSecrets() {
+    _secretPatterns.clear();
+    _ordered = const [];
   }
 
-  static String _maskPair(Match m) {
-    final quote = m[1]!;
-    final value = m[4]!;
-    final maskedValue = value.startsWith('"')
-        ? '"$mask"'
-        : value.startsWith("'")
-        ? "'$mask'"
-        : mask;
-    return '$quote${m[2]}$quote${m[3]}$maskedValue';
-  }
+  /// Representaciones de [secret] que se buscan en el texto.
+  static Set<String> variantsOf(String secret) {
+    final out = <String>{secret};
 
-  static String _replaceSecrets(String input) {
-    if (_secrets.isEmpty) return input;
-    var out = input;
-    // Del más largo al más corto: un secreto contenido en otro no debe dejar
-    // restos del más largo sin enmascarar.
-    final ordered = _secrets.entries.toList()
-      ..sort((a, b) => b.key.length.compareTo(a.key.length));
-    for (final entry in ordered) {
-      out = out.replaceAll(entry.value, mask);
+    // Percent-encoding: componente y query (+ para espacios), en mayúsculas
+    // y minúsculas, y doble codificación de cada una.
+    for (final single in {
+      Uri.encodeComponent(secret),
+      Uri.encodeQueryComponent(secret),
+      secret.replaceAll(' ', '+'),
+    }) {
+      for (final s in {single, _lowerHex(single)}) {
+        out.add(s);
+        final dbl = Uri.encodeComponent(s);
+        out
+          ..add(dbl)
+          ..add(_lowerHex(dbl));
+      }
     }
+
+    // JSON: escapes estándar (\" \\ \n …) combinados con barras escapadas
+    // (\/) y no-ASCII como \uXXXX en minúsculas o mayúsculas. PHP, el
+    // lenguaje de los paneles Xtream, usa por defecto \/ y \uXXXX a la vez.
+    // Además, la forma con \uXXXX para todo lo que no es alfanumérico.
+    final json = jsonEncode(secret);
+    final jsonBody = json.substring(1, json.length - 1);
+    out.add(secret.replaceAll('/', r'\/'));
+    for (final body in {
+      jsonBody,
+      _escapeNonAscii(jsonBody, upper: false),
+      _escapeNonAscii(jsonBody, upper: true),
+    }) {
+      out
+        ..add(body)
+        ..add(body.replaceAll('/', r'\/'));
+    }
+    out
+      ..add(_escapeAllSymbols(secret, upper: false))
+      ..add(_escapeAllSymbols(secret, upper: true));
+    out.remove('');
     return out;
   }
 
-  /// Decodificación que nunca lanza: `%xx` (mayúsculas o minúsculas) como
-  /// UTF-8, y los escapes JSON `\/` y `\uXXXX`. Hasta 3 pasadas para cubrir
-  /// doble o triple codificación.
-  static String _decode(String input) {
-    var current = input;
-    for (var i = 0; i < 3; i++) {
-      final next = current
-          .replaceAll(r'\/', '/')
-          .replaceAllMapped(
-            _unicodeEscape,
-            (m) => String.fromCharCode(int.parse(m[1]!, radix: 16)),
-          )
-          .replaceAllMapped(_percentRun, (m) {
-            final hex = m[0]!;
-            final bytes = <int>[
-              for (var j = 0; j < hex.length; j += 3)
-                int.parse(hex.substring(j + 1, j + 3), radix: 16),
-            ];
-            return utf8.decode(bytes, allowMalformed: true);
-          });
-      if (next == current) break;
-      current = next;
+  static final RegExp _hexSeq = RegExp(r'%[0-9A-F]{2}');
+
+  static String _lowerHex(String s) =>
+      s.replaceAllMapped(_hexSeq, (m) => m[0]!.toLowerCase());
+
+  static final RegExp _alnum = RegExp(r'[A-Za-z0-9]');
+
+  static String _hex4(int unit, {required bool upper}) {
+    final hex = unit.toRadixString(16).padLeft(4, '0');
+    return '\\u${upper ? hex.toUpperCase() : hex}';
+  }
+
+  /// Caracteres fuera de ASCII como `\uXXXX`; el resto sin cambios.
+  static String _escapeNonAscii(String s, {required bool upper}) =>
+      String.fromCharCodes(
+        s.codeUnits.expand((u) {
+          return u < 0x7F ? [u] : _hex4(u, upper: upper).codeUnits;
+        }),
+      );
+
+  /// Todo lo que no es alfanumérico ASCII como `\uXXXX`.
+  static String _escapeAllSymbols(String s, {required bool upper}) {
+    final b = StringBuffer();
+    for (final unit in s.codeUnits) {
+      final ch = String.fromCharCode(unit);
+      b.write(_alnum.hasMatch(ch) ? ch : _hex4(unit, upper: upper));
     }
-    return current;
+    return b.toString();
+  }
+
+  /// Devuelve [input] con todas las credenciales conocidas enmascaradas.
+  static String redact(String input) {
+    if (input.isEmpty) return input;
+    var out = input;
+    // Secretos primero, de la variante más larga a la más corta: un patrón
+    // podría cortar un valor con espacios y dejar el resto sin cubrir, y un
+    // secreto corto no debe tocar la codificación de uno más largo.
+    for (final pattern in _ordered) {
+      out = out.replaceAll(pattern, mask);
+    }
+    return out
+        .replaceAllMapped(_pathPlain, (m) => '/${m[1]}/$mask/$mask/')
+        .replaceAllMapped(_pathJson, (m) => '\\/${m[1]}\\/$mask\\/$mask\\/')
+        .replaceAllMapped(_pathEncoded, (m) => '%2F${m[1]}%2F$mask%2F$mask%2F')
+        .replaceAllMapped(_queryPair, (m) => '${m[1]}$mask')
+        .replaceAllMapped(
+          _jsonPair,
+          (m) => '${m[1]}${m[2]!.startsWith('"') ? '"$mask"' : mask}',
+        )
+        .replaceAllMapped(_userInfo, (m) => '${m[1]}$mask@');
   }
 
   /// Versión segura de `toString()` para objetos arbitrarios.
