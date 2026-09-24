@@ -37,10 +37,21 @@ class LivePlaybackController extends ChangeNotifier {
     this._allowedFormats = const [],
     this.stallTimeout = const Duration(seconds: 20),
     this.stableAfter = const Duration(seconds: 30),
+    this.errorGrace = const Duration(seconds: 3),
   }) : _channels = List.unmodifiable(channels),
        _index = initialIndex.clamp(0, channels.length - 1) {
     _subscriptions.addAll([
-      engine.playing.listen(_onPlaying),
+      engine.playing.listen((playing) {
+        _isPlaying = playing;
+        _onPlaying(playing);
+      }),
+      engine.position.listen((p) {
+        _position = p;
+        if (p > Duration.zero && !_opened) {
+          _opened = true;
+          if (_isPlaying) _onPlaying(true);
+        }
+      }),
       engine.buffering.listen(_onBuffering),
       engine.completed.listen((done) {
         if (done) _reconnect('completed');
@@ -49,7 +60,7 @@ class LivePlaybackController extends ChangeNotifier {
         // El mensaje de mpv puede incluir la URL: el logger lo reduce al
         // tipo en release y lo redacta en debug.
         AppLogger.w('Error del reproductor', message);
-        _reconnect('error');
+        _onEngineError();
       }),
     ]);
   }
@@ -60,6 +71,18 @@ class LivePlaybackController extends ChangeNotifier {
   List<String> _allowedFormats;
   final Duration stallTimeout;
   final Duration stableAfter;
+
+  /// Los errores de mpv no siempre son fatales (p. ej. "Could not open
+  /// codec" al fallar la decodificación por hardware, que sigue por
+  /// software): solo se reconecta si en este lapso el video no avanzó.
+  final Duration errorGrace;
+  Timer? _errorCheck;
+  Duration _position = Duration.zero;
+  bool _isPlaying = false;
+
+  /// El stream llegó a abrirse (la posición avanzó). No alcanza con
+  /// `playing`: media_kit lo pone en `true` apenas se pide reproducir.
+  bool _opened = false;
 
   final List<StreamSubscription<Object?>> _subscriptions = [];
   Timer? _retryTimer;
@@ -143,6 +166,8 @@ class LivePlaybackController extends ChangeNotifier {
     if (_disposed) return;
     _cancelTimers();
     final generation = ++_generation;
+    _opened = false;
+    _position = Duration.zero;
     _setStatus(
       _attempt == 0
           ? LivePlaybackStatus.connecting
@@ -165,7 +190,7 @@ class LivePlaybackController extends ChangeNotifier {
   }
 
   void _onPlaying(bool playing) {
-    if (!playing || _status == LivePlaybackStatus.failed) return;
+    if (!playing || !_opened || _status == LivePlaybackStatus.failed) return;
     _stallTimer?.cancel();
     _setStatus(LivePlaybackStatus.playing);
     _stableTimer?.cancel();
@@ -181,6 +206,23 @@ class LivePlaybackController extends ChangeNotifier {
         if (generation == _generation) _reconnect('stall');
       });
     }
+  }
+
+  void _onEngineError() {
+    if (_disposed || _status == LivePlaybackStatus.failed) return;
+    if (_errorCheck?.isActive ?? false) return;
+    final generation = _generation;
+    final before = _position;
+    _errorCheck = Timer(errorGrace, () {
+      if (generation != _generation || _disposed) return;
+      // Avanzó, o está en pausa por el usuario: el error no era fatal.
+      final pausedByUser = _status == LivePlaybackStatus.playing && !_isPlaying;
+      if (_position > before || pausedByUser) {
+        AppLogger.event('player.error_ignored', {'kind': 'live'});
+        return;
+      }
+      _reconnect('error');
+    });
   }
 
   void _reconnect(String reason) {
@@ -239,6 +281,7 @@ class LivePlaybackController extends ChangeNotifier {
   }
 
   void _cancelTimers() {
+    _errorCheck?.cancel();
     _retryTimer?.cancel();
     _stallTimer?.cancel();
     _stableTimer?.cancel();

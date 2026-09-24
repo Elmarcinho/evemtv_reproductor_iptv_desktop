@@ -123,6 +123,14 @@ class StorageFailure extends AppFailure {
   final StorageFailureKind kind;
 }
 
+class ContentUnavailableFailure extends AppFailure {
+  const ContentUnavailableFailure({super.detail, super.cause})
+    : super(
+        'Este contenido no está disponible en el servidor en este momento. '
+        'Prueba más tarde o elige otro.',
+      );
+}
+
 class PlayerUnavailableFailure extends AppFailure {
   const PlayerUnavailableFailure({super.detail, super.cause})
     : super(

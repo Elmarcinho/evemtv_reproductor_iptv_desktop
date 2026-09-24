@@ -104,7 +104,7 @@ class LivePlayerNotifier extends Notifier<LivePlayerState> {
     final engine = await MediaKitEngine.create();
     return LivePlayerHandle(
       engine: engine,
-      video: VideoController(engine.player),
+      video: createVideoController(engine.player),
       playback: LivePlaybackController(
         engine: engine,
         source: source,

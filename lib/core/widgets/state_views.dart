@@ -8,27 +8,26 @@ import '../theme/app_theme.dart';
 String userMessageFor(Object error) =>
     error is AppFailure ? error.message : const UnknownFailure().message;
 
+/// Logo de EvemTv (símbolo y texto). El texto es blanco: pensado para el
+/// tema oscuro de la app.
 class AppLogo extends StatelessWidget {
-  const AppLogo({super.key, this.size = 40});
+  const AppLogo({super.key, this.height = 64});
 
-  final double size;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(Icons.live_tv_rounded, size: size, color: AppColors.accent),
-        SizedBox(width: size * 0.3),
-        Text(
-          'EvemTv',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            fontSize: size * 0.7,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.5,
-          ),
-        ),
-      ],
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    return Semantics(
+      label: 'EvemTv',
+      image: true,
+      child: Image.asset(
+        'assets/branding/logo.png',
+        height: height,
+        // Decodificado al tamaño mostrado.
+        cacheHeight: (height * dpr).round(),
+        filterQuality: FilterQuality.medium,
+      ),
     );
   }
 }

@@ -43,8 +43,10 @@ class PlaybackStatusView extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Canal que no responde (puede estar caído aunque la
+                      // conexión funcione).
                       Icon(
-                        Icons.signal_wifi_bad_rounded,
+                        Icons.tv_off_rounded,
                         size: compact ? 32 : 48,
                         color: AppColors.error,
                       ),

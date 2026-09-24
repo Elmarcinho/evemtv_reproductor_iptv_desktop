@@ -152,7 +152,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     children: [
                       Row(
                         children: [
-                          const AppLogo(size: 32),
+                          const AppLogo(height: 56),
                           const Spacer(),
                           if (hasProfiles)
                             TextButton.icon(

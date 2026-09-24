@@ -6,7 +6,7 @@ Compatible con servidores que usan la API de Xtream Codes y con listas M3U/M3U8.
 > EvemTv es solo un reproductor: **no incluye listas, canales ni contenido**.
 > Cada usuario es responsable del servicio y del contenido al que accede.
 
-Estado: **Fase 2** (TV en vivo con EPG corta y reproductor). Ver [`CLAUDE.md`](CLAUDE.md) para la especificación completa.
+Estado: **Fase 3** (TV en vivo, películas y series). Ver [`CLAUDE.md`](CLAUDE.md) para la especificación completa.
 
 ## Requisitos
 
@@ -75,6 +75,16 @@ Linux, Windows y macOS en cada push.
 - Credenciales: almacén seguro del sistema.
 - Perfiles y preferencias (sin credenciales): `evemtv.sqlite` en la carpeta de
   soporte de la app (en Linux, `~/.local/share/com.evemtv.player/`).
+
+## Ícono y logo
+
+El logo original está en `assets/branding/logo_source.png`. Los íconos de
+Windows (`.ico`), macOS (`AppIcon`) y Linux, y el logo de la interfaz, se
+generan con:
+
+```bash
+python3 tool/generate_icons.py   # requiere Pillow
+```
 
 ## Estructura
 

@@ -68,6 +68,12 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
+  # Marca de la app (ver tool/generate_icons.py). El original
+  # (logo_source.png) no se empaqueta.
+  assets:
+    - assets/branding/logo.png
+    - assets/branding/mark.png
+    - assets/branding/icon_256.png
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

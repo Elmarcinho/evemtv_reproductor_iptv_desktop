@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../core/network/dio_factory.dart';
 import '../domain/repositories/credential_store.dart';
+import '../domain/repositories/favorites_repository.dart';
 import '../domain/repositories/profile_repository.dart';
 import '../domain/repositories/settings_repository.dart';
 import 'content_source_factory.dart';
@@ -45,4 +46,8 @@ final credentialStoreProvider = Provider<CredentialStore>(
 
 final contentSourceFactoryProvider = Provider<ContentSourceFactory>(
   (ref) => ContentSourceFactory(ref.watch(dioProvider)),
+);
+
+final favoritesRepositoryProvider = Provider<FavoritesRepository>(
+  (ref) => DriftFavoritesRepository(ref.watch(appDatabaseProvider)),
 );

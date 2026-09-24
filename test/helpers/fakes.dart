@@ -3,6 +3,11 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:evemtv/core/network/retry_interceptor.dart';
+import 'package:evemtv/domain/entities/favorite.dart';
+import 'package:evemtv/domain/entities/profile.dart';
+import 'package:evemtv/domain/entities/source_credentials.dart';
+import 'package:evemtv/domain/repositories/favorites_repository.dart';
+import 'package:evemtv/features/auth/application/session.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -121,4 +126,57 @@ class FakeSecureStorage extends Fake implements FlutterSecureStorage {
     if (failDeleteWith != null) throw failDeleteWith!;
     values.remove(key);
   }
+}
+
+/// Favoritos en memoria (para pruebas de pantallas).
+class InMemoryFavoritesRepository implements FavoritesRepository {
+  final Map<(int, FavoriteKind), List<Favorite>> _data = {};
+  final _changes = StreamController<void>.broadcast();
+
+  @override
+  Stream<List<Favorite>> watch(int profileId, FavoriteKind kind) async* {
+    yield List.of(_data[(profileId, kind)] ?? const []);
+    await for (final _ in _changes.stream) {
+      yield List.of(_data[(profileId, kind)] ?? const []);
+    }
+  }
+
+  @override
+  Future<void> add(int profileId, Favorite favorite) async {
+    final list = _data.putIfAbsent((profileId, favorite.kind), () => []);
+    list
+      ..removeWhere((f) => f.itemId == favorite.itemId)
+      ..insert(0, favorite);
+    _changes.add(null);
+  }
+
+  @override
+  Future<void> remove(int profileId, FavoriteKind kind, String itemId) async {
+    _data[(profileId, kind)]?.removeWhere((f) => f.itemId == itemId);
+    _changes.add(null);
+  }
+}
+
+/// Sesión fija para pruebas de pantallas (datos ficticios).
+class FixedSession extends SessionController {
+  FixedSession([this.credentials]);
+
+  final SourceCredentials? credentials;
+
+  @override
+  Session? build() => Session(
+    profile: Profile(
+      id: 1,
+      name: 'Cuenta 1',
+      type: SourceType.xtream,
+      createdAt: DateTime(2026),
+    ),
+    credentials:
+        credentials ??
+        XtreamCredentials(
+          server: Uri.parse('http://panel.example.com:8080'),
+          username: 'usuarioDemo',
+          password: 'claveDemo',
+        ),
+  );
 }

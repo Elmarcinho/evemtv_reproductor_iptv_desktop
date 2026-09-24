@@ -17,7 +17,7 @@ class SplashScreen extends ConsumerWidget {
               error: terms.error!,
               onRetry: () => ref.invalidate(termsProvider),
             )
-          : const Center(child: AppLogo(size: 48)),
+          : const Center(child: AppLogo(height: 160)),
     );
   }
 }

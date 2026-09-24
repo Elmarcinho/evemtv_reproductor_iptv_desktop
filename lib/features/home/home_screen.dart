@@ -69,7 +69,7 @@ class HomeScreen extends ConsumerWidget {
             children: [
               Row(
                 children: [
-                  const AppLogo(size: 32),
+                  const AppLogo(height: 52),
                   const Spacer(),
                   Text(
                     session.credentials.displayName ?? profile.name,
@@ -127,7 +127,7 @@ class HomeScreen extends ConsumerWidget {
 class _SectionTiles extends StatelessWidget {
   const _SectionTiles();
 
-  /// Ruta de cada sección; `null` = todavía no disponible (Fase 3).
+  /// Ruta de cada sección.
   static const _sections = [
     (
       Icons.live_tv_rounded,
@@ -135,8 +135,18 @@ class _SectionTiles extends StatelessWidget {
       'Canales y guía de programación',
       AppRoutes.live,
     ),
-    (Icons.movie_outlined, 'Películas', 'Catálogo de películas', null),
-    (Icons.video_library_outlined, 'Series', 'Temporadas y episodios', null),
+    (
+      Icons.movie_outlined,
+      'Películas',
+      'Catálogo de películas',
+      AppRoutes.movies,
+    ),
+    (
+      Icons.video_library_outlined,
+      'Series',
+      'Temporadas y episodios',
+      AppRoutes.series,
+    ),
   ];
 
   @override

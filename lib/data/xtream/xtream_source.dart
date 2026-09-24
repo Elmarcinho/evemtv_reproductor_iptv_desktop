@@ -2,10 +2,12 @@ import '../../core/utils/task_pool.dart';
 import '../../domain/entities/account_info.dart';
 import '../../domain/entities/live.dart';
 import '../../domain/entities/profile.dart';
+import '../../domain/entities/vod.dart';
 import '../../domain/repositories/content_source.dart';
 import 'xtream_account_parser.dart';
 import 'xtream_client.dart';
 import 'xtream_live_parser.dart';
+import 'xtream_vod_parser.dart';
 
 /// Fuente de contenido Xtream Codes.
 class XtreamSource implements ContentSource {
@@ -72,6 +74,63 @@ class XtreamSource implements ContentSource {
   }) => PlaybackCandidates([
     for (final ext in liveExtensions(allowedFormats))
       _client.streamUri('live', '${channel.id}.$ext'),
+  ]);
+
+  // --- Películas ---
+
+  @override
+  Future<List<ContentCategory>> vodCategories() async =>
+      XtreamLiveParser.categories(await _client.get('get_vod_categories'));
+
+  @override
+  Future<List<VodItem>> vodItems({String? categoryId}) async =>
+      XtreamVodParser.movies(
+        await _client.get(
+          'get_vod_streams',
+          params: {'category_id': ?categoryId},
+        ),
+      );
+
+  @override
+  Future<VodDetail> vodDetail(VodItem item) async =>
+      XtreamVodParser.movieDetail(
+        item,
+        await _client.get('get_vod_info', params: {'vod_id': item.id}),
+      );
+
+  @override
+  PlaybackCandidates movieStream(VodItem item) => PlaybackCandidates([
+    _client.streamUri(
+      'movie',
+      '${item.id}.${item.containerExtension ?? 'mp4'}',
+    ),
+  ]);
+
+  // --- Series ---
+
+  @override
+  Future<List<ContentCategory>> seriesCategories() async =>
+      XtreamLiveParser.categories(await _client.get('get_series_categories'));
+
+  @override
+  Future<List<SeriesItem>> seriesItems({String? categoryId}) async =>
+      XtreamVodParser.series(
+        await _client.get('get_series', params: {'category_id': ?categoryId}),
+      );
+
+  @override
+  Future<SeriesDetail> seriesDetail(SeriesItem series) async =>
+      XtreamVodParser.seriesDetail(
+        series,
+        await _client.get('get_series_info', params: {'series_id': series.id}),
+      );
+
+  @override
+  PlaybackCandidates episodeStream(Episode episode) => PlaybackCandidates([
+    _client.streamUri(
+      'series',
+      '${episode.id}.${episode.containerExtension ?? 'mp4'}',
+    ),
   ]);
 
   /// Extensiones a probar según `allowed_output_formats`: primero `m3u8` y

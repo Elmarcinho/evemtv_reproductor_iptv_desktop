@@ -9,18 +9,19 @@ import '../../core/errors/app_failure.dart';
 import '../../core/logging/app_logger.dart';
 import '../../core/network/network_failure.dart';
 import '../../core/network/retry_interceptor.dart';
-import '../../core/utils/stable_id.dart';
 import '../../domain/entities/account_info.dart';
 import '../../domain/entities/live.dart';
 import '../../domain/entities/profile.dart';
 import '../../domain/entities/source_credentials.dart';
+import '../../domain/entities/vod.dart';
 import '../../domain/repositories/content_source.dart';
+import 'm3u_catalog.dart';
 import 'm3u_parser.dart';
 
 /// Fuente de contenido basada en una lista M3U/M3U8.
 ///
-/// La lista se descarga una vez por sesión, se parsea en otro isolate y se
-/// mantiene en memoria. Las listas no traen EPG corta: la guía XMLTV
+/// La lista se descarga una vez por sesión, se parsea y organiza (vivo,
+/// películas y series) en otro isolate y se mantiene en memoria. Las listas no traen EPG corta: la guía XMLTV
 /// completa llega en la Fase 6.
 class M3uSource implements ContentSource {
   M3uSource(this._dio, this.credentials);
@@ -32,13 +33,13 @@ class M3uSource implements ContentSource {
   /// Tope de descarga: protege la memoria ante una respuesta enorme.
   static const int maxPlaylistBytes = 64 * 1024 * 1024;
 
-  static const String uncategorizedId = '__sin_categoria__';
+  static const String uncategorizedId = M3uCatalog.uncategorizedId;
 
   final Dio _dio;
   final M3uCredentials credentials;
 
-  Future<_LiveIndex>? _live;
-  final Map<String, Uri> _urlsById = {};
+  Future<M3uCatalog>? _catalogFuture;
+  final Map<String, Uri> _urls = {};
 
   @override
   SourceType get type => SourceType.m3u;
@@ -68,19 +69,15 @@ class M3uSource implements ContentSource {
     return null;
   }
 
-  @override
-  Future<List<ContentCategory>> liveCategories() async =>
-      (await _liveIndex()).categories;
+  // --- TV en vivo ---
 
   @override
-  Future<List<LiveChannel>> liveChannels({String? categoryId}) async {
-    final index = await _liveIndex();
-    if (categoryId == null) return index.channels;
-    return [
-      for (final c in index.channels)
-        if (c.categoryId == categoryId) c,
-    ];
-  }
+  Future<List<ContentCategory>> liveCategories() async =>
+      (await _catalog()).liveCategories;
+
+  @override
+  Future<List<LiveChannel>> liveChannels({String? categoryId}) async =>
+      _filter((await _catalog()).channels, categoryId, (c) => c.categoryId);
 
   @override
   Future<List<EpgEntry>> shortEpg(LiveChannel channel, {int limit = 4}) async =>
@@ -90,37 +87,93 @@ class M3uSource implements ContentSource {
   PlaybackCandidates liveStream(
     LiveChannel channel, {
     List<String> allowedFormats = const [],
-  }) {
-    final url = _urlsById[channel.id];
+  }) => _stream(channel.id);
+
+  // --- Películas ---
+
+  @override
+  Future<List<ContentCategory>> vodCategories() async =>
+      (await _catalog()).vodCategories;
+
+  @override
+  Future<List<VodItem>> vodItems({String? categoryId}) async =>
+      _filter((await _catalog()).movies, categoryId, (m) => m.categoryId);
+
+  /// Las listas no traen sinopsis ni reparto: ficha mínima.
+  @override
+  Future<VodDetail> vodDetail(VodItem item) async => VodDetail(item: item);
+
+  @override
+  PlaybackCandidates movieStream(VodItem item) => _stream(item.id);
+
+  // --- Series ---
+
+  @override
+  Future<List<ContentCategory>> seriesCategories() async =>
+      (await _catalog()).seriesCategories;
+
+  @override
+  Future<List<SeriesItem>> seriesItems({String? categoryId}) async =>
+      _filter((await _catalog()).series, categoryId, (s) => s.categoryId);
+
+  @override
+  Future<SeriesDetail> seriesDetail(SeriesItem series) async {
+    final detail = (await _catalog()).seriesDetails[series.id];
+    if (detail == null) {
+      throw const InvalidPlaylistFailure(detail: 'serie fuera de la lista');
+    }
+    return detail;
+  }
+
+  @override
+  PlaybackCandidates episodeStream(Episode episode) => _stream(episode.id);
+
+  // --- Carga ---
+
+  static List<T> _filter<T>(
+    List<T> items,
+    String? categoryId,
+    String? Function(T) categoryOf,
+  ) => categoryId == null
+      ? items
+      : [
+          for (final item in items)
+            if (categoryOf(item) == categoryId) item,
+        ];
+
+  PlaybackCandidates _stream(String id) {
+    final url = _urls[id];
     if (url == null) {
-      throw const InvalidPlaylistFailure(detail: 'canal fuera de la lista');
+      throw const InvalidPlaylistFailure(detail: 'elemento fuera de la lista');
     }
     return PlaybackCandidates([url]);
   }
 
-  Future<_LiveIndex> _liveIndex() =>
-      _live ??= _loadLive().catchError((Object e) {
+  Future<M3uCatalog> _catalog() =>
+      _catalogFuture ??= _load().catchError((Object e) {
         // Si falla, el próximo intento vuelve a descargar.
-        _live = null;
+        _catalogFuture = null;
         throw e;
       });
 
-  Future<_LiveIndex> _loadLive() async {
+  Future<M3uCatalog> _load() async {
     final text = await _download();
-    final playlist = await Isolate.run(() => M3uParser.parse(text));
-    if (playlist.entries.isEmpty) {
+    final catalog = await Isolate.run(() {
+      final playlist = M3uParser.parse(text);
+      return playlist.entries.isEmpty ? null : M3uCatalog.build(playlist);
+    });
+    if (catalog == null) {
       throw const InvalidPlaylistFailure(detail: 'lista vacía');
     }
-    final index = _LiveIndex.build(playlist);
-    _urlsById
+    _urls
       ..clear()
-      ..addAll(index.urls);
+      ..addAll(catalog.urls);
     AppLogger.event('m3u.loaded', {
-      'entries': playlist.entries.length,
-      'live': index.channels.length,
-      'groups': index.categories.length,
+      'live': catalog.channels.length,
+      'movies': catalog.movies.length,
+      'series': catalog.series.length,
     });
-    return index;
+    return catalog;
   }
 
   Future<String> _download() async {
@@ -194,43 +247,4 @@ class M3uSource implements ContentSource {
     }
     return false;
   }
-}
-
-/// Canales en vivo de la lista, agrupados por `group-title`.
-class _LiveIndex {
-  const _LiveIndex(this.categories, this.channels, this.urls);
-
-  factory _LiveIndex.build(M3uPlaylist playlist) {
-    final categories = <String, ContentCategory>{};
-    final channels = <LiveChannel>[];
-    final urls = <String, Uri>{};
-    for (final entry in playlist.entries) {
-      if (entry.kind != M3uKind.live) continue;
-      // Id estable sin credenciales: hash de la URL.
-      final id = 'm3u:${stableHash(entry.url.toString())}';
-      if (urls.containsKey(id)) continue; // URL repetida en la lista.
-      final group = entry.group;
-      final categoryId = group ?? M3uSource.uncategorizedId;
-      categories.putIfAbsent(
-        categoryId,
-        () => ContentCategory(id: categoryId, name: group ?? 'Sin categoría'),
-      );
-      urls[id] = entry.url;
-      channels.add(
-        LiveChannel(
-          id: id,
-          name: entry.name,
-          number: entry.channelNumber,
-          logoUrl: entry.logoUrl,
-          categoryId: categoryId,
-          epgChannelId: entry.tvgId,
-        ),
-      );
-    }
-    return _LiveIndex(categories.values.toList(), channels, urls);
-  }
-
-  final List<ContentCategory> categories;
-  final List<LiveChannel> channels;
-  final Map<String, Uri> urls;
 }

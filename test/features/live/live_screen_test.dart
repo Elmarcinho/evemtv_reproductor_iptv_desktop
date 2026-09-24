@@ -1,6 +1,7 @@
 // Pantalla En vivo con una fuente simulada y datos ficticios.
 import 'package:evemtv/core/router/app_router.dart';
 import 'package:evemtv/core/theme/app_theme.dart';
+import 'package:evemtv/data/providers.dart';
 import 'package:evemtv/domain/entities/live.dart';
 import 'package:evemtv/features/auth/application/session.dart';
 import 'package:evemtv/features/live/live_screen.dart';
@@ -11,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../helpers/fakes.dart';
 import '../player/live_playback_controller_test.dart' show FakeSource;
 
 class _LiveSource extends FakeSource {
@@ -113,6 +115,10 @@ void main() {
         overrides: [
           contentSourceProvider.overrideWithValue(source),
           livePlayerProvider.overrideWith(_FakePlayer.new),
+          sessionProvider.overrideWith(FixedSession.new),
+          favoritesRepositoryProvider.overrideWithValue(
+            InMemoryFavoritesRepository(),
+          ),
           if (playingNoticiasDos)
             playingLiveChannelProvider.overrideWith(_PlayingNoticiasDos.new),
         ],
@@ -235,4 +241,36 @@ void main() {
       expect(find.byIcon(Icons.graphic_eq_rounded), findsNothing);
     },
   );
+
+  testWidgets('favoritos: vacío, marcar con ★ y aparece en la categoría', (
+    tester,
+  ) async {
+    await pumpLive(tester);
+    await tester.tap(find.text('Favoritos'));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Todavía no tienes canales favoritos'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Noticias'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Agregar a favoritos'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Quitar de favoritos'), findsOneWidget);
+    expect(find.byIcon(Icons.star_rounded), findsWidgets);
+
+    await tester.tap(find.text('Favoritos'));
+    await tester.pumpAndSettle();
+    expect(find.text('Noticias Uno'), findsWidgets);
+    expect(find.text('Noticias Dos'), findsNothing);
+
+    // Quitar desde el panel lo saca de la lista.
+    await tester.tap(find.byTooltip('Quitar de favoritos'));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Todavía no tienes canales favoritos'),
+      findsOneWidget,
+    );
+  });
 }

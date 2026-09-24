@@ -264,3 +264,65 @@ Solo compila y prueba; el empaquetado y la publicación son de la Fase 5.
   volumen, M silencio, L lista de canales. En la lista de En vivo: ↑/↓,
   Re Pág/Av Pág, Enter pantalla completa, Esc vuelve al inicio.
 
+## 10. Películas y series (Fase 3)
+
+- **Mismo patrón que En vivo:** categorías primero, elementos por categoría
+  (se abre la primera), grilla perezosa de pósters y filtro por nombre. Una
+  sola pantalla de catálogo (`CatalogScreen<T>`) sirve para ambos.
+- **Fichas:** se muestra enseguida lo que ya se sabe (póster y nombre) y se
+  completa con sinopsis, reparto, duración y fondo al llegar `get_vod_info` /
+  `get_series_info`. Si la ficha falla, se puede reproducir igual.
+- **Pósters:** `Image.network` decodificado al tamaño mostrado
+  (`cacheWidth`), con caché en memoria de Flutter. Se descartó
+  `cached_network_image` por ahora: agrega una base SQLite propia para la
+  caché de disco y no hace falta para cargar bajo demanda. Se puede revisar
+  si el consumo de red de los pósters resulta un problema.
+- **Parseo tolerante de series:** `episodes` se acepta como objeto por
+  temporada, lista de listas o lista plana; episodios repetidos se descartan;
+  temporadas y episodios se ordenan. La extensión del contenedor solo se usa
+  si es alfanumérica (evita alterar la ruta de la URL).
+- **M3U:** las películas se agrupan por `group-title`; las series se arman
+  a partir del nombre (`Serie S01 E02`, `Serie - S1E2 - Título`,
+  `Serie 1x02`). Sin numeración, cada entrada es una serie de un episodio.
+  Las listas no traen sinopsis ni reparto: ficha mínima.
+- **Reproductor de películas y episodios:** barra de progreso con tiempos,
+  pausa, volumen, pistas, pantalla completa. Teclado: Espacio, F, Esc,
+  ←/→ ±10 s, ↑/↓ volumen, M silencio, N siguiente episodio.
+- **Reconexión en VOD:** ante error, carga trabada 30 s o un "fin" que llega
+  a más de 60 s del final real, reconecta (2, 4 y 8 s) y **vuelve a la
+  posición donde se cortó**. El fin real muestra "Ver de nuevo" o, en series,
+  el siguiente episodio con cuenta regresiva de 10 s (cancelable), también
+  entre temporadas.
+- **Errores de mpv no fatales:** mpv reporta como error cosas que no cortan
+  la reproducción (p. ej. "Could not open codec" cuando falla la
+  decodificación por hardware y sigue por software). Un error solo provoca
+  reconexión si en 3 s el video no avanzó y no está en pausa por el usuario.
+  Vale para vivo y VOD.
+- **"Abierto" no es `playing`:** media_kit pone `playing = true` apenas se
+  pide reproducir, antes de abrir el archivo. Un contenido cuenta como
+  abierto recién cuando mpv informa duración o la posición avanza.
+- **Contenido que no existe en el servidor:** si una película o episodio no
+  llega a abrirse, se consulta el código HTTP pidiendo un solo byte. Con un
+  4xx se informa "no disponible en el servidor" enseguida, sin reintentos.
+- **Decodificación por hardware:** `hwdec=auto-safe` (recomendado por mpv)
+  en lugar de `auto`, el valor por defecto de media_kit.
+- **Reanudar:** el controlador ya acepta una posición inicial; "seguir
+  viendo" (guardar la posición por perfil) llega en la Fase 4.
+
+## 11. Favoritos (adelantado de la Fase 4)
+
+- Canales, películas y series, **por perfil**, en la tabla `favorites` de
+  drift (esquema v2, con migración desde v1 que conserva los datos). Se
+  borran al cerrar sesión o eliminar el perfil (en la misma transacción y,
+  además, con borrado en cascada).
+- Se marcan con ★ en el panel del canal y en las fichas; se ven en la
+  categoría fija **Favoritos** de En vivo, Películas y Series, y los
+  elementos marcados llevan una ★.
+- Se guarda lo mínimo para mostrar y reproducir sin volver a descargar el
+  catálogo: id, nombre, número de canal, extensión del archivo y año. **Nunca
+  la URL del stream.**
+- **Imágenes:** los logos y pósters suelen estar en el mismo servidor del
+  panel, y la base no debe guardar su host (sección 4). La URL de la imagen
+  solo se guarda si no apunta al servidor ni contiene credenciales; si no,
+  el favorito se muestra con un ícono genérico.
+

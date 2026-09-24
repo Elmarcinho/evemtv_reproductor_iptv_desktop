@@ -41,6 +41,18 @@ abstract final class JsonRead {
     return value.toInt();
   }
 
+  /// Decimal desde número o texto (`"7.5"`, `"7,5"`). `NaN` e infinitos
+  /// devuelven `null`.
+  static double? decimal(Object? value) {
+    final double? parsed;
+    if (value is num) {
+      parsed = value.toDouble();
+    } else {
+      parsed = double.tryParse(string(value)?.replaceAll(',', '.') ?? '');
+    }
+    return (parsed == null || !parsed.isFinite) ? null : parsed;
+  }
+
   /// Booleano desde `true`, `1`, `"1"`, `"true"`, `"yes"`.
   static bool boolean(Object? value, {bool fallback = false}) {
     if (value is bool) return value;

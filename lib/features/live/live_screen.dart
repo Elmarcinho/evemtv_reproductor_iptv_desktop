@@ -8,8 +8,12 @@ import 'package:go_router/go_router.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/date_format.dart';
+import '../../core/widgets/category_list.dart';
 import '../../core/widgets/state_views.dart';
+import '../../domain/entities/favorite.dart';
 import '../../domain/entities/live.dart';
+import '../favorites/favorite_button.dart';
+import '../favorites/favorites.dart';
 import '../player/live_player_provider.dart';
 import 'live_providers.dart';
 import 'widgets/channel_logo.dart';
@@ -201,10 +205,18 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
                         children: [
                           SizedBox(
                             width: _categoriesWidth,
-                            child: _CategoryList(
+                            child: CategoryList(
                               categories: list,
                               selectedId: categoryId,
                               onSelect: _selectCategory,
+                              allLabel: 'Todos los canales',
+                              pinned: const [
+                                (
+                                  id: favoritesCategoryId,
+                                  name: 'Favoritos',
+                                  icon: Icons.star_rounded,
+                                ),
+                              ],
                             ),
                           ),
                           const VerticalDivider(width: 1),
@@ -225,7 +237,12 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
   }
 
   Widget _buildChannels(String? categoryId, double detailWidth) {
-    final channels = ref.watch(liveChannelsProvider(categoryId));
+    final isFavorites = categoryId == favoritesCategoryId;
+    final channels = isFavorites
+        ? ref
+              .watch(favoritesProvider(FavoriteKind.live))
+              .whenData((list) => [for (final f in list) f.toChannel()])
+        : ref.watch(liveChannelsProvider(categoryId));
     return channels.when(
       loading: () => const LoadingView(message: 'Cargando canales…'),
       error: (e, _) => ErrorView(
@@ -239,7 +256,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
           return Center(
             child: Text(
               _filter.isEmpty
-                  ? 'Esta categoría no tiene canales.'
+                  ? (isFavorites
+                        ? 'Todavía no tienes canales favoritos.\n'
+                              'Márcalos con ★ en el panel del canal.'
+                        : 'Esta categoría no tiene canales.')
                   : 'Ningún canal coincide con "$_filter".',
               style: const TextStyle(color: AppColors.textSecondary),
             ),
@@ -259,6 +279,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     double detailWidth,
     LiveChannel? playing,
   ) {
+    final favoriteIds = ref.watch(favoriteIdsProvider(FavoriteKind.live));
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -275,6 +296,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
                 channel: list[i],
                 selected: i == selected,
                 playing: list[i] == playing,
+                isFavorite: favoriteIds.contains(list[i].id),
                 onTap: () {
                   _autoplay?.cancel();
                   setState(() => _selected = i);
@@ -348,46 +370,12 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _CategoryList extends StatelessWidget {
-  const _CategoryList({
-    required this.categories,
-    required this.selectedId,
-    required this.onSelect,
-  });
-
-  final List<ContentCategory> categories;
-  final String? selectedId;
-  final ValueChanged<String?> onSelect;
-
-  @override
-  Widget build(BuildContext context) {
-    // Primera fila: todos los canales.
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: categories.length + 1,
-      itemBuilder: (context, i) {
-        final id = i == 0 ? null : categories[i - 1].id;
-        final name = i == 0 ? 'Todos los canales' : categories[i - 1].name;
-        final selected = id == selectedId;
-        return ListTile(
-          dense: true,
-          selected: selected,
-          selectedTileColor: AppColors.accent.withValues(alpha: 0.14),
-          selectedColor: AppColors.textPrimary,
-          leading: i == 0 ? const Icon(Icons.apps_rounded, size: 20) : null,
-          title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-          onTap: () => onSelect(id),
-        );
-      },
-    );
-  }
-}
-
 class _ChannelRow extends ConsumerWidget {
   const _ChannelRow({
     required this.channel,
     required this.selected,
     required this.playing,
+    required this.isFavorite,
     required this.onTap,
     required this.onDoubleTap,
   });
@@ -397,6 +385,9 @@ class _ChannelRow extends ConsumerWidget {
 
   /// Es el canal que suena en el reproductor.
   final bool playing;
+
+  /// Está en favoritos.
+  final bool isFavorite;
   final VoidCallback onTap;
   final VoidCallback onDoubleTap;
 
@@ -453,6 +444,7 @@ class _ChannelRow extends ConsumerWidget {
                   ],
                 ),
               ),
+              if (isFavorite) const FavoriteBadge(),
               if (playing)
                 const Tooltip(
                   message: 'Reproduciendo',
@@ -503,6 +495,15 @@ class _ChannelDetail extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 12),
+              FavoriteButton(
+                compact: true,
+                isFavorite: ref
+                    .watch(favoriteIdsProvider(FavoriteKind.live))
+                    .contains(channel.id),
+                onPressed: () =>
+                    ref.read(favoritesServiceProvider).toggleChannel(channel),
+              ),
+              const SizedBox(width: 8),
               FilledButton.icon(
                 onPressed: onExpand,
                 icon: const Icon(Icons.fullscreen_rounded),

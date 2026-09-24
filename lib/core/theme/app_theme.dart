@@ -13,6 +13,7 @@ abstract final class AppColors {
   static const Color error = Color(0xFFFF6B6B);
   static const Color success = Color(0xFF3FB950);
   static const Color live = Color(0xFFE5484D);
+  static const Color favorite = Color(0xFFFFC53D);
 }
 
 abstract final class AppTheme {

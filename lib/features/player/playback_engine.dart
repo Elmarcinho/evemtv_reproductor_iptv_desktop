@@ -1,4 +1,5 @@
 import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../core/config/app_config.dart';
 
@@ -13,7 +14,12 @@ abstract interface class PlaybackEngine {
   /// nunca se muestran y solo se registran a través del logger.
   Stream<String> get error;
 
+  /// Posición y duración (VOD). En vivo la duración suele ser cero.
+  Stream<Duration> get position;
+  Stream<Duration> get duration;
+
   Future<void> open(Uri url);
+  Future<void> seek(Duration position);
   Future<void> dispose();
 }
 
@@ -53,8 +59,27 @@ class MediaKitEngine implements PlaybackEngine {
   Stream<String> get error => player.stream.error;
 
   @override
+  Stream<Duration> get position => player.stream.position;
+
+  @override
+  Stream<Duration> get duration => player.stream.duration;
+
+  @override
   Future<void> open(Uri url) => player.open(Media(url.toString()));
+
+  @override
+  Future<void> seek(Duration position) => player.seek(position);
 
   @override
   Future<void> dispose() => player.dispose();
 }
+
+/// Salida de video. `hwdec: auto-safe` (recomendado por mpv): solo prueba
+/// la decodificación por hardware que mpv considera estable y, si no hay,
+/// sigue por software. Con `auto` (el valor por defecto de media_kit)
+/// intenta todas, lo que genera avisos como "Could not open codec" en
+/// equipos sin el controlador correspondiente.
+VideoController createVideoController(Player player) => VideoController(
+  player,
+  configuration: const VideoControllerConfiguration(hwdec: 'auto-safe'),
+);

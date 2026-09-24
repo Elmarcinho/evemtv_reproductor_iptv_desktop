@@ -36,7 +36,7 @@ class TermsScreen extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const AppLogo(),
+                    const AppLogo(height: 72),
                     const SizedBox(height: 24),
                     Text('Antes de empezar', style: text.headlineSmall),
                     const SizedBox(height: 16),

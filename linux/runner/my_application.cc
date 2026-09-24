@@ -52,6 +52,20 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(window, "EvemTv");
   }
 
+  // Ícono de la ventana, desde los assets empaquetados junto al ejecutable
+  // (bundle/data/flutter_assets/...). En Wayland el panel usa el .desktop
+  // instalado (Fase 5, AppImage); esto cubre X11 y el alt+tab.
+  {
+    g_autofree gchar* exe = g_file_read_link("/proc/self/exe", nullptr);
+    if (exe != nullptr) {
+      g_autofree gchar* dir = g_path_get_dirname(exe);
+      g_autofree gchar* icon = g_build_filename(
+          dir, "data", "flutter_assets", "assets", "branding", "icon_256.png",
+          nullptr);
+      gtk_window_set_icon_from_file(window, icon, nullptr);
+    }
+  }
+
   gtk_window_set_default_size(window, 1280, 720);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();

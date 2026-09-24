@@ -23,7 +23,7 @@ class ProfilesScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const AppLogo(),
+              const AppLogo(height: 72),
               const SizedBox(height: 32),
               Text(
                 'Elige una cuenta',

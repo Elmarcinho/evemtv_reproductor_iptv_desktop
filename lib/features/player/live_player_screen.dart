@@ -16,6 +16,7 @@ import '../live/widgets/channel_logo.dart';
 import 'live_playback_controller.dart';
 import 'live_player_provider.dart';
 import 'widgets/playback_status_view.dart';
+import 'widgets/player_bar.dart';
 
 /// Reproductor de TV en vivo a pantalla grande. Usa el mismo reproductor
 /// que el mini reproductor de En vivo ([livePlayerProvider]): entrar y salir
@@ -325,7 +326,7 @@ class _Controls extends ConsumerWidget {
             // de audio y subtítulos (PopupMenuButton usa otro estilo por
             // defecto).
             child: IconButtonTheme(
-              data: IconButtonThemeData(style: _barButtonStyle),
+              data: IconButtonThemeData(style: barButtonStyle),
               child: Row(
                 children: [
                   StreamBuilder<bool>(
@@ -341,7 +342,7 @@ class _Controls extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  _VolumeControl(player: player),
+                  VolumeControl(player: player),
                   const Spacer(),
                   IconButton(
                     tooltip: 'Lista de canales (L)',
@@ -349,13 +350,13 @@ class _Controls extends ConsumerWidget {
                     style: channelListOpen
                         ? IconButton.styleFrom(
                             foregroundColor: AppColors.accent,
-                            iconSize: _barIconSize,
+                            iconSize: barIconSize,
                           )
                         : null,
                     onPressed: onChannelList,
                     icon: const Icon(Icons.format_list_bulleted_rounded),
                   ),
-                  _TracksMenu(player: player),
+                  TracksMenu(player: player),
                   IconButton(
                     tooltip: fullscreen
                         ? 'Salir de pantalla completa (F / Esc)'
@@ -376,14 +377,6 @@ class _Controls extends ConsumerWidget {
     );
   }
 }
-
-/// Estilo común de los botones de la barra del reproductor.
-final ButtonStyle _barButtonStyle = IconButton.styleFrom(
-  foregroundColor: _barIconColor,
-  iconSize: _barIconSize,
-);
-const Color _barIconColor = Colors.white;
-const double _barIconSize = 24;
 
 /// Lista de canales sobre el video: muestra dónde está el canal actual y
 /// permite saltar a cualquiera con un clic.
@@ -523,109 +516,6 @@ class _ChannelListPanelState extends State<_ChannelListPanel> {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _VolumeControl extends StatelessWidget {
-  const _VolumeControl({required this.player});
-
-  final Player player;
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<double>(
-      stream: player.stream.volume,
-      initialData: player.state.volume,
-      builder: (context, snap) {
-        final volume = snap.data ?? 100;
-        return Row(
-          children: [
-            IconButton(
-              tooltip: volume > 0 ? 'Silenciar (M)' : 'Activar sonido (M)',
-              onPressed: () => player.setVolume(volume > 0 ? 0 : 100),
-              icon: Icon(
-                volume == 0
-                    ? Icons.volume_off_rounded
-                    : volume < 50
-                    ? Icons.volume_down_rounded
-                    : Icons.volume_up_rounded,
-              ),
-            ),
-            SizedBox(
-              width: 120,
-              child: Slider(
-                value: volume.clamp(0, 100),
-                max: 100,
-                onChanged: player.setVolume,
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-/// Selección de pista de audio y subtítulos.
-class _TracksMenu extends StatelessWidget {
-  const _TracksMenu({required this.player});
-
-  final Player player;
-
-  static String _label(String? title, String? language, int index) {
-    final parts = [?title, ?language];
-    return parts.isEmpty ? 'Pista ${index + 1}' : parts.join(' · ');
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<Tracks>(
-      stream: player.stream.tracks,
-      initialData: player.state.tracks,
-      builder: (context, snap) {
-        final tracks = snap.data ?? const Tracks();
-        // media_kit agrega las opciones "auto" y "no": solo se listan las
-        // pistas reales.
-        final audio = tracks.audio
-            .where((t) => t.id != 'auto' && t.id != 'no')
-            .toList();
-        final subtitles = tracks.subtitle
-            .where((t) => t.id != 'auto' && t.id != 'no')
-            .toList();
-        return PopupMenuButton<VoidCallback>(
-          tooltip: 'Audio y subtítulos',
-          style: _barButtonStyle,
-          iconColor: _barIconColor,
-          iconSize: _barIconSize,
-          icon: const Icon(Icons.subtitles_outlined),
-          onSelected: (action) => action(),
-          itemBuilder: (context) => [
-            const PopupMenuItem(enabled: false, child: Text('Audio')),
-            if (audio.isEmpty)
-              const PopupMenuItem(enabled: false, child: Text('  Única pista')),
-            for (final (i, t) in audio.indexed)
-              CheckedPopupMenuItem(
-                checked: player.state.track.audio.id == t.id,
-                value: () => player.setAudioTrack(t),
-                child: Text(_label(t.title, t.language, i)),
-              ),
-            const PopupMenuDivider(),
-            const PopupMenuItem(enabled: false, child: Text('Subtítulos')),
-            CheckedPopupMenuItem(
-              checked: player.state.track.subtitle.id == 'no',
-              value: () => player.setSubtitleTrack(SubtitleTrack.no()),
-              child: const Text('Desactivados'),
-            ),
-            for (final (i, t) in subtitles.indexed)
-              CheckedPopupMenuItem(
-                checked: player.state.track.subtitle.id == t.id,
-                value: () => player.setSubtitleTrack(t),
-                child: Text(_label(t.title, t.language, i)),
-              ),
-          ],
-        );
-      },
     );
   }
 }

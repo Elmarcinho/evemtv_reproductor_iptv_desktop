@@ -1,6 +1,8 @@
 import 'package:drift/drift.dart';
 
+import '../../domain/entities/favorite.dart';
 import '../../domain/entities/profile.dart';
+import '../../domain/repositories/favorites_repository.dart';
 import '../../domain/repositories/profile_repository.dart';
 import '../../domain/repositories/settings_repository.dart';
 import 'app_database.dart';
@@ -58,9 +60,13 @@ class DriftProfileRepository implements ProfileRepository {
 
   @override
   Future<void> delete(int id) async {
-    // En las fases siguientes, aquí se borran también catálogo, EPG,
-    // favoritos y "seguir viendo" de este perfil, en la misma transacción.
+    // Todo lo del perfil se borra en la misma transacción. Los favoritos
+    // también tienen borrado en cascada; se borran explícitamente por si
+    // las claves foráneas estuvieran desactivadas.
     await _db.transaction(() async {
+      await (_db.delete(
+        _db.favorites,
+      )..where((t) => t.profileId.equals(id))).go();
       await (_db.delete(_db.profiles)..where((t) => t.id.equals(id))).go();
     });
   }
@@ -93,5 +99,60 @@ class DriftSettingsRepository implements SettingsRepository {
         .insertOnConflictUpdate(
           AppSettingsCompanion.insert(key: key, value: value),
         );
+  }
+}
+
+class DriftFavoritesRepository implements FavoritesRepository {
+  DriftFavoritesRepository(this._db);
+
+  final AppDatabase _db;
+
+  static Favorite _toEntity(FavoriteRow r) => Favorite(
+    kind: r.kind,
+    itemId: r.itemId,
+    name: r.name,
+    addedAt: r.addedAt,
+    imageUrl: r.imageUrl,
+    number: r.number,
+    containerExtension: r.containerExtension,
+    year: r.year,
+  );
+
+  @override
+  Stream<List<Favorite>> watch(int profileId, FavoriteKind kind) {
+    final query = _db.select(_db.favorites)
+      ..where((t) => t.profileId.equals(profileId) & t.kind.equalsValue(kind))
+      ..orderBy([(t) => OrderingTerm.desc(t.addedAt)]);
+    return query.watch().map((rows) => rows.map(_toEntity).toList());
+  }
+
+  @override
+  Future<void> add(int profileId, Favorite f) async {
+    await _db
+        .into(_db.favorites)
+        .insertOnConflictUpdate(
+          FavoritesCompanion.insert(
+            profileId: profileId,
+            kind: f.kind,
+            itemId: f.itemId,
+            name: f.name,
+            imageUrl: Value(f.imageUrl),
+            number: Value(f.number),
+            containerExtension: Value(f.containerExtension),
+            year: Value(f.year),
+            addedAt: f.addedAt,
+          ),
+        );
+  }
+
+  @override
+  Future<void> remove(int profileId, FavoriteKind kind, String itemId) async {
+    await (_db.delete(_db.favorites)..where(
+          (t) =>
+              t.profileId.equals(profileId) &
+              t.kind.equalsValue(kind) &
+              t.itemId.equals(itemId),
+        ))
+        .go();
   }
 }
