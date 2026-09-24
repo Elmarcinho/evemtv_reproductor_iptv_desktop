@@ -86,6 +86,17 @@ generan con:
 python3 tool/generate_icons.py   # requiere Pillow
 ```
 
+## Certificados raíz (Windows y macOS)
+
+mpv usa `assets/certs/cacert.pem` para verificar HTTPS en Windows y macOS
+(ver `docs/decisiones.md`, sección 12). Para actualizarlo:
+
+```bash
+curl -o assets/certs/cacert.pem https://curl.se/ca/cacert.pem
+curl -s https://curl.se/ca/cacert.pem.sha256    # comparar con:
+sha256sum assets/certs/cacert.pem
+```
+
 ## Estructura
 
 ```

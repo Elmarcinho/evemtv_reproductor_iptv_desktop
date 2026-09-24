@@ -172,9 +172,18 @@ void main() {
   ) async {
     await tester.runAsync(() async {
       final marker = 'marcaFicticia${DateTime.now().microsecondsSinceEpoch}';
+      // Servidor local que responde 404 al instante: sin esperas de red
+      // (un puerto cerrado puede quedar colgado según la plataforma).
+      final plain = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      plain.listen((r) {
+        r.response.statusCode = HttpStatus.notFound;
+        unawaited(r.response.close());
+      });
       final engine = await MediaKitEngine.create();
       await engine.open(
-        Uri.parse('http://127.0.0.1:9/movie/$marker/claveFicticia/1.mkv'),
+        Uri.parse(
+          'http://127.0.0.1:${plain.port}/movie/$marker/claveFicticia/1.mkv',
+        ),
       );
       await Future<void>.delayed(const Duration(seconds: 1));
       // media_kit escribía su lista directamente en Directory.systemTemp
@@ -197,6 +206,7 @@ void main() {
         }
       }
       await engine.dispose();
+      await plain.close(force: true);
       report(
         '(c) temporales',
         leaked.isEmpty,

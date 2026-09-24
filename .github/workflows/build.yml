@@ -87,10 +87,16 @@ jobs:
       - name: Compilar Windows
         run: flutter build windows --release
 
-      - name: Almacén seguro real (DPAPI), TLS y temporales de mpv
-        timeout-minutes: 15
+      # Un archivo por paso: lanzar la app de prueba dos veces en un mismo
+      # comando falla en algunas plataformas.
+      - name: Almacén seguro real (DPAPI)
+        timeout-minutes: 10
+        run: flutter test integration_test/secure_storage_test.dart -d windows
+
+      - name: TLS y temporales de mpv
+        timeout-minutes: 12
         run: >
-          flutter test integration_test -d windows
+          flutter test integration_test/playback_tls_test.dart -d windows
           --dart-define=TLS_VALID_URL=${{ env.TLS_VALID_URL }}
 
   build-macos:
@@ -120,8 +126,12 @@ jobs:
 
       # Valida que el Keychain funcione con firma ad-hoc (sin Team ID), con
       # usesDataProtectionKeychain: false, igual que en la app.
-      - name: Keychain real con firma ad-hoc, TLS y temporales de mpv
-        timeout-minutes: 15
+      - name: Keychain real con firma ad-hoc
+        timeout-minutes: 10
+        run: flutter test integration_test/secure_storage_test.dart -d macos
+
+      - name: TLS y temporales de mpv
+        timeout-minutes: 12
         run: >
-          flutter test integration_test -d macos
+          flutter test integration_test/playback_tls_test.dart -d macos
           --dart-define=TLS_VALID_URL=${{ env.TLS_VALID_URL }}

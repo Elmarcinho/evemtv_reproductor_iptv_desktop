@@ -41,6 +41,7 @@ dependencies:
   media_kit: ^1.2.6
   media_kit_libs_video: ^1.0.7
   media_kit_video: ^2.0.1
+  path: ^1.9.1
   path_provider: ^2.1.6
   window_manager: ^0.5.2
   xml: ^7.0.1
@@ -74,6 +75,9 @@ flutter:
     - assets/branding/logo.png
     - assets/branding/mark.png
     - assets/branding/icon_256.png
+    # Certificados raíz (Mozilla, vía curl.se) para la verificación TLS de
+    # mpv en Windows y macOS. Ver lib/features/player/tls_ca_bundle.dart.
+    - assets/certs/cacert.pem
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

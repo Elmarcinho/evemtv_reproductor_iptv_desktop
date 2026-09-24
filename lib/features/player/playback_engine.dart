@@ -2,6 +2,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../core/config/app_config.dart';
+import 'tls_ca_bundle.dart';
 
 /// Lo mínimo que el controlador de reproducción necesita del motor. Separado
 /// de media_kit para probar la reconexión sin libmpv.
@@ -44,10 +45,11 @@ class MediaKitEngine implements PlaybackEngine {
   };
 
   /// Certificados raíz para mpv, si la plataforma los necesita (ver
-  /// `tls_ca_bundle.dart`). Se fija una vez al arrancar.
+  /// [TlsCaBundle]). Se prepara una vez, al crear el primer reproductor.
   static String? caFile;
 
   static Future<MediaKitEngine> create() async {
+    caFile ??= await TlsCaBundle.ensure();
     final player = Player(
       configuration: const PlayerConfiguration(
         title: AppConfig.appName,

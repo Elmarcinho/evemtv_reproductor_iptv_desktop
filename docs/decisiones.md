@@ -333,6 +333,16 @@ Solo compila y prueba; el empaquetado y la publicación son de la Fase 5.
   workflow prueba en Linux, Windows y macOS con el mpv real que un
   certificado autofirmado se rechaza **sin que llegue la petición** y que un
   HTTPS válido sigue reproduciendo (`integration_test/playback_tls_test.dart`).
+- **Certificados raíz en Windows y macOS:** el libmpv que incluye media_kit
+  en esas plataformas no encuentra los certificados del sistema; con
+  `tls-verify=yes` rechazaba todo HTTPS, incluso válido (confirmado en CI).
+  La app incluye el paquete de certificados raíz de Mozilla publicado por
+  curl.se (`assets/certs/cacert.pem`, 121 certificados, datos de Mozilla al
+  13/08/2026) y se lo pasa a mpv con `tls-ca-file`. En Linux se usan los
+  certificados del sistema (el libmpv de la distribución los encuentra).
+  Consecuencia: en Windows y macOS no se confía en certificados raíz
+  agregados a mano al sistema (p. ej. proxies corporativos). El paquete
+  debe actualizarse periódicamente (ver README).
 - **Sin archivos temporales con la URL:** `player.open` de media_kit 1.2.6
   escribe la lista (con la URL y sus credenciales) en un archivo temporal y
   lo borra 5 s después. Se abre con `loadfile` directo a mpv, sin tocar el
