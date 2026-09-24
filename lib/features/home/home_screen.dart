@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/date_format.dart';
 import '../../core/widgets/state_views.dart';
@@ -125,10 +127,16 @@ class HomeScreen extends ConsumerWidget {
 class _SectionTiles extends StatelessWidget {
   const _SectionTiles();
 
+  /// Ruta de cada sección; `null` = todavía no disponible (Fase 3).
   static const _sections = [
-    (Icons.live_tv_rounded, 'En vivo', 'Canales y guía de programación'),
-    (Icons.movie_outlined, 'Películas', 'Catálogo de películas'),
-    (Icons.video_library_outlined, 'Series', 'Temporadas y episodios'),
+    (
+      Icons.live_tv_rounded,
+      'En vivo',
+      'Canales y guía de programación',
+      AppRoutes.live,
+    ),
+    (Icons.movie_outlined, 'Películas', 'Catálogo de películas', null),
+    (Icons.video_library_outlined, 'Series', 'Temporadas y episodios', null),
   ];
 
   @override
@@ -139,7 +147,13 @@ class _SectionTiles extends StatelessWidget {
         for (final (i, s) in _sections.indexed) ...[
           if (i > 0) const SizedBox(width: 20),
           Expanded(
-            child: _SectionTile(icon: s.$1, title: s.$2, subtitle: s.$3),
+            child: _SectionTile(
+              icon: s.$1,
+              title: s.$2,
+              subtitle: s.$3,
+              route: s.$4,
+              autofocus: i == 0,
+            ),
           ),
         ],
       ],
@@ -152,26 +166,36 @@ class _SectionTile extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
+    required this.route,
+    this.autofocus = false,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
+  final String? route;
+  final bool autofocus;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    // Se habilitan en las Fases 2 (En vivo) y 3 (Películas y Series).
-    return Tooltip(
-      message: 'Disponible próximamente',
-      child: Card(
+    final enabled = route != null;
+    final card = Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        autofocus: autofocus && enabled,
+        onTap: enabled ? () => context.go(route!) : null,
         child: Padding(
           padding: const EdgeInsets.all(28),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              Icon(icon, size: 44, color: AppColors.textSecondary),
+              Icon(
+                icon,
+                size: 44,
+                color: enabled ? AppColors.accent : AppColors.textSecondary,
+              ),
               const SizedBox(height: 20),
               Text(title, style: text.headlineSmall),
               const SizedBox(height: 6),
@@ -181,16 +205,21 @@ class _SectionTile extends StatelessWidget {
                   color: AppColors.textSecondary,
                 ),
               ),
-              const SizedBox(height: 12),
-              Text(
-                'Próximamente',
-                style: text.labelMedium?.copyWith(color: AppColors.accent),
-              ),
+              if (!enabled) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Próximamente',
+                  style: text.labelMedium?.copyWith(color: AppColors.accent),
+                ),
+              ],
             ],
           ),
         ),
       ),
     );
+    return enabled
+        ? card
+        : Tooltip(message: 'Disponible próximamente', child: card);
   }
 }
 

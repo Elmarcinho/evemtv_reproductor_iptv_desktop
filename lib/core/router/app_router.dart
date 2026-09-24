@@ -9,6 +9,8 @@ import '../../features/auth/presentation/profiles_screen.dart';
 import '../../features/auth/presentation/splash_screen.dart';
 import '../../features/auth/presentation/terms_screen.dart';
 import '../../features/home/home_screen.dart';
+import '../../features/live/live_screen.dart';
+import '../../features/player/live_player_screen.dart';
 
 abstract final class AppRoutes {
   static const String splash = '/splash';
@@ -16,6 +18,8 @@ abstract final class AppRoutes {
   static const String profiles = '/profiles';
   static const String login = '/login';
   static const String home = '/home';
+  static const String live = '/live';
+  static const String livePlayer = '/live/player';
 
   /// Pantallas accesibles sin sesión.
   static const Set<String> _public = {profiles, login};
@@ -72,6 +76,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.home,
         builder: (context, state) => const HomeScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.live,
+        builder: (context, state) => const LiveScreen(),
+        routes: [
+          GoRoute(
+            path: 'player',
+            // Usa el reproductor compartido con el mini reproductor.
+            builder: (context, state) => const LivePlayerScreen(),
+          ),
+        ],
       ),
     ],
   );

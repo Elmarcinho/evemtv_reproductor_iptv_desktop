@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:isolate';
 
 import 'package:dio/dio.dart';
 
@@ -34,6 +35,26 @@ class XtreamClient {
       },
     );
   }
+
+  /// URL de reproducción `{servidor}/{tipo}/{usuario}/{clave}/{archivo}`.
+  /// Usuario y contraseña van como segmentos codificados, así caracteres
+  /// como `/`, `?` o espacios no rompen la URL.
+  Uri streamUri(String kind, String file) {
+    final server = credentials.server;
+    return server.replace(
+      pathSegments: [
+        ...server.pathSegments.where((s) => s.isNotEmpty),
+        kind,
+        credentials.username,
+        credentials.password,
+        file,
+      ],
+    );
+  }
+
+  /// Respuestas más grandes que esto se decodifican en otro isolate para no
+  /// congelar la interfaz (listas de miles de canales).
+  static const int isolateDecodeThreshold = 256 * 1024;
 
   /// Ejecuta una acción de la API y devuelve el JSON decodificado.
   /// [action] `null` = login / información de la cuenta.
@@ -71,6 +92,9 @@ class XtreamClient {
     final body = response.data?.trim() ?? '';
     if (body.isEmpty) return null;
     try {
+      if (body.length > isolateDecodeThreshold) {
+        return await Isolate.run(() => jsonDecode(body));
+      }
       return jsonDecode(body);
     } on FormatException catch (e) {
       // No se registra el cuerpo: podría ser una página HTML con datos.

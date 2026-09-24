@@ -6,7 +6,7 @@ Compatible con servidores que usan la API de Xtream Codes y con listas M3U/M3U8.
 > EvemTv es solo un reproductor: **no incluye listas, canales ni contenido**.
 > Cada usuario es responsable del servicio y del contenido al que accede.
 
-Estado: **Fase 1** (inicio de sesión, perfiles y datos de la cuenta). Ver [`CLAUDE.md`](CLAUDE.md) para la especificación completa.
+Estado: **Fase 2** (TV en vivo con EPG corta y reproductor). Ver [`CLAUDE.md`](CLAUDE.md) para la especificación completa.
 
 ## Requisitos
 

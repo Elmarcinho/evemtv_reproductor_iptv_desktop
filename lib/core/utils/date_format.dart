@@ -8,6 +8,12 @@ abstract final class DateFormatEs {
     return '${_two(d.day)}/${_two(d.month)}/${d.year}';
   }
 
+  /// `18:05`, en hora local.
+  static String time(DateTime value) {
+    final d = value.toLocal();
+    return '${_two(d.hour)}:${_two(d.minute)}';
+  }
+
   /// `31/12/2026 18:05`, en hora local.
   static String dateTime(DateTime value) {
     final d = value.toLocal();

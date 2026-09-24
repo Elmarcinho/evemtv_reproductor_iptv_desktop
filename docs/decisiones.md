@@ -212,3 +212,55 @@ disponible. En ese caso se muestra un error claro al reproducir.
 
 Solo compila y prueba; el empaquetado y la publicación son de la Fase 5.
 
+## 9. TV en vivo y reproductor (Fase 2)
+
+- **Carga progresiva:** primero las categorías; los canales se piden por
+  categoría (al abrir se muestra la primera, no la lista completa). Las listas
+  usan `ListView.builder` con altura fija de fila, así miles de canales no
+  traban la interfaz. Las respuestas de más de 256 KB se decodifican en otro
+  isolate.
+- **Caché en memoria por sesión**, no en drift todavía. Las categorías y
+  canales ya vistos quedan en memoria mientras dure la sesión y se descartan
+  al cambiarla. La caché en disco llega con la búsqueda global (Fase 4, FTS5)
+  y la EPG completa (Fase 6), que son las que necesitan el catálogo completo.
+- **EPG corta** bajo demanda: solo para las filas visibles, con como máximo 4
+  peticiones simultáneas y 5 minutos de caché. Si falla, la fila no muestra
+  programa (no es un error para el usuario). Títulos en base64 decodificados
+  solo si el resultado es UTF-8 válido.
+- **Formato de vivo según `allowed_output_formats`:** `m3u8` y luego `ts`,
+  solo los permitidos. Si la cuenta no informa formatos o solo permite otros
+  (p. ej. `rtmp`), se prueban ambos. En cada reconexión se alterna el formato.
+- **Reconexión automática:** ante error, fin del stream o carga trabada más de
+  20 s, reintenta con esperas de 1, 2, 4, 8 y 15 s. Tras 30 s estable, el
+  contador vuelve a cero. Agotados los intentos, muestra un error fijo con
+  "Reintentar". Cambiar de canal cancela la reconexión pendiente.
+- **mpv:** nivel de log `error` (sus mensajes incluyen la URL), User-Agent
+  propio, `network-timeout` de 15 s. El motor se inicializa recién al
+  reproducir (ver sección 6).
+- **M3U:** la lista se descarga una vez por sesión (tope de 64 MB) y se
+  parsea en otro isolate. Los canales se identifican con un hash FNV-1a de la
+  URL (`m3u:<hash>`): estable para favoritos futuros y sin credenciales en
+  claro. Las entradas con rutas `/movie/`, `/series/` o extensión de video se
+  reservan para la Fase 3. Las listas no tienen EPG corta; la guía XMLTV de
+  `url-tvg` se usará en la Fase 6.
+- **Mini reproductor en En vivo:** un clic en un canal lo reproduce en el
+  panel derecho; con el teclado, se reproduce al detenerse 600 ms en un canal
+  (no se abre un stream por cada canal que se pasa). Doble clic, Enter o clic
+  sobre el video abren la pantalla completa. Ambos usan **el mismo
+  reproductor** (`livePlayerProvider`): pasar de uno a otro no corta ni
+  reconecta. El reproductor se libera al salir de En vivo o cambiar de
+  sesión. Si en pantalla completa se cambia de canal, la lista acompaña la
+  selección al volver.
+- **El panel del mini reproductor muestra el canal que suena**, no el
+  seleccionado: al cambiar de categoría la selección pasa a otra lista pero el
+  video sigue con el canal anterior, y el panel no debe contradecirlo. La
+  fila del canal que suena lleva un indicador.
+- **Pantalla completa:** lista de canales lateral (botón o tecla L) que marca
+  el canal actual y permite saltar a cualquiera con un clic; un clic fuera de
+  la lista la cierra. Sin botones de canal anterior/siguiente (se usan ↑/↓ o
+  la lista). Todos los íconos de la barra comparten color y tamaño.
+- **Atajos del reproductor:** Espacio pausa, F pantalla completa, Esc cierra
+  la lista, sale de pantalla completa o vuelve, ↑/↓ cambian de canal, ←/→
+  volumen, M silencio, L lista de canales. En la lista de En vivo: ↑/↓,
+  Re Pág/Av Pág, Enter pantalla completa, Esc vuelve al inicio.
+
