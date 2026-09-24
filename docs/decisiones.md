@@ -167,7 +167,10 @@ disponible. En ese caso se muestra un error claro al reproducir.
   de la URL.
 - **Lista M3U:** se conserva la URL completa (ruta y query). Si es un
   `get.php?username=…&password=…` se ofrece ingresar como Xtream, que agrega
-  EPG, películas y series. La verificación descarga solo los primeros 4 KB.
+  EPG, películas y series. La verificación conserva como máximo 4 KB y exige
+  que la primera línea con contenido sea `#EXTM3U` o `#EXTINF:`.
+- **Números y fechas anómalos** (`NaN`, `Infinity`, `1e309`, fuera de ±2^53 o
+  del rango de `DateTime`) se leen como ausentes, nunca lanzan.
 - **Nombre visible del perfil:** el usuario de la cuenta (en M3U, el
   `username` de la query si lo tiene). Se lee del almacén seguro al mostrar
   el selector y se mantiene solo en memoria. En la base se guarda un nombre
@@ -175,7 +178,15 @@ disponible. En ese caso se muestra un error claro al reproducir.
   disponible. Así la base no guarda usuario ni host del servidor.
 - **Cambiar de cuenta** vuelve al selector sin borrar nada. **Cerrar sesión**
   borra credenciales y todos los datos locales de ese perfil (spec §5.7): para
-  volver a usarlo hay que ingresar los datos de nuevo.
+  volver a usarlo hay que ingresar los datos de nuevo. La sesión termina
+  **solo si el borrado se completó**; si el llavero falla, la sesión sigue
+  abierta, se muestra el error y se puede reintentar.
+- **Resultados obsoletos (época de sesión):** `SessionController` lleva un
+  contador que cambia al abrir o terminar una sesión y al eliminar un perfil.
+  Toda operación asíncrona que depende de la sesión (abrir un perfil,
+  actualizar los datos de la cuenta y, en adelante, catálogo y EPG) toma un
+  `SessionToken` al empezar y descarta su resultado si la época cambió. Un
+  solo mecanismo en lugar de parches por pantalla.
 - **Abrir un perfil guardado no espera al servidor:** se entra al inicio y los
   datos de la cuenta se cargan ahí, con "Reintentar" si fallan. Así un servidor
   caído no bloquea el acceso a la app.

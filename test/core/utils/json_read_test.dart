@@ -47,4 +47,22 @@ void main() {
     expect(JsonRead.unixSeconds(null), isNull);
     expect(JsonRead.unixSeconds('nunca'), isNull);
   });
+
+  test('Codex 4: números anómalos no lanzan', () {
+    for (final v in ['NaN', 'Infinity', '-Infinity', '1e309', double.nan]) {
+      expect(JsonRead.integer(v), isNull, reason: '$v');
+      expect(JsonRead.unixSeconds(v), isNull, reason: '$v');
+    }
+    expect(JsonRead.integer('1e20'), isNull);
+  });
+
+  test('Codex 4: fechas fuera de rango = sin fecha, sin desbordes', () {
+    // Fuera del rango de DateTime (antes: RangeError).
+    expect(JsonRead.unixSeconds('8640000000001'), isNull);
+    // int máximo: antes se desbordaba al multiplicar y daba una fecha de 1969.
+    expect(JsonRead.unixSeconds('9223372036854775807'), isNull);
+    expect(JsonRead.unixSeconds('99999999999999999999'), isNull);
+    // El límite exacto sigue siendo válido.
+    expect(JsonRead.unixSeconds('8640000000000'), isNotNull);
+  });
 }

@@ -5,6 +5,9 @@ import '../auth/application/session.dart';
 
 /// Datos de la cuenta de la sesión activa. Usa los obtenidos en el login si
 /// los hay; si no (perfil guardado), los pide al servidor.
+///
+/// Los resultados de una sesión anterior se descartan con [SessionToken]:
+/// si mientras se esperaba la respuesta cambió la sesión, no se aplican.
 class AccountInfoController extends AsyncNotifier<AccountInfo?> {
   @override
   Future<AccountInfo?> build() async {
@@ -18,8 +21,12 @@ class AccountInfoController extends AsyncNotifier<AccountInfo?> {
       ref.read(contentSourceProvider)?.fetchAccountInfo();
 
   Future<void> refresh() async {
+    final sessions = ref.read(sessionProvider.notifier);
+    final token = sessions.token;
     state = const AsyncLoading();
-    state = await AsyncValue.guard(_fetch);
+    final result = await AsyncValue.guard(_fetch);
+    if (!ref.mounted || !sessions.isCurrent(token)) return;
+    state = result;
   }
 }
 

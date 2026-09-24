@@ -20,14 +20,25 @@ abstract final class JsonRead {
     return text;
   }
 
+  /// Mayor entero que un `double` representa con exactitud (2^53). Más allá
+  /// la conversión pierde precisión o, en el caso extremo, lanza.
+  static const int _maxSafeInteger = 9007199254740992;
+
   /// Entero desde `int`, `double`, `"12"`, `"12.0"` o `true`/`false`.
+  /// `NaN`, infinitos y valores fuera de ±2^53 devuelven `null`.
   static int? integer(Object? value) {
     if (value is int) return value;
-    if (value is double) return value.isFinite ? value.toInt() : null;
+    if (value is double) return _fromDouble(value);
     if (value is bool) return value ? 1 : 0;
     final text = string(value);
     if (text == null) return null;
-    return int.tryParse(text) ?? double.tryParse(text)?.toInt();
+    return int.tryParse(text) ?? _fromDouble(double.tryParse(text));
+  }
+
+  static int? _fromDouble(double? value) {
+    if (value == null || !value.isFinite) return null;
+    if (value.abs() > _maxSafeInteger) return null;
+    return value.toInt();
   }
 
   /// Booleano desde `true`, `1`, `"1"`, `"true"`, `"yes"`.
@@ -62,11 +73,17 @@ abstract final class JsonRead {
     for (final item in list(value)) ?string(item),
   ];
 
-  /// Fecha desde segundos Unix (`1767139200` o `"1767139200"`). `0`, vacío
-  /// o `null` significan "sin fecha".
+  /// Límite de `DateTime` (±8,64e15 ms) expresado en segundos.
+  static const int _maxUnixSeconds = 8640000000000;
+
+  /// Fecha desde segundos Unix (`1767139200` o `"1767139200"`). `0`, vacío,
+  /// `null` y valores fuera del rango de fechas significan "sin fecha".
+  /// Se comprueba el rango **antes** de multiplicar para evitar desbordes.
   static DateTime? unixSeconds(Object? value) {
     final seconds = integer(value);
-    if (seconds == null || seconds <= 0) return null;
+    if (seconds == null || seconds <= 0 || seconds > _maxUnixSeconds) {
+      return null;
+    }
     return DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true);
   }
 }

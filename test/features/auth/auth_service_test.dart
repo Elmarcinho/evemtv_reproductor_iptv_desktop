@@ -1,4 +1,6 @@
 // Casos de uso de autenticación con dobles en memoria y datos ficticios.
+import 'dart:async';
+
 import 'package:drift/native.dart';
 import 'package:evemtv/core/errors/app_failure.dart';
 import 'package:evemtv/core/logging/app_logger.dart';
@@ -9,6 +11,7 @@ import 'package:evemtv/domain/entities/profile.dart';
 import 'package:evemtv/domain/entities/source_credentials.dart';
 import 'package:evemtv/features/auth/application/auth_service.dart';
 import 'package:evemtv/features/auth/application/session.dart';
+import 'package:evemtv/features/home/account_info_controller.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -189,6 +192,125 @@ void main() {
       M3uCredentials(playlist: Uri.parse('http://lista.example.com/a.m3u'))
           .displayName,
       isNull,
+    );
+  });
+
+  group('Informe Codex Fase 1', () {
+    Future<void> addDemo({String user = 'usuarioDemo'}) => auth().addXtream(
+      url: 'http://panel.example.com',
+      username: user,
+      password: 'claveDemo',
+    );
+
+    test(
+      '1. si el borrado falla, cerrar sesión no termina la sesión',
+      () async {
+        await addDemo();
+        final profile = container.read(sessionProvider)!.profile;
+        storage.failDeleteWith = PlatformException(code: 'locked');
+
+        await expectLater(
+          auth().logout(profile),
+          throwsA(
+            isA<StorageFailure>().having(
+              (f) => f.kind,
+              'kind',
+              StorageFailureKind.deleteFailed,
+            ),
+          ),
+        );
+        // La sesión sigue abierta (el inicio puede mostrar el error) y la
+        // cuenta sigue guardada: nada se anunció como borrado.
+        expect(container.read(sessionProvider)?.profile.id, profile.id);
+        expect(await profileCount(), 1);
+        expect(storage.values, isNotEmpty);
+
+        // Al reintentar con el llavero disponible, se completa.
+        storage.failDeleteWith = null;
+        await auth().logout(profile);
+        expect(container.read(sessionProvider), isNull);
+        expect(await profileCount(), 0);
+      },
+    );
+
+    test('2. una apertura pendiente no revive un perfil eliminado', () async {
+      await addDemo();
+      final profile = container.read(sessionProvider)!.profile;
+      auth().switchProfile();
+
+      storage.readGate = Completer<void>();
+      final opening = auth().open(profile);
+      await auth().removeProfile(profile);
+      storage.readGate!.complete();
+
+      expect(await opening, isFalse);
+      expect(container.read(sessionProvider), isNull);
+      expect(Redactor.redact('claveDemo'), 'claveDemo');
+    });
+
+    test('2b. de dos aperturas solapadas, la obsoleta se descarta', () async {
+      await addDemo(user: 'usuarioA');
+      final a = container.read(sessionProvider)!.profile;
+      auth().switchProfile();
+      await addDemo(user: 'usuarioB');
+      final b = container.read(sessionProvider)!.profile;
+      auth().switchProfile();
+
+      // La lectura de A queda esperando; B abre mientras tanto.
+      final gateA = Completer<void>();
+      storage.readGate = gateA;
+      final openingA = auth().open(a);
+      storage.readGate = null;
+      expect(await auth().open(b), isTrue);
+
+      gateA.complete();
+      expect(await openingA, isFalse);
+      expect(container.read(sessionProvider)?.profile.id, b.id);
+    });
+
+    test(
+      '3. una actualización de la cuenta anterior no pisa la nueva',
+      () async {
+        // Las peticiones de A esperan a holdA cuando está puesto y responden
+        // con otra cantidad de conexiones; las de B responden al instante.
+        Completer<void>? holdA;
+        http.handler = (o) async {
+          if (o.uri.queryParameters['username'] == 'usuarioA' &&
+              holdA != null) {
+            await holdA.future;
+            return jsonBody(
+              loginOk.replaceFirst(
+                '"max_connections": "2"',
+                '"max_connections": "9"',
+              ),
+            );
+          }
+          return jsonBody(loginOk);
+        };
+
+        await addDemo(user: 'usuarioA');
+        final sub = container.listen(accountInfoProvider, (_, _) {});
+        addTearDown(sub.close);
+        await container.read(accountInfoProvider.future);
+
+        holdA = Completer<void>();
+        final refreshA = container.read(accountInfoProvider.notifier).refresh();
+
+        auth().switchProfile();
+        await addDemo(user: 'usuarioB');
+        expect(
+          (await container.read(accountInfoProvider.future))?.maxConnections,
+          2,
+        );
+
+        holdA.complete();
+        await refreshA;
+        expect(
+          container.read(sessionProvider)?.credentials.displayName,
+          'usuarioB',
+        );
+        expect(container.read(accountInfoProvider).value?.maxConnections, 2);
+      },
     );
   });
 }

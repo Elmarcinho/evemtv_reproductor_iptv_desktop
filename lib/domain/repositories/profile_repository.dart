@@ -7,7 +7,8 @@ abstract interface class ProfileRepository {
 
   Future<Profile> create({required String name, required SourceType type});
 
-  Future<void> markUsed(int id);
+  /// Marca el perfil como usado ahora. `false` si el perfil ya no existe.
+  Future<bool> markUsed(int id);
 
   /// Borra el perfil y todos sus datos locales (catálogo, EPG, favoritos…).
   Future<void> delete(int id);

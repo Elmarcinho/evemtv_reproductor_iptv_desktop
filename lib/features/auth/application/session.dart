@@ -23,21 +23,45 @@ class Session {
   final AccountInfo? initialAccountInfo;
 }
 
+/// Marca de la época en que empezó una operación asíncrona.
+///
+/// Mecanismo común para descartar resultados obsoletos: toda operación que
+/// dependa de la sesión o de un perfil toma un [SessionToken] al empezar y,
+/// después de cada `await`, comprueba [SessionController.isCurrent] antes de
+/// aplicar su resultado. La época cambia al abrir o terminar una sesión y al
+/// eliminar un perfil, así que cualquier resultado pendiente de "antes" queda
+/// invalidado de una sola vez.
+extension type const SessionToken._(int epoch) {}
+
 /// Sesión activa, o `null` si no hay ninguna.
 ///
 /// Al iniciar una sesión se registran sus credenciales en el redactor de
 /// logs; al terminarla se olvidan.
 class SessionController extends Notifier<Session?> {
+  int _epoch = 0;
+
   @override
   Session? build() => null;
 
+  /// Token de la época actual, para operaciones que empiezan ahora.
+  SessionToken get token => SessionToken._(_epoch);
+
+  /// `true` si no hubo cambios de sesión ni eliminaciones desde [token].
+  bool isCurrent(SessionToken token) => token.epoch == _epoch;
+
+  /// Invalida todas las operaciones pendientes sin tocar la sesión (p. ej.
+  /// al empezar a eliminar un perfil).
+  void invalidatePending() => _epoch++;
+
   void start(Session session) {
+    _epoch++;
     Redactor.clearSecrets();
     session.credentials.secrets.forEach(Redactor.registerSecret);
     state = session;
   }
 
   void end() {
+    _epoch++;
     Redactor.clearSecrets();
     state = null;
   }

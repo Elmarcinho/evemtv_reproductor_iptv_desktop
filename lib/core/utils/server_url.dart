@@ -53,6 +53,14 @@ abstract final class ServerUrl {
   /// Xtream, devuelve servidor y credenciales para ofrecer el ingreso Xtream,
   /// que tiene EPG, películas y series.
   static XtreamFromPlaylist? tryExtractXtream(Uri playlist) {
+    try {
+      return _extractXtream(playlist);
+    } on FormatException {
+      return null;
+    }
+  }
+
+  static XtreamFromPlaylist? _extractXtream(Uri playlist) {
     final segments = playlist.pathSegments.where((s) => s.isNotEmpty).toList();
     if (segments.isEmpty || segments.last.toLowerCase() != 'get.php') {
       return null;
@@ -86,6 +94,16 @@ abstract final class ServerUrl {
     }
     final uri = Uri.tryParse(text);
     if (uri == null) throw InvalidUrlFailure(InvalidUrlReason.malformed);
+    // Uri.tryParse acepta cosas que fallan recién al leerlas (`%FF` en la
+    // ruta, puertos de 20 dígitos). Se leen aquí para que todo error de
+    // formato termine como InvalidUrlFailure.
+    try {
+      uri.port;
+      uri.pathSegments;
+      uri.queryParametersAll;
+    } on FormatException {
+      throw InvalidUrlFailure(InvalidUrlReason.malformed);
+    }
     final scheme = uri.scheme.toLowerCase();
     if (scheme != 'http' && scheme != 'https') {
       throw InvalidUrlFailure(InvalidUrlReason.unsupportedScheme);

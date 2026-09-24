@@ -119,4 +119,34 @@ void main() {
       );
     });
   });
+
+  group('Codex 5: URLs que Uri.tryParse acepta pero fallan al leerlas', () {
+    test('se convierten en InvalidUrlFailure', () {
+      for (final url in [
+        'https://panel.example.com/%FF',
+        'http://panel.example.com:12345678901234567890',
+        'http://panel.example.com/?a=%FF',
+      ]) {
+        expect(
+          () => ServerUrl.normalizeXtream(url),
+          throwsUrl(InvalidUrlReason.malformed),
+          reason: url,
+        );
+        expect(
+          () => ServerUrl.validatePlaylist(url),
+          throwsUrl(InvalidUrlReason.malformed),
+          reason: url,
+        );
+      }
+    });
+
+    test('tryExtractXtream no lanza con un Uri dañado', () {
+      expect(
+        ServerUrl.tryExtractXtream(
+          Uri.parse('http://panel.example.com/get.php?username=%FF&password=x'),
+        ),
+        isNull,
+      );
+    });
+  });
 }

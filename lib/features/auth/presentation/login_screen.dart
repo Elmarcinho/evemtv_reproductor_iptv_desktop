@@ -63,8 +63,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     } on InvalidUrlFailure {
       suggestion = null;
     }
-    if (suggestion?.server != _xtreamSuggestion?.server ||
-        suggestion?.username != _xtreamSuggestion?.username) {
+    // Igualdad de registro: compara servidor, usuario **y contraseña**, así
+    // corregir solo la contraseña actualiza la sugerencia.
+    if (suggestion != _xtreamSuggestion) {
       setState(() => _xtreamSuggestion = suggestion);
     }
   }

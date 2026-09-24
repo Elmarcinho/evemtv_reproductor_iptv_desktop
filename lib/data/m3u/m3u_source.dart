@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../core/errors/app_failure.dart';
 import '../../core/logging/app_logger.dart';
@@ -44,7 +45,7 @@ class M3uSource implements ContentSource {
           extra: <String, Object?>{RetryInterceptor.maxRetriesKey: 1},
         ),
       );
-      head = await _readHead(response.data!.stream);
+      head = await readHead(response.data!.stream);
     } on DioException catch (e) {
       if (CancelToken.isCancel(e)) rethrow;
       final failure = mapDioException(e);
@@ -60,26 +61,39 @@ class M3uSource implements ContentSource {
 
     if (!looksLikePlaylist(utf8.decode(head, allowMalformed: true))) {
       AppLogger.event('m3u.invalid', {'bytes': head.length}, LogLevel.warning);
-      throw const InvalidPlaylistFailure(detail: 'sin #EXTM3U');
+      throw const InvalidPlaylistFailure(detail: 'sin directiva de lista');
     }
     AppLogger.event('m3u.ok', {'bytes': head.length}, LogLevel.debug);
     return null;
   }
 
-  static Future<List<int>> _readHead(Stream<List<int>> stream) async {
+  /// Lee como máximo [probeBytes] bytes y corta la descarga. Si un chunk
+  /// supera lo que falta, solo se conserva la parte necesaria.
+  @visibleForTesting
+  static Future<List<int>> readHead(Stream<List<int>> stream) async {
     final bytes = <int>[];
     await for (final chunk in stream) {
-      bytes.addAll(chunk);
+      final remaining = probeBytes - bytes.length;
+      bytes.addAll(
+        chunk.length > remaining ? chunk.sublist(0, remaining) : chunk,
+      );
       if (bytes.length >= probeBytes) break;
     }
     return bytes;
   }
 
-  /// `#EXTM3U` al inicio (tolerando BOM y espacios) o, en listas sin
-  /// cabecera, alguna línea `#EXTINF`.
+  /// La primera línea con contenido (tolerando BOM y espacios) debe ser una
+  /// directiva de lista: `#EXTM3U` o, en listas sin cabecera, `#EXTINF:`.
+  /// No basta con que la cadena aparezca en cualquier lugar: una página de
+  /// error HTML puede mencionarla.
   static bool looksLikePlaylist(String head) {
-    final text = head.replaceFirst('﻿', '').trimLeft();
-    return text.toUpperCase().startsWith('#EXTM3U') ||
-        text.toUpperCase().contains('#EXTINF');
+    final text = head.replaceFirst('\uFEFF', '');
+    for (final line in const LineSplitter().convert(text)) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+      final upper = trimmed.toUpperCase();
+      return upper.startsWith('#EXTM3U') || upper.startsWith('#EXTINF:');
+    }
+    return false;
   }
 }

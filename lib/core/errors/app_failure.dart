@@ -106,7 +106,11 @@ enum StorageFailureKind {
     'No se encontró un llavero del sistema para guardar las credenciales. '
     'En Linux instala y activa GNOME Keyring o KWallet.',
   ),
-  readWrite('No se pudieron leer o guardar los datos locales.');
+  readWrite('No se pudieron leer o guardar los datos locales.'),
+  deleteFailed(
+    'No se pudieron borrar los datos de esta cuenta. La cuenta sigue '
+    'guardada; intenta de nuevo.',
+  );
 
   const StorageFailureKind(this.message);
   final String message;

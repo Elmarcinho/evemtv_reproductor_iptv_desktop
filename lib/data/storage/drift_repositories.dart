@@ -48,10 +48,12 @@ class DriftProfileRepository implements ProfileRepository {
   }
 
   @override
-  Future<void> markUsed(int id) async {
-    await (_db.update(_db.profiles)..where((t) => t.id.equals(id))).write(
-      ProfilesCompanion(lastUsedAt: Value(_clock())),
-    );
+  Future<bool> markUsed(int id) async {
+    final updated =
+        await (_db.update(_db.profiles)..where((t) => t.id.equals(id))).write(
+          ProfilesCompanion(lastUsedAt: Value(_clock())),
+        );
+    return updated > 0;
   }
 
   @override

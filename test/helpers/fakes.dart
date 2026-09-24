@@ -61,6 +61,13 @@ class FakeSecureStorage extends Fake implements FlutterSecureStorage {
   final Map<String, String> values = {};
   PlatformException? failWith;
 
+  /// Solo falla al borrar (simula un llavero que se bloquea a mitad).
+  PlatformException? failDeleteWith;
+
+  /// Si no es `null`, las lecturas esperan a que se complete (para simular
+  /// un llavero lento y solapar operaciones).
+  Completer<void>? readGate;
+
   void _maybeFail() {
     if (failWith != null) throw failWith!;
   }
@@ -76,7 +83,9 @@ class FakeSecureStorage extends Fake implements FlutterSecureStorage {
     WindowsOptions? wOptions,
   }) async {
     _maybeFail();
-    return values[key];
+    final value = values[key];
+    await readGate?.future;
+    return value;
   }
 
   @override
@@ -109,6 +118,7 @@ class FakeSecureStorage extends Fake implements FlutterSecureStorage {
     WindowsOptions? wOptions,
   }) async {
     _maybeFail();
+    if (failDeleteWith != null) throw failDeleteWith!;
     values.remove(key);
   }
 }

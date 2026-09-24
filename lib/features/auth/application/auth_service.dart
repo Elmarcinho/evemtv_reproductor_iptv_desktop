@@ -57,32 +57,55 @@ class AuthService {
   /// Abre un perfil guardado. No valida contra el servidor: la pantalla de
   /// inicio carga los datos de la cuenta y muestra el error si lo hay, así
   /// se puede entrar aunque el servidor esté caído.
-  Future<void> open(Profile profile) async {
+  ///
+  /// Devuelve `false` si la apertura quedó obsoleta mientras esperaba (el
+  /// perfil se eliminó o se abrió otra sesión): en ese caso no abre nada.
+  Future<bool> open(Profile profile) async {
+    final token = _session.token;
     final credentials = await _credentials.read(profile.id);
+    if (!_session.isCurrent(token)) return _discarded(profile);
     if (credentials == null) {
       throw StorageFailure(StorageFailureKind.readWrite);
     }
-    await _profiles.markUsed(profile.id);
+    final exists = await _profiles.markUsed(profile.id);
+    if (!exists || !_session.isCurrent(token)) return _discarded(profile);
     _session.start(Session(profile: profile, credentials: credentials));
     AppLogger.event('session.open', {
       'profile': profile.id,
       'type': profile.type,
     });
+    return true;
+  }
+
+  bool _discarded(Profile profile) {
+    AppLogger.event('session.open_discarded', {'profile': profile.id});
+    return false;
   }
 
   /// Vuelve al selector de perfiles sin borrar nada.
   void switchProfile() => _session.end();
 
-  /// Cierra sesión: borra credenciales y todos los datos locales del perfil.
+  /// Cierra sesión: borra credenciales y todos los datos locales del perfil
+  /// y, **solo si el borrado se completó**, termina la sesión. Si falla,
+  /// lanza [StorageFailure] (`deleteFailed`) y la sesión sigue abierta, así
+  /// el inicio puede mostrar el error y el usuario reintentar.
   Future<void> logout(Profile profile) async {
-    _session.end();
     await removeProfile(profile);
+    _session.end();
   }
 
-  /// Elimina un perfil guardado y sus credenciales.
+  /// Elimina un perfil guardado y sus credenciales. Invalida primero las
+  /// operaciones pendientes (aperturas, actualizaciones de cuenta) para que
+  /// ninguna reviva el perfil al terminar.
   Future<void> removeProfile(Profile profile) async {
-    await _credentials.delete(profile.id);
-    await _profiles.delete(profile.id);
+    _session.invalidatePending();
+    try {
+      await _credentials.delete(profile.id);
+      await _profiles.delete(profile.id);
+    } on Object catch (e) {
+      AppLogger.e('No se pudo eliminar el perfil', e);
+      throw StorageFailure(StorageFailureKind.deleteFailed, cause: e);
+    }
     AppLogger.event('profile.removed', {'profile': profile.id});
   }
 
