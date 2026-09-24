@@ -155,3 +155,49 @@ archivo o exportación de diagnósticos, este riesgo debe revisarse.
 llama en `main()`, sino al primer intento de reproducir (`MediaEngine`), para
 que login, perfiles y catálogo funcionen aunque el reproductor no esté
 disponible. En ese caso se muestra un error claro al reproducir.
+
+## 7. Cuentas, sesiones y URLs (Fase 1)
+
+- **URL del servidor:** se exige `http://` o `https://` explícito. No se
+  agrega un esquema por defecto para no adivinar (y no degradar a HTTP en
+  silencio). Se normaliza: minúsculas, sin barra final, sin query ni
+  fragmento, sin el endpoint si se pegó (`/player_api.php`, `/get.php`), y el
+  puerto por defecto se omite (`http://host:80` = `http://host`). Se rechazan
+  espacios, hosts mal formados, puertos fuera de rango y credenciales dentro
+  de la URL.
+- **Lista M3U:** se conserva la URL completa (ruta y query). Si es un
+  `get.php?username=…&password=…` se ofrece ingresar como Xtream, que agrega
+  EPG, películas y series. La verificación descarga solo los primeros 4 KB.
+- **Nombre visible del perfil:** el usuario de la cuenta (en M3U, el
+  `username` de la query si lo tiene). Se lee del almacén seguro al mostrar
+  el selector y se mantiene solo en memoria. En la base se guarda un nombre
+  genérico ("Cuenta N"), que se muestra solo si el llavero no está
+  disponible. Así la base no guarda usuario ni host del servidor.
+- **Cambiar de cuenta** vuelve al selector sin borrar nada. **Cerrar sesión**
+  borra credenciales y todos los datos locales de ese perfil (spec §5.7): para
+  volver a usarlo hay que ingresar los datos de nuevo.
+- **Abrir un perfil guardado no espera al servidor:** se entra al inicio y los
+  datos de la cuenta se cargan ahí, con "Reintentar" si fallan. Así un servidor
+  caído no bloquea el acceso a la app.
+- **Reintentos:** solo GET, ante timeouts, conexión caída o 5xx, con espera de
+  0,8 s, 1,6 s… El login usa un solo reintento para no demorar el error. Los
+  reintentos automáticos de Riverpod están desactivados para no duplicarlos.
+- **Base de datos** en la carpeta de soporte de la app
+  (`~/.local/share/com.evemtv.player/` en Linux, `~/Library/Application
+  Support/com.evemtv.player/` en macOS, `%APPDATA%` en Windows), no en
+  Documentos.
+- **User-Agent** propio (`EvemTv/<versión>`); no se imita a otros
+  reproductores.
+
+## 8. CI desde la Fase 1
+
+`.github/workflows/build.yml` corre en cada push y pull request:
+
+- Linux: código generado de drift al día, formato, `flutter analyze`,
+  `flutter test` y compilación.
+- Windows: compilación y prueba del almacén seguro real.
+- macOS: compilación, firma ad-hoc verificada y prueba del **Keychain real con
+  firma ad-hoc** (`integration_test/secure_storage_test.dart`).
+
+Solo compila y prueba; el empaquetado y la publicación son de la Fase 5.
+

@@ -6,7 +6,7 @@ Compatible con servidores que usan la API de Xtream Codes y con listas M3U/M3U8.
 > EvemTv es solo un reproductor: **no incluye listas, canales ni contenido**.
 > Cada usuario es responsable del servicio y del contenido al que accede.
 
-Estado: **Fase 0** (base del proyecto). Ver [`CLAUDE.md`](CLAUDE.md) para la especificación completa.
+Estado: **Fase 1** (inicio de sesión, perfiles y datos de la cuenta). Ver [`CLAUDE.md`](CLAUDE.md) para la especificación completa.
 
 ## Requisitos
 
@@ -23,7 +23,8 @@ sudo apt install clang cmake ninja-build pkg-config libgtk-3-dev \
 
 - `libmpv` es el motor de video (media_kit). En Linux se usa la del sistema.
 - `libsecret` y un llavero activo (GNOME Keyring o KWallet) son necesarios para
-  guardar las credenciales de forma segura.
+  guardar las credenciales. Sin llavero, la app muestra un error y no guarda
+  nada en texto plano.
 
 ### macOS
 
@@ -55,8 +56,25 @@ Cada plataforma se compila en su propio sistema operativo (o en GitHub Actions).
 
 ```bash
 flutter analyze
-flutter test
+flutter test                              # tests unitarios y de widgets
+flutter test integration_test -d linux    # almacén seguro real del sistema
 ```
+
+Si cambias las tablas de `lib/data/storage/app_database.dart`, regenera el
+código de drift:
+
+```bash
+dart run build_runner build --delete-conflicting-outputs
+```
+
+GitHub Actions (`.github/workflows/build.yml`) analiza, prueba y compila
+Linux, Windows y macOS en cada push.
+
+## Datos locales
+
+- Credenciales: almacén seguro del sistema.
+- Perfiles y preferencias (sin credenciales): `evemtv.sqlite` en la carpeta de
+  soporte de la app (en Linux, `~/.local/share/com.evemtv.player/`).
 
 ## Estructura
 

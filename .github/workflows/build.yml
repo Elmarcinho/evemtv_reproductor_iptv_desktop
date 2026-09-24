@@ -1,0 +1,109 @@
+# Compilación continua (Fase 1): análisis, tests y compilación de Windows y
+# macOS. Solo compila; el empaquetado y la publicación llegan en la Fase 5.
+#
+# Repositorio público: este workflow no usa secretos ni credenciales.
+name: Compilar
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: '3.47.5'
+
+jobs:
+  analyze-test:
+    name: Análisis y tests (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Dependencias del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config \
+            libgtk-3-dev libmpv-dev libsecret-1-dev
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Código generado de drift al día
+        run: |
+          dart run build_runner build --delete-conflicting-outputs
+          git diff --exit-code -- lib/
+
+      - name: Formato
+        run: dart format --output=none --set-exit-if-changed lib test integration_test
+
+      - run: flutter analyze
+
+      - run: flutter test
+
+      - name: Compilar Linux
+        run: flutter build linux --release
+
+  build-windows:
+    name: Compilar Windows
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Compilar Windows
+        run: flutter build windows --release
+
+      - name: Almacén seguro real (DPAPI)
+        run: flutter test integration_test -d windows
+
+  build-macos:
+    name: Compilar macOS
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Compilar macOS
+        run: flutter build macos --release
+
+      - name: Firma ad-hoc y verificación
+        run: |
+          APP="build/macos/Build/Products/Release/EvemTv.app"
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign --display --entitlements - "$APP"
+
+      # Valida que el Keychain funcione con firma ad-hoc (sin Team ID), con
+      # usesDataProtectionKeychain: false, igual que en la app.
+      - name: Keychain real con firma ad-hoc
+        run: flutter test integration_test -d macos

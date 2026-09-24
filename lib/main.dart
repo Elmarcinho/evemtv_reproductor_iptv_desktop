@@ -26,7 +26,14 @@ Future<void> main() async {
   // El motor de video (media_kit) NO se inicializa aquí: ver MediaEngine.
   await _setUpWindow();
 
-  runApp(const ProviderScope(child: EvemTvApp()));
+  runApp(
+    ProviderScope(
+      // Sin reintentos automáticos de Riverpod: la red ya reintenta con
+      // espera progresiva y las pantallas ofrecen "Reintentar".
+      retry: (_, _) => null,
+      child: const EvemTvApp(),
+    ),
+  );
 }
 
 Future<void> _setUpWindow() async {

@@ -60,7 +60,10 @@ enum InvalidUrlReason {
   empty('Ingresa la URL del servidor.'),
   containsSpaces('La URL no puede contener espacios.'),
   unsupportedScheme('La URL debe empezar con http:// o https://.'),
-  malformed('La URL no tiene un formato válido.');
+  malformed('La URL no tiene un formato válido.'),
+  embeddedCredentials(
+    'No incluyas usuario ni contraseña en la URL: usa los campos de abajo.',
+  );
 
   const InvalidUrlReason(this.message);
   final String message;
@@ -72,9 +75,30 @@ class InvalidUrlFailure extends AppFailure {
   final InvalidUrlReason reason;
 }
 
+class CertificateFailure extends AppFailure {
+  const CertificateFailure({super.detail, super.cause})
+    : super(
+        'El certificado de seguridad del servidor no es válido. '
+        'Prueba con http:// si tu proveedor no usa HTTPS.',
+      );
+}
+
+class ResourceNotFoundFailure extends AppFailure {
+  const ResourceNotFoundFailure({super.detail, super.cause})
+    : super('No se encontró nada en esa dirección. Revisa la URL.');
+}
+
+class InvalidPlaylistFailure extends AppFailure {
+  const InvalidPlaylistFailure({super.detail, super.cause})
+    : super('La URL no devolvió una lista M3U válida.');
+}
+
 class InvalidResponseFailure extends AppFailure {
   const InvalidResponseFailure({super.detail, super.cause})
-    : super('El servidor devolvió una respuesta no reconocida.');
+    : super(
+        'El servidor devolvió una respuesta no reconocida. '
+        'Verifica que sea un servidor compatible con Xtream Codes.',
+      );
 }
 
 enum StorageFailureKind {
