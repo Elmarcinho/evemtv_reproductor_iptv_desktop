@@ -64,6 +64,7 @@ jobs:
       # no deja la URL en archivos temporales. (La prueba del almacén seguro
       # no corre aquí: el runner no tiene un llavero activo.)
       - name: TLS y archivos temporales de mpv
+        timeout-minutes: 12
         run: >
           xvfb-run -a flutter test integration_test/playback_tls_test.dart
           -d linux --dart-define=TLS_VALID_URL=${{ env.TLS_VALID_URL }}
@@ -87,6 +88,7 @@ jobs:
         run: flutter build windows --release
 
       - name: Almacén seguro real (DPAPI), TLS y temporales de mpv
+        timeout-minutes: 15
         run: >
           flutter test integration_test -d windows
           --dart-define=TLS_VALID_URL=${{ env.TLS_VALID_URL }}
@@ -119,6 +121,7 @@ jobs:
       # Valida que el Keychain funcione con firma ad-hoc (sin Team ID), con
       # usesDataProtectionKeychain: false, igual que en la app.
       - name: Keychain real con firma ad-hoc, TLS y temporales de mpv
+        timeout-minutes: 15
         run: >
           flutter test integration_test -d macos
           --dart-define=TLS_VALID_URL=${{ env.TLS_VALID_URL }}

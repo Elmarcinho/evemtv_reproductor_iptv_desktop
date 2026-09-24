@@ -4,6 +4,10 @@
 // (b) un servidor HTTPS con certificado válido sigue reproduciendo;
 // (c) abrir una URL no deja archivos temporales con la URL.
 // Datos ficticios. Ver integration_test/README.md.
+//
+// Los resultados se imprimen también como anotaciones de GitHub Actions
+// (`::notice::` / `::error::`) para poder diagnosticar sin los logs.
+// ignore_for_file: avoid_print
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -12,6 +16,7 @@ import 'package:evemtv/features/player/media_engine.dart';
 import 'package:evemtv/features/player/playback_engine.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:media_kit/media_kit.dart';
 
 import 'tls_fixture.dart';
 
@@ -27,72 +32,111 @@ const String validHttpsUrl = String.fromEnvironment(
 /// Ruta con "credenciales" ficticias, para comprobar que nunca se envía.
 const String secretPath = '/movie/usuarioFicticio/claveFicticia/1.mkv';
 
-/// Abierto = mpv informó una duración (el archivo se leyó).
-Future<bool> opensWithin(MediaKitEngine engine, Uri url, Duration limit) async {
+String get _os => Platform.operatingSystem;
+
+void report(String test, bool ok, String detail) {
+  final level = ok ? 'notice' : 'error';
+  // Una sola línea: GitHub la convierte en anotación.
+  print('::$level title=TLS $_os $test::${detail.replaceAll('\n', ' | ')}');
+}
+
+/// Resultado de intentar abrir: si llegó a abrir (mpv informó duración) y
+/// los errores que emitió mpv (sin URLs: solo para diagnóstico en CI con
+/// datos ficticios).
+Future<({bool opened, List<String> errors})> tryOpen(
+  MediaKitEngine engine,
+  Uri url,
+  Duration limit,
+) async {
+  final errors = <String>[];
+  final sub = engine.error.listen(errors.add);
   final opened = engine.duration.firstWhere((d) => d > Duration.zero);
   await engine.open(url);
+  var ok = true;
   try {
     await opened.timeout(limit);
-    return true;
   } on TimeoutException {
-    return false;
+    ok = false;
   }
+  await sub.cancel();
+  return (opened: ok, errors: errors);
 }
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  late HttpServer server;
+  HttpServer? server;
   final requests = <String>[];
+  Object? setupError;
 
   setUpAll(() async {
-    MediaEngine().ensureReady();
-    final context = SecurityContext()
-      ..useCertificateChainBytes(utf8.encode(selfSignedCertPem))
-      ..usePrivateKeyBytes(utf8.encode(selfSignedKeyPem));
-    server = await HttpServer.bindSecure(
-      InternetAddress.loopbackIPv4,
-      0,
-      context,
-    );
-    final media = base64.decode(tlsProbeMediaBase64);
-    server.listen(
-      (request) {
-        requests.add(request.uri.path);
-        request.response
-          ..headers.contentType = ContentType('video', 'x-matroska')
-          ..add(media);
-        unawaited(request.response.close());
-      },
-      // Los handshakes rechazados por mpv aparecen aquí: se ignoran.
-      onError: (_) {},
-    );
+    try {
+      MediaEngine().ensureReady();
+      final context = SecurityContext()
+        ..useCertificateChainBytes(utf8.encode(selfSignedCertPem))
+        ..usePrivateKeyBytes(utf8.encode(selfSignedKeyPem));
+      server = await HttpServer.bindSecure(
+        InternetAddress.loopbackIPv4,
+        0,
+        context,
+      );
+      final media = base64.decode(tlsProbeMediaBase64);
+      server!.listen(
+        (request) {
+          requests.add(request.uri.path);
+          request.response
+            ..headers.contentType = ContentType('video', 'x-matroska')
+            ..add(media);
+          unawaited(request.response.close());
+        },
+        // Los handshakes rechazados por mpv aparecen aquí: se ignoran.
+        onError: (_) {},
+      );
+    } on Object catch (e, s) {
+      setupError = e;
+      report('preparación', false, '$e ${s.toString().split('\n').first}');
+      rethrow;
+    }
   });
 
-  tearDownAll(() => server.close(force: true));
+  tearDownAll(() => server?.close(force: true));
 
   testWidgets('mpv tiene la verificación TLS activada', (tester) async {
     await tester.runAsync(() async {
       final engine = await MediaKitEngine.create();
-      final platform = engine.player.platform! as dynamic;
-      expect(await platform.getProperty('tls-verify'), 'yes');
+      final platform = engine.player.platform! as NativePlayer;
+      final verify = await platform.getProperty('tls-verify');
+      final caFile = await platform.getProperty('tls-ca-file');
+      report(
+        'tls-verify',
+        verify == 'yes',
+        'tls-verify=$verify tls-ca-file=$caFile',
+      );
       await engine.dispose();
+      expect(verify, 'yes');
     });
   });
 
   testWidgets('(a) certificado autofirmado: rechazado sin enviar la ruta', (
     tester,
   ) async {
+    expect(setupError, isNull);
     await tester.runAsync(() async {
       final engine = await MediaKitEngine.create();
-      final url = Uri.parse('https://127.0.0.1:${server.port}$secretPath');
-      final opened = await opensWithin(
-        engine,
-        url,
-        const Duration(seconds: 10),
-      );
+      final url = Uri.parse('https://127.0.0.1:${server!.port}$secretPath');
+      final r = await tryOpen(engine, url, const Duration(seconds: 10));
       await engine.dispose();
-      expect(opened, isFalse, reason: 'mpv aceptó un certificado no confiable');
+      final ok = !r.opened && requests.isEmpty;
+      report(
+        '(a) autofirmado',
+        ok,
+        'abrió=${r.opened} peticiones=${requests.length} errores=${r.errors.length}',
+      );
+      expect(
+        r.opened,
+        isFalse,
+        reason: 'mpv aceptó un certificado no confiable',
+      );
       expect(
         requests,
         isEmpty,
@@ -104,14 +148,17 @@ void main() {
   testWidgets('(b) certificado válido: reproduce', (tester) async {
     await tester.runAsync(() async {
       final engine = await MediaKitEngine.create();
-      final opened = await opensWithin(
+      final r = await tryOpen(
         engine,
         Uri.parse(validHttpsUrl),
         const Duration(seconds: 30),
       );
       await engine.dispose();
+      // La URL de prueba es pública y sin credenciales: el error de mpv se
+      // puede mostrar tal cual para diagnosticar (p. ej. certificados).
+      report('(b) válido', r.opened, 'abrió=${r.opened} errores=${r.errors}');
       expect(
-        opened,
+        r.opened,
         isTrue,
         reason:
             'mpv no pudo abrir un HTTPS válido: ¿faltan los certificados '
@@ -130,12 +177,18 @@ void main() {
         Uri.parse('http://127.0.0.1:9/movie/$marker/claveFicticia/1.mkv'),
       );
       await Future<void>.delayed(const Duration(seconds: 1));
+      // media_kit escribía su lista directamente en Directory.systemTemp
+      // (sin subcarpetas): basta revisar ese nivel, sin seguir enlaces.
       final leaked = <String>[];
+      var scanned = 0;
       await for (final entity
-          in Directory.systemTemp.list(recursive: true).handleError((_) {})) {
+          in Directory.systemTemp
+              .list(followLinks: false)
+              .handleError((Object _) {})) {
         if (entity is! File) continue;
         try {
           if (await entity.length() > 1024 * 1024) continue;
+          scanned++;
           if ((await entity.readAsString()).contains(marker)) {
             leaked.add(entity.path);
           }
@@ -144,6 +197,11 @@ void main() {
         }
       }
       await engine.dispose();
+      report(
+        '(c) temporales',
+        leaked.isEmpty,
+        'revisados=$scanned con la URL=${leaked.length}',
+      );
       expect(leaked, isEmpty);
     });
   });
