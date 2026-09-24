@@ -1,0 +1,27 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  # Los paneles Xtream devuelven tipos inconsistentes: los casts implícitos
+  # quedan prohibidos para obligar a parsear de forma tolerante.
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+  exclude:
+    - build/**
+    - windows/**
+    - macos/**
+    - linux/**
+    - "**/*.g.dart"
+
+linter:
+  rules:
+    - avoid_print
+    - always_declare_return_types
+    - cancel_subscriptions
+    - close_sinks
+    - directives_ordering
+    - prefer_final_locals
+    - prefer_single_quotes
+    - unawaited_futures
+    - use_super_parameters
