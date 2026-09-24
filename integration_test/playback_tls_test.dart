@@ -196,13 +196,19 @@ void main() {
               .handleError((Object _) {})) {
         if (entity is! File) continue;
         try {
-          if (await entity.length() > 1024 * 1024) continue;
+          // Solo archivos regulares: Dart lista como File también tuberías
+          // (FIFO) y sockets, y leerlos bloquea para siempre (pasaba en el
+          // runner de Linux).
+          final stat = await entity.stat();
+          if (stat.type != FileSystemEntityType.file) continue;
+          if (stat.size > 1024 * 1024) continue;
           scanned++;
-          if ((await entity.readAsString()).contains(marker)) {
-            leaked.add(entity.path);
-          }
+          final text = await entity.readAsString().timeout(
+            const Duration(seconds: 2),
+          );
+          if (text.contains(marker)) leaked.add(entity.path);
         } on Object {
-          // Archivos ilegibles o binarios: se ignoran.
+          // Archivos ilegibles, binarios o que no responden: se ignoran.
         }
       }
       await engine.dispose();
