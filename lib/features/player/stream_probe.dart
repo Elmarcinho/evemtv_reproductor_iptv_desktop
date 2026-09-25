@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../../core/logging/app_logger.dart';
+import '../../core/network/linked_cancel_token.dart';
 import '../../core/network/retry_interceptor.dart';
 
 /// Consulta el código HTTP de un stream pidiendo solo el primer byte. Se usa
@@ -10,9 +11,15 @@ import '../../core/network/retry_interceptor.dart';
 /// Devuelve `null` si no se pudo consultar (sin red, otro protocolo…).
 typedef StreamProbe = Future<int?> Function(Uri url);
 
-StreamProbe httpStreamProbe(Dio dio) => (url) async {
+/// [cancelWhen]: tokens cuyo cierre corta la consulta en curso (el del
+/// reproductor y el de la sesión); sin ellos la conexión seguiría abierta
+/// hasta responder o agotar el tiempo aunque ya nadie espere el resultado.
+StreamProbe httpStreamProbe(
+  Dio dio, {
+  Iterable<CancelToken?> cancelWhen = const [],
+}) => (url) async {
   if (!url.isScheme('http') && !url.isScheme('https')) return null;
-  final cancel = CancelToken();
+  final cancel = linkedCancelToken(cancelWhen);
   try {
     final response = await dio.getUri<ResponseBody>(
       url,

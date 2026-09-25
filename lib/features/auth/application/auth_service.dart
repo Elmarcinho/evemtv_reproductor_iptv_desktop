@@ -25,6 +25,13 @@ class AuthService {
 
   final ImageCacheRegistry _imageCaches;
 
+  /// Eliminaciones en curso, por perfil: una segunda llamada para el mismo
+  /// perfil reutiliza la primera en lugar de borrar dos veces.
+  final Map<int, Future<void>> _removing = {};
+
+  /// Cola de eliminaciones: de a una, para que dos cierres nunca se crucen.
+  Future<void> _queue = Future.value();
+
   final ProfileRepository _profiles;
   final CredentialStore _credentials;
   final ContentSourceFactory _sources;
@@ -65,6 +72,8 @@ class AuthService {
   /// Devuelve `false` si la apertura quedó obsoleta mientras esperaba (el
   /// perfil se eliminó o se abrió otra sesión): en ese caso no abre nada.
   Future<bool> open(Profile profile) async {
+    // Un perfil que se está eliminando no se abre.
+    if (_removing.containsKey(profile.id)) return _discarded(profile);
     final token = _session.token;
     final credentials = await _credentials.read(profile.id);
     if (!_session.isCurrent(token)) return _discarded(profile);
@@ -96,16 +105,53 @@ class AuthService {
   /// 2. Borra credenciales y datos locales. Si falla, lanza
   ///    [StorageFailure] (`deleteFailed`), reabre la caché y la sesión
   ///    **sigue abierta** para reintentar.
-  /// 3. Termina la sesión (se destruye su contenedor).
+  /// 3. Termina la sesión **que inició el cierre** (se destruye su
+  ///    contenedor). Si mientras tanto se cambió a otra cuenta, esa sigue
+  ///    abierta.
   /// 4. Borra la carpeta de imágenes y su clave, y comprueba que ya no
   ///    estén. Si algo quedó, lanza [StorageFailure] (`cleanupIncomplete`):
   ///    la sesión ya se cerró, pero no se informa éxito.
-  Future<void> logout(Profile profile) =>
-      removeProfile(profile, endSession: true);
+  ///
+  /// Si ya hay un cierre o eliminación de este perfil en curso, devuelve
+  /// ese mismo; si es de otro perfil, espera a que termine.
+  Future<void> logout(Profile profile) {
+    final session = _session.current;
+    return _serialized(
+      profile.id,
+      () => _remove(
+        profile,
+        session: session != null && session.profile.id == profile.id
+            ? session
+            : null,
+      ),
+    );
+  }
 
-  /// Elimina un perfil guardado y todo lo suyo (ver [logout]). Invalida
-  /// primero las aperturas pendientes para que ninguna reviva el perfil.
-  Future<void> removeProfile(Profile profile, {bool endSession = false}) async {
+  /// Elimina un perfil guardado y todo lo suyo (ver [logout]), sin tocar la
+  /// sesión activa.
+  Future<void> removeProfile(Profile profile) =>
+      _serialized(profile.id, () => _remove(profile));
+
+  Future<void> _serialized(int profileId, Future<void> Function() task) {
+    final running = _removing[profileId];
+    if (running != null) return running;
+    // Ya desde ahora (aunque espere en la cola) ninguna apertura pendiente
+    // de este perfil debe completarse.
+    _session.invalidatePending();
+    late final Future<void> future;
+    future = _queue.then((_) => task()).whenComplete(() {
+      if (identical(_removing[profileId], future)) _removing.remove(profileId);
+    });
+    _removing[profileId] = future;
+    // La cola sigue aunque esta eliminación falle.
+    _queue = future.catchError((Object _) {});
+    return future;
+  }
+
+  /// [session]: la sesión a terminar al completar el borrado (la que
+  /// estaba abierta al pedir el cierre), o `null` para no terminar ninguna.
+  Future<void> _remove(Profile profile, {Session? session}) async {
+    // Invalida las aperturas pendientes para que ninguna reviva el perfil.
     _session.invalidatePending();
     await _imageCaches.close(profile.id);
     try {
@@ -116,7 +162,9 @@ class AuthService {
       AppLogger.e('No se pudo eliminar el perfil', e);
       throw StorageFailure(StorageFailureKind.deleteFailed, cause: e);
     }
-    if (endSession) _session.end();
+    if (session != null && !_session.endIf(session)) {
+      AppLogger.event('session.end_skipped', {'reason': 'changed'});
+    }
     try {
       await _imageCaches.purge(profile.id);
     } on Object catch (e) {
@@ -139,9 +187,11 @@ class AuthService {
       name: cleanName.length > 60 ? cleanName.substring(0, 60) : cleanName,
       type: credentials.type,
     );
-    // Los ids se reutilizan: si quedaron imágenes o clave de un perfil
-    // anterior con este id (limpieza fallida), no deben heredarse: si no
-    // se pueden borrar, el perfil no se crea.
+    // Protección adicional: con AUTOINCREMENT la base no repite ids, pero
+    // la carpeta de imágenes y el llavero viven fuera de ella. Si la base
+    // se recreó, un perfil nuevo podría tener el id de uno anterior cuyos
+    // restos quedaron: no deben heredarse. Si no se pueden borrar, el
+    // perfil no se crea.
     try {
       await _imageCaches.purge(profile.id);
     } on Object catch (e) {

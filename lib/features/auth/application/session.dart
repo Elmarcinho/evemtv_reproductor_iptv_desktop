@@ -64,6 +64,18 @@ class SessionController extends Notifier<Session?> {
     Redactor.clearSecrets();
     state = null;
   }
+
+  /// Sesión activa (para servicios fuera de la interfaz).
+  Session? get current => state;
+
+  /// Termina la sesión solo si sigue siendo [session] (la misma instancia).
+  /// Un cierre que empezó en A y termina tarde no cierra la sesión de B.
+  /// Devuelve `true` si la terminó.
+  bool endIf(Session session) {
+    if (!identical(state, session)) return false;
+    end();
+    return true;
+  }
 }
 
 final sessionProvider = NotifierProvider<SessionController, Session?>(

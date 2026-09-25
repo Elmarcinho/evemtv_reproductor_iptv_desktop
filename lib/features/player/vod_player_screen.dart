@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart' show CancelToken;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -158,6 +159,9 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
 
   final FocusNode _focus = FocusNode(debugLabel: 'reproductor-vod');
 
+  /// Corta la consulta HTTP de diagnóstico al cerrar el reproductor.
+  final CancelToken _probeCancel = CancelToken();
+
   /// "Seguir viendo": se guarda cada [_saveEvery], al cambiar de episodio y
   /// al salir. El servicio se toma al iniciar para poder usarlo en dispose.
   late final VodProgressTracker _progress = VodProgressTracker(
@@ -187,7 +191,13 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
       }
       final playback = VodPlaybackController(
         engine: engine,
-        probe: httpStreamProbe(ref.read(dioProvider)),
+        probe: httpStreamProbe(
+          ref.read(dioProvider),
+          cancelWhen: [
+            _probeCancel,
+            ref.read(sessionContextProvider).lifetime.cancelToken,
+          ],
+        ),
       )..addListener(_onPlaybackChanged);
       setState(() {
         _engine = engine;
@@ -313,6 +323,7 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
     _hideTimer?.cancel();
     _countdownTimer?.cancel();
     _focus.dispose();
+    _probeCancel.cancel();
     _playback
       ?..removeListener(_onPlaybackChanged)
       ..dispose();

@@ -23,6 +23,7 @@ import 'package:evemtv/domain/repositories/watch_progress_repository.dart';
 import 'package:evemtv/features/auth/application/auth_service.dart';
 import 'package:evemtv/features/auth/application/session.dart';
 import 'package:evemtv/features/images/app_images.dart';
+import 'package:evemtv/features/player/stream_probe.dart';
 import 'package:evemtv/features/player/vod_player_screen.dart';
 import 'package:evemtv/features/player/watch_progress.dart';
 import 'package:evemtv/features/search/catalog_sync.dart';
@@ -436,6 +437,153 @@ void main() {
       await cache.load('http://img.example.com/otra.png');
       expect(cache.directory.listSync(), hasLength(2));
     });
+  });
+
+  group('Revisión de la rama', () {
+    late AppDatabase db;
+    late FakeSecureStorage storage;
+    late Directory root;
+    late ProviderContainer app;
+
+    setUp(() async {
+      db = _memoryDb();
+      storage = FakeSecureStorage();
+      root = await Directory.systemTemp.createTemp('evemtv_root_');
+      app = ProviderContainer.test(
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          secureStorageProvider.overrideWithValue(storage),
+          dioProvider.overrideWithValue(
+            testDio(FakeHttpAdapter((_) => jsonBody(loginOk))),
+          ),
+          imageCacheRootProvider.overrideWithValue(() async => root),
+          imageDecodeCheckProvider.overrideWithValue((_) async => true),
+        ],
+      );
+    });
+    tearDown(() async {
+      if (!(storage.deleteGate?.isCompleted ?? true)) {
+        storage.deleteGate!.complete();
+      }
+      if (!(storage.readGate?.isCompleted ?? true)) {
+        storage.readGate!.complete();
+      }
+      await db.close();
+      if (root.existsSync()) await root.delete(recursive: true);
+    });
+
+    AuthService auth() => app.read(authServiceProvider);
+    Future<Profile> add(String user) async {
+      await auth().addXtream(
+        url: 'http://panel.example.com',
+        username: user,
+        password: 'claveDemo',
+      );
+      return app.read(sessionProvider)!.profile;
+    }
+
+    bool hasImageKey(int id) =>
+        storage.values.containsKey('profile.$id.image_cache_key');
+
+    test('1. un cierre tardío de A no termina la sesión de B', () async {
+      final a = await add('usuarioA');
+      auth().switchProfile();
+      final b = await add('usuarioB');
+      auth().switchProfile();
+      expect(await auth().open(a), isTrue);
+
+      // El borrado de A se demora; mientras, se cambia a B.
+      storage.deleteGate = Completer<void>();
+      final closingA = auth().logout(a);
+      await pumpEventQueue();
+      auth().switchProfile();
+      expect(await auth().open(b), isTrue);
+      final sessionB = app.read(sessionProvider);
+
+      storage.deleteGate!.complete();
+      await closingA;
+      expect(identical(app.read(sessionProvider), sessionB), isTrue);
+      expect(await app.read(credentialStoreProvider).read(b.id), isNotNull);
+      expect(await app.read(credentialStoreProvider).read(a.id), isNull);
+    });
+
+    test('1b. no hay dos cierres simultáneos del mismo perfil', () async {
+      final a = await add('usuarioA');
+      storage.deleteGate = Completer<void>();
+      final first = auth().logout(a);
+      final second = auth().logout(a);
+      expect(identical(first, second), isTrue);
+      // Mientras se elimina, no se puede volver a abrir.
+      expect(await auth().open(a), isFalse);
+      storage.deleteGate!.complete();
+      await first;
+      expect(app.read(sessionProvider), isNull);
+    });
+
+    test('1c. los cierres de perfiles distintos van de a uno', () async {
+      final a = await add('usuarioA');
+      auth().switchProfile();
+      final b = await add('usuarioB');
+      auth().switchProfile();
+      final order = <String>[];
+      storage.deleteGate = Completer<void>();
+      final removeA = auth().removeProfile(a).then((_) => order.add('A'));
+      final removeB = auth().removeProfile(b).then((_) => order.add('B'));
+      await pumpEventQueue();
+      expect(order, isEmpty);
+      storage.deleteGate!.complete();
+      await Future.wait([removeA, removeB]);
+      expect(order, ['A', 'B']);
+    });
+
+    test(
+      '3. una lectura lenta de la clave no la recrea tras la limpieza',
+      () async {
+        final a = await add('usuarioA');
+        final scope = sessionContainerFor(app, app.read(sessionProvider)!);
+        addTearDown(scope.dispose);
+
+        // La caché empieza a prepararse y la lectura del llavero se demora.
+        storage.readGate = Completer<void>();
+        scope.listen(imageDiskCacheProvider, (_, _) {});
+        final opening = scope.read(imageDiskCacheProvider.future);
+        await pumpEventQueue();
+
+        final closing = auth().logout(a);
+        await pumpEventQueue();
+        storage.readGate!.complete();
+        await closing;
+        await opening;
+        await pumpEventQueue();
+
+        expect(hasImageKey(a.id), isFalse);
+        expect(Directory(p.join(root.path, '${a.id}')).existsSync(), isFalse);
+      },
+    );
+  });
+
+  test('4. la consulta de diagnóstico se corta al cerrar el reproductor o la '
+      'sesión', () async {
+    final slow = Completer<void>();
+    addTearDown(() {
+      if (!slow.isCompleted) slow.complete();
+    });
+    final http = FakeHttpAdapter((_) async {
+      await slow.future;
+      return textBody('', 206);
+    });
+    for (final closeSession in [false, true]) {
+      final player = CancelToken();
+      final session = SessionLifetime();
+      final probe = httpStreamProbe(
+        testDio(http),
+        cancelWhen: [player, session.cancelToken],
+      );
+      final result = probe(Uri.parse('http://s.example.com/movie/a/b/1.mkv'));
+      await pumpEventQueue();
+      closeSession ? session.close() : player.cancel();
+      expect(await result, isNull, reason: 'cerrar sesión: $closeSession');
+    }
   });
 
   test(

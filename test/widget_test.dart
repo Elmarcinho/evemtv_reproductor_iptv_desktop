@@ -217,4 +217,77 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await db.close();
   });
+
+  // Revisión de la rama, punto 2: al eliminar desde el selector la tarjeta
+  // desaparece antes de que termine la limpieza; el aviso igual se ve.
+  testWidgets('eliminar desde el selector con limpieza incompleta avisa', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final db = AppDatabase(
+      DatabaseConnection(
+        NativeDatabase.memory(),
+        closeStreamsSynchronously: true,
+      ),
+    );
+    final storage = FakeSecureStorage();
+    await tester.pumpWidget(
+      ProviderScope(
+        retry: (_, _) => null,
+        overrides: [
+          appDatabaseProvider.overrideWithValue(db),
+          secureStorageProvider.overrideWithValue(storage),
+          dioProvider.overrideWithValue(
+            testDio(FakeHttpAdapter((_) => jsonBody(loginOk))),
+          ),
+          tempImageCacheRoot(),
+        ],
+        child: const EvemTvApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Acepto y continúo'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Agregar cuenta'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'URL del servidor'),
+      'http://panel.example.com',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Usuario'),
+      'demo',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Contraseña'),
+      'clave',
+    );
+    await tester.tap(find.text('Conectar'));
+    await settleIo(tester);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cambiar cuenta'));
+    await settleIo(tester);
+    await tester.pumpAndSettle();
+
+    await tester.runAsync(() => ImageCacheKeyStore(storage).keyFor(1));
+    storage.ignoreDeleteOf = (k) => k.contains('image_cache_key');
+    await tester.tap(find.byTooltip('Opciones'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Eliminar cuenta'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Eliminar'));
+    await settleIo(tester);
+    await tester.pump();
+
+    expect(find.text('Todavía no hay cuentas guardadas'), findsOneWidget);
+    expect(
+      find.text(StorageFailureKind.cleanupIncomplete.message),
+      findsOneWidget,
+    );
+
+    await tester.pumpWidget(const SizedBox());
+    await db.close();
+  });
 }

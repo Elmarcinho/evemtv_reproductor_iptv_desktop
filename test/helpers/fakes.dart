@@ -78,6 +78,9 @@ class FakeSecureStorage extends Fake implements FlutterSecureStorage {
   /// que no elimina la entrada).
   bool Function(String key)? ignoreDeleteOf;
 
+  /// Si no es `null`, los borrados esperan a que se complete.
+  Completer<void>? deleteGate;
+
   /// Si no es `null`, las lecturas esperan a que se complete (para simular
   /// un llavero lento y solapar operaciones).
   Completer<void>? readGate;
@@ -132,6 +135,7 @@ class FakeSecureStorage extends Fake implements FlutterSecureStorage {
     WindowsOptions? wOptions,
   }) async {
     _maybeFail();
+    await deleteGate?.future;
     if (failDeleteWith != null) throw failDeleteWith!;
     if (ignoreDeleteOf?.call(key) ?? false) return;
     values.remove(key);

@@ -43,8 +43,32 @@ class ImageCacheRegistry {
   final Map<int, Set<ImageDiskCache>> _open = {};
 
   /// Perfiles que se están eliminando: una caché que se abra para ellos
-  /// nace cerrada.
+  /// nace cerrada, y no empieza ninguna inicialización nueva.
   final Set<int> _closing = {};
+
+  /// Inicializaciones en curso por perfil (leer o crear la clave en el
+  /// almacén seguro). [close] las espera: si no, una lectura lenta podría
+  /// escribir una clave nueva después de la limpieza.
+  final Map<int, Set<Future<void>>> _initializing = {};
+
+  /// Ejecuta [init] (la preparación de una caché del perfil) registrada
+  /// como pendiente. Falla sin ejecutarla si el perfil se está eliminando.
+  Future<T> initialize<T>(int profileId, Future<T> Function() init) {
+    if (_closing.contains(profileId)) {
+      return Future.error(StateError('perfil en eliminación'));
+    }
+    final result = init();
+    final pending = _initializing.putIfAbsent(profileId, () => {});
+    final done = result.then<void>((_) {}, onError: (Object _) {});
+    pending.add(done);
+    done.whenComplete(() {
+      pending.remove(done);
+      if (pending.isEmpty && identical(_initializing[profileId], pending)) {
+        _initializing.remove(profileId);
+      }
+    });
+    return result;
+  }
 
   Future<Directory> directoryFor(int profileId) async =>
       Directory(p.join((await _root()).path, '$profileId'));
@@ -60,9 +84,13 @@ class ImageCacheRegistry {
     if (set != null && set.isEmpty) _open.remove(profileId);
   }
 
-  /// Cierra todas las cachés del perfil y espera sus operaciones en curso.
+  /// Cierra todas las cachés del perfil y espera sus operaciones en curso,
+  /// incluidas las inicializaciones que ya habían empezado.
   Future<void> close(int profileId) async {
     _closing.add(profileId);
+    await Future.wait(_initializing[profileId]?.toList() ?? const []);
+    // Las que terminaron de inicializarse ya se registraron (y nacieron
+    // cerradas); se cierran todas y se espera lo que tengan en curso.
     await Future.wait([
       for (final c in _open[profileId]?.toList() ?? const <ImageDiskCache>[])
         c.close(),
@@ -91,8 +119,8 @@ class ImageCacheRegistry {
         throw StateError('la clave sigue guardada');
       }
     } finally {
-      // Los ids se pueden reutilizar: un perfil nuevo con este id no debe
-      // nacer con la caché cerrada.
+      // El perfil ya no existe; si la base se recreara y otro perfil
+      // tuviera este id, su caché no debe nacer cerrada.
       _closing.remove(profileId);
     }
   }
@@ -115,8 +143,13 @@ final imageDiskCacheProvider = FutureProvider<ImageDiskCache?>((ref) async {
   final keys = ref.watch(imageCacheKeyStoreProvider);
   final verifyDecodes = ref.watch(imageDecodeCheckProvider);
   try {
-    final key = await keys.keyFor(profileId);
-    final directory = await registry.directoryFor(profileId);
+    final (key, directory) = await registry.initialize(
+      profileId,
+      () async => (
+        await keys.keyFor(profileId),
+        await registry.directoryFor(profileId),
+      ),
+    );
     // La sesión terminó mientras se preparaba: no se abre nada.
     if (!ref.mounted) return null;
     final cache = ImageDiskCache(

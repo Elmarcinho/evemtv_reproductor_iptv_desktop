@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../../core/errors/app_failure.dart';
 import '../../core/logging/app_logger.dart';
+import '../../core/network/linked_cancel_token.dart';
 import '../../core/network/network_failure.dart';
 import '../../core/network/retry_interceptor.dart';
 import '../../domain/entities/account_info.dart';
@@ -209,20 +210,7 @@ class M3uSource implements ContentSource {
 
   /// Token propio de una petición, enlazado al de la sesión: se cancela
   /// solo (p. ej. tras leer la cabecera) o cuando termina la sesión.
-  CancelToken _requestToken() {
-    final token = CancelToken();
-    final session = _sessionToken;
-    if (session != null) {
-      if (session.isCancelled) {
-        token.cancel();
-      } else {
-        session.whenCancel.then((_) {
-          if (!token.isCancelled) token.cancel();
-        });
-      }
-    }
-    return token;
-  }
+  CancelToken _requestToken() => linkedCancelToken([_sessionToken]);
 
   Future<Response<ResponseBody>> _open(
     CancelToken cancel, {

@@ -480,9 +480,18 @@ contenedor**.
   cumplen siempre, no solo tras una limpieza periódica.
 - **Cierre:** `close()` rechaza cargas y escrituras nuevas, cancela las
   descargas y espera las operaciones en curso. Un registro por perfil, fuera
-  de las sesiones, permite cerrarlas antes de borrar la carpeta. Al crear un
-  perfil se borran restos de caché y clave con ese id (los ids de SQLite se
-  pueden reutilizar); si no se pueden borrar, el perfil no se crea.
+  de las sesiones, permite cerrarlas antes de borrar la carpeta, y también
+  espera las inicializaciones pendientes (una lectura lenta del llavero no
+  puede recrear la clave después de la limpieza).
+- **Ids de perfil y restos:** la tabla `profiles` usa `AUTOINCREMENT`, así
+  que dentro de una misma base un id eliminado **no se reutiliza**. Aun así,
+  al crear un perfil se borran restos de caché y clave con su id, como
+  protección adicional: el contador vive dentro de la base, pero la carpeta
+  de imágenes y el llavero están fuera. Si la base se borra o se recrea (se
+  borran los datos de la app a mano, una reinstalación que conserva el
+  llavero, como pasa en macOS), los ids vuelven a empezar y un perfil nuevo
+  heredaría las imágenes de otra cuenta. Si esos restos no se pueden
+  borrar, el perfil no se crea.
 
 ### Orden del cierre de sesión
 
@@ -490,9 +499,21 @@ contenedor**.
    descargas, espera lo que estaba en curso).
 2. Borrar credenciales y datos locales. Si falla, la caché se reabre, la
    sesión **sigue abierta** y se muestra el error para reintentar.
-3. Terminar la sesión: se destruye su contenedor.
+3. Terminar la sesión **que pidió el cierre** (se compara la instancia):
+   si mientras tanto se cambió a otra cuenta, esa sigue abierta. Se
+   destruye su contenedor.
 4. Borrar la carpeta de imágenes y su clave, y **comprobar** que ya no
    existen. Si algo quedó, se avisa con el mensajero global de la app (la
    pantalla de inicio ya no existe): "Se cerró la sesión, pero no se
    pudieron borrar todas las imágenes guardadas de esta cuenta en el
-   equipo." Nunca se informa éxito en ese caso.
+   equipo." Nunca se informa éxito en ese caso. Lo mismo al eliminar una
+   cuenta desde el selector (la tarjeta desaparece antes del aviso).
+
+Los cierres y eliminaciones van **de a uno**: una segunda petición para el
+mismo perfil reutiliza la que está en curso, una para otro perfil espera a
+que termine, y un perfil que se está eliminando no se puede abrir.
+
+La consulta HTTP de diagnóstico del reproductor de películas (el primer
+byte, para distinguir un 404 de un fallo pasajero) usa un token enlazado al
+del reproductor y al de la sesión: al cerrar cualquiera de los dos, la
+conexión se corta en lugar de esperar la respuesta o el tiempo límite.

@@ -169,9 +169,9 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
     try {
       await ref.read(authServiceProvider).removeProfile(widget.profile);
     } on Object catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(userMessageFor(e))));
+      // Global: al borrarse el perfil esta tarjeta desaparece antes de que
+      // termine la limpieza de imágenes, y el aviso igual debe verse.
+      showGlobalMessage(userMessageFor(e));
     }
   }
 
