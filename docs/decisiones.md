@@ -373,7 +373,14 @@ Solo compila y prueba; el empaquetado y la publicación son de la Fase 5.
   películas, series) con más de 12 h se vuelve a descargar completo, de a
   uno. El JSON grande se decodifica en otro isolate y drift escribe en el
   suyo: la interfaz no se bloquea. Si la sesión termina a mitad de camino, la
-  petición en curso se cancela y no sale ninguna otra (ver §14). En la búsqueda se ve el estado y hay un botón
+  petición en curso se cancela y no sale ninguna otra (ver §14).
+- **La búsqueda espera a la primera descarga:** mientras falte algún tipo y
+  la descarga siga en curso, el campo queda deshabilitado con "Preparando la
+  búsqueda" y el progreso (p. ej. "Descargando películas (2 de 3)"). Buscar
+  antes daba "nada coincide" solo porque faltaba contenido. Lo escrito se
+  conserva y se busca al terminar. En las actualizaciones siguientes se
+  busca en el catálogo anterior mientras se descarga el nuevo. Si un tipo
+  falla, se habilita igual y el mensaje dice qué falta. En la búsqueda se ve el estado y hay un botón
   "Actualizar".
 - **La navegación sigue usando la red + memoria** (con imágenes); el
   catálogo local sirve para la búsqueda. Mostrar las listas desde la base

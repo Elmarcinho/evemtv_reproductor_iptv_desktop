@@ -16,9 +16,13 @@ class CatalogSyncState {
     this.current,
     this.info = const {},
     this.failed = const {},
+    this.loaded = false,
   });
 
   final bool running;
+
+  /// `true` cuando ya se leyó qué hay en el catálogo local.
+  final bool loaded;
 
   /// Tipo que se está descargando ahora.
   final ContentKind? current;
@@ -29,13 +33,23 @@ class CatalogSyncState {
 
   bool get hasIndex => info.isNotEmpty;
 
+  /// Los tres tipos (vivo, películas, series) tienen catálogo local.
+  bool get isComplete => ContentKind.values.every(info.containsKey);
+
+  /// Se puede buscar: el catálogo está completo, o la descarga ya terminó
+  /// (si falló algún tipo se busca en lo que haya). Durante la primera
+  /// descarga no, porque una búsqueda "sin resultados" engañaría.
+  bool get searchReady => isComplete || (loaded && !running);
+
   CatalogSyncState copyWith({
     bool? running,
     ContentKind? current,
     bool clearCurrent = false,
     Map<ContentKind, CatalogSyncInfo>? info,
     Set<ContentKind>? failed,
+    bool? loaded,
   }) => CatalogSyncState(
+    loaded: loaded ?? this.loaded,
     running: running ?? this.running,
     current: clearCurrent ? null : (current ?? this.current),
     info: info ?? this.info,
@@ -92,7 +106,7 @@ class CatalogSyncController extends Notifier<CatalogSyncState> {
         if (i != null) info[kind] = i;
       }
       if (!alive()) return;
-      state = state.copyWith(info: info);
+      state = state.copyWith(info: info, loaded: true);
 
       final now = DateTime.now();
       final pending = [
@@ -136,6 +150,17 @@ class CatalogSyncController extends Notifier<CatalogSyncState> {
       );
     } on SessionClosedException {
       AppLogger.event('catalog.sync_stopped', {'reason': 'session_closed'});
+    } on Object catch (e) {
+      // Base local ilegible: se habilita la búsqueda con lo que haya en
+      // lugar de dejarla esperando para siempre.
+      AppLogger.w('No se pudo leer el catálogo local', e);
+      if (alive()) {
+        state = state.copyWith(
+          loaded: true,
+          running: false,
+          clearCurrent: true,
+        );
+      }
     }
   }
 

@@ -70,7 +70,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     final sync = ref.watch(catalogSyncProvider);
-    final results = _query.isEmpty
+    // En la primera descarga del catálogo no se busca: el resultado sería
+    // "nada coincide" solo porque falta contenido. Lo escrito se conserva y
+    // se busca en cuanto termina.
+    final ready = sync.searchReady;
+    ref.listen(catalogSyncProvider.select((s) => s.searchReady), (_, now) {
+      if (now) _field.requestFocus();
+    });
+    final results = !ready || _query.isEmpty
         ? null
         : ref.watch(searchResultsProvider(_query));
 
@@ -102,12 +109,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         controller: _controller,
                         focusNode: _field,
                         autofocus: true,
+                        enabled: ready,
                         onChanged: _onChanged,
                         textInputAction: TextInputAction.search,
                         onSubmitted: (v) => setState(() => _query = v.trim()),
-                        decoration: const InputDecoration(
-                          hintText: 'Buscar canales, películas y series',
-                          prefixIcon: Icon(Icons.search_rounded),
+                        decoration: InputDecoration(
+                          hintText: ready
+                              ? 'Buscar canales, películas y series'
+                              : 'Preparando la búsqueda…',
+                          prefixIcon: const Icon(Icons.search_rounded),
                         ),
                       ),
                     ),
@@ -117,7 +127,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               _SyncStatus(state: sync),
               const Divider(),
               Expanded(
-                child: results == null
+                child: !ready
+                    ? _Preparing(state: sync)
+                    : results == null
                     ? const _Hint()
                     : results.when(
                         loading: () => const LoadingView(),
@@ -125,10 +137,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         data: (r) => r.isEmpty
                             ? Center(
                                 child: Text(
-                                  sync.hasIndex
+                                  sync.isComplete
                                       ? 'Nada coincide con "$_query".'
-                                      : 'Todavía se está preparando el catálogo '
-                                            'para buscar. Prueba en un momento.',
+                                      : 'Nada coincide con "$_query" en lo '
+                                            'descargado. Falta: '
+                                            '${_missing(sync)}. Usa "Actualizar" '
+                                            'para reintentar.',
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
                                     color: AppColors.textSecondary,
@@ -140,6 +154,51 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+String _missing(CatalogSyncState s) => [
+  for (final k in ContentKind.values)
+    if (!s.info.containsKey(k)) k.label.toLowerCase(),
+].join(', ');
+
+/// Primera descarga del catálogo: la búsqueda espera a que termine.
+class _Preparing extends StatelessWidget {
+  const _Preparing({required this.state});
+
+  final CatalogSyncState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = ContentKind.values.length;
+    final done = state.info.length;
+    final current = state.current;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Preparando la búsqueda',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              current == null
+                  ? 'Leyendo el catálogo guardado…'
+                  : 'Descargando ${current.label.toLowerCase()} '
+                        '(${done + 1} de $total). La primera vez puede tardar '
+                        'unos minutos; después se actualiza sola.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 16),
+            LinearProgressIndicator(value: state.loaded ? done / total : null),
+          ],
         ),
       ),
     );

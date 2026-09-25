@@ -1,5 +1,6 @@
 // Fase 4: actualización del catálogo, seguir viendo, caché de imágenes,
 // atajos y búsqueda. Datos ficticios.
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -18,6 +19,7 @@ import 'package:evemtv/domain/entities/live.dart';
 import 'package:evemtv/domain/entities/profile.dart';
 import 'package:evemtv/domain/entities/vod.dart';
 import 'package:evemtv/domain/entities/watch_progress.dart';
+import 'package:evemtv/domain/repositories/content_source.dart';
 import 'package:evemtv/features/auth/application/session.dart';
 import 'package:evemtv/features/home/continue_watching_row.dart';
 import 'package:evemtv/features/player/vod_player_screen.dart';
@@ -64,6 +66,17 @@ class _CatalogSource extends FakeSource {
 
   @override
   Future<List<SeriesItem>> seriesItems({String? categoryId}) async => const [];
+}
+
+/// Catálogo cuyas películas esperan a [gate] (primera descarga lenta).
+class _SlowMoviesSource extends _CatalogSource {
+  final gate = Completer<void>();
+
+  @override
+  Future<List<VodItem>> vodItems({String? categoryId}) async {
+    await gate.future;
+    return super.vodItems(categoryId: categoryId);
+  }
 }
 
 AppDatabase memoryDb() => AppDatabase(
@@ -385,7 +398,12 @@ void main() {
     Object? pushedExtra;
     String? pushedRoute;
 
-    Future<void> pumpApp(WidgetTester tester, Widget home) async {
+    Future<void> pumpApp(
+      WidgetTester tester,
+      Widget home, {
+      ContentSource? source,
+      bool settle = true,
+    }) async {
       tester.view.physicalSize = const Size(1400, 1000);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
@@ -431,7 +449,7 @@ void main() {
             appDatabaseProvider.overrideWithValue(db),
             sessionProvider.overrideWith(FixedSession.new),
             sessionContextProvider.overrideWithValue(testSessionContext()),
-            contentSourceProvider.overrideWithValue(_CatalogSource()),
+            contentSourceProvider.overrideWithValue(source ?? _CatalogSource()),
           ],
           child: MaterialApp.router(
             theme: AppTheme.dark(),
@@ -439,7 +457,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      if (settle) await tester.pumpAndSettle();
     }
 
     setUp(() async {
@@ -499,6 +517,42 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.runAsync(db.close);
     });
+
+    testWidgets(
+      'búsqueda: en la primera descarga espera al catálogo completo',
+      (tester) async {
+        await tester.runAsync(
+          () =>
+              DriftProfileRepository(db)
+                  .create(name: 'A', type: SourceType.xtream),
+        );
+        final source = _SlowMoviesSource();
+        await pumpApp(
+          tester,
+          const SearchScreen(initialQuery: 'futbol'),
+          source: source,
+          settle: false,
+        );
+        await settleIo(tester);
+
+        // En vivo ya está, películas se está descargando: no se busca.
+        expect(find.text('Preparando la búsqueda'), findsOneWidget);
+        expect(find.textContaining('Descargando películas'), findsOneWidget);
+        expect(tester.widget<TextField>(find.byType(TextField)).enabled, false);
+        expect(find.textContaining('Nada coincide'), findsNothing);
+        expect(find.text('En vivo (1)'), findsNothing);
+
+        // Al terminar, se busca lo que se había escrito.
+        source.gate.complete();
+        await settleIo(tester);
+        await tester.pumpAndSettle();
+        expect(tester.widget<TextField>(find.byType(TextField)).enabled, true);
+        expect(find.text('En vivo (1)'), findsOneWidget);
+        expect(find.text('Películas (1)'), findsOneWidget);
+        await tester.pumpWidget(const SizedBox());
+        await tester.runAsync(db.close);
+      },
+    );
 
     testWidgets('búsqueda: un canal abre el reproductor con ese canal', (
       tester,
