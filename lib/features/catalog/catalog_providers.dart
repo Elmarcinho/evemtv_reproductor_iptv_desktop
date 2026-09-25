@@ -53,3 +53,50 @@ final seriesDetailProvider = FutureProvider.autoDispose
       final source = ref.watch(contentSourceProvider);
       return source.seriesDetail(series);
     }, dependencies: [contentSourceProvider]);
+
+/// Id de la categoría fija "Recién agregadas" en Películas y Series.
+const String recentlyAddedCategoryId = '__recientes__';
+
+/// Cuántos elementos muestra "Recién agregadas".
+const int recentlyAddedLimit = 200;
+
+/// Lo más nuevo primero según la fecha en que el servidor lo agregó. Los
+/// que no tienen fecha van después; si ninguno la tiene (listas M3U), se
+/// usa el orden inverso de la lista, que suele ir de lo más viejo a lo más
+/// nuevo.
+List<T> newestFirst<T>(List<T> items, DateTime? Function(T item) addedOf) {
+  final reversed = items.reversed.toList();
+  final dated = [
+    for (final item in reversed)
+      if (addedOf(item) != null) item,
+  ];
+  // sort no es estable: se desempata por la posición en la lista.
+  final index = {for (final (i, item) in reversed.indexed) item: i};
+  dated.sort((a, b) {
+    final byDate = addedOf(b)!.compareTo(addedOf(a)!);
+    return byDate != 0 ? byDate : index[a]!.compareTo(index[b]!);
+  });
+  return [
+    ...dated,
+    for (final item in reversed)
+      if (addedOf(item) == null) item,
+  ].take(recentlyAddedLimit).toList();
+}
+
+/// Películas recién agregadas (de la lista completa, en memoria).
+final recentMoviesProvider = FutureProvider<List<VodItem>>(
+  (ref) async => newestFirst(
+    await ref.watch(vodItemsProvider(null).future),
+    (m) => m.added,
+  ),
+  dependencies: [vodItemsProvider],
+);
+
+/// Series recién agregadas o con episodios nuevos (de la lista completa).
+final recentSeriesProvider = FutureProvider<List<SeriesItem>>(
+  (ref) async => newestFirst(
+    await ref.watch(seriesItemsProvider(null).future),
+    (s) => s.added,
+  ),
+  dependencies: [seriesItemsProvider],
+);

@@ -3,10 +3,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme.dart';
+import '../home/promo_banner.dart';
 
 /// Encabezado de En vivo, Películas y Series con el filtro de la selección
 /// actual: su etiqueta nombra la categoría ("Buscar en Favoritos") y queda
-/// visible mientras se escribe. La búsqueda global está en el inicio.
+/// visible mientras se escribe. La búsqueda global está en el inicio. Al
+/// lado, el botón discreto del anuncio ([PromoChip]).
 class SectionHeader extends StatelessWidget {
   const SectionHeader({
     super.key,
@@ -39,6 +41,9 @@ class SectionHeader extends StatelessWidget {
           const SizedBox(width: 8),
           Text(title, style: Theme.of(context).textTheme.headlineSmall),
           const Spacer(),
+          // Anuncio discreto, igual que en la barra del inicio.
+          const PromoChip(),
+          const SizedBox(width: 16),
           SizedBox(
             width: 340,
             child: ValueListenableBuilder<TextEditingValue>(

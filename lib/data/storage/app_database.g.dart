@@ -1618,6 +1618,15 @@ class $CatalogItemsTable extends CatalogItems
     type: DriftSqlType.double,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _addedMeta = const VerificationMeta('added');
+  @override
+  late final GeneratedColumn<int> added = GeneratedColumn<int>(
+    'added',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _positionMeta = const VerificationMeta(
     'position',
   );
@@ -1640,6 +1649,7 @@ class $CatalogItemsTable extends CatalogItems
     containerExtension,
     year,
     rating,
+    added,
     position,
   ];
   @override
@@ -1711,6 +1721,12 @@ class $CatalogItemsTable extends CatalogItems
         rating.isAcceptableOrUnknown(data['rating']!, _ratingMeta),
       );
     }
+    if (data.containsKey('added')) {
+      context.handle(
+        _addedMeta,
+        added.isAcceptableOrUnknown(data['added']!, _addedMeta),
+      );
+    }
     if (data.containsKey('position')) {
       context.handle(
         _positionMeta,
@@ -1766,6 +1782,10 @@ class $CatalogItemsTable extends CatalogItems
         DriftSqlType.double,
         data['${effectivePrefix}rating'],
       ),
+      added: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}added'],
+      ),
       position: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}position'],
@@ -1792,6 +1812,9 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
   final String? containerExtension;
   final int? year;
   final double? rating;
+
+  /// Cuándo se agregó al servidor (segundos Unix), si lo informa.
+  final int? added;
   final int position;
   const CatalogItemRow({
     required this.profileId,
@@ -1803,6 +1826,7 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
     this.containerExtension,
     this.year,
     this.rating,
+    this.added,
     required this.position,
   });
   @override
@@ -1831,6 +1855,9 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
     if (!nullToAbsent || rating != null) {
       map['rating'] = Variable<double>(rating);
     }
+    if (!nullToAbsent || added != null) {
+      map['added'] = Variable<int>(added);
+    }
     map['position'] = Variable<int>(position);
     return map;
   }
@@ -1854,6 +1881,9 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
       rating: rating == null && nullToAbsent
           ? const Value.absent()
           : Value(rating),
+      added: added == null && nullToAbsent
+          ? const Value.absent()
+          : Value(added),
       position: Value(position),
     );
   }
@@ -1877,6 +1907,7 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
       ),
       year: serializer.fromJson<int?>(json['year']),
       rating: serializer.fromJson<double?>(json['rating']),
+      added: serializer.fromJson<int?>(json['added']),
       position: serializer.fromJson<int>(json['position']),
     );
   }
@@ -1895,6 +1926,7 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
       'containerExtension': serializer.toJson<String?>(containerExtension),
       'year': serializer.toJson<int?>(year),
       'rating': serializer.toJson<double?>(rating),
+      'added': serializer.toJson<int?>(added),
       'position': serializer.toJson<int>(position),
     };
   }
@@ -1909,6 +1941,7 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
     Value<String?> containerExtension = const Value.absent(),
     Value<int?> year = const Value.absent(),
     Value<double?> rating = const Value.absent(),
+    Value<int?> added = const Value.absent(),
     int? position,
   }) => CatalogItemRow(
     profileId: profileId ?? this.profileId,
@@ -1922,6 +1955,7 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
         : this.containerExtension,
     year: year.present ? year.value : this.year,
     rating: rating.present ? rating.value : this.rating,
+    added: added.present ? added.value : this.added,
     position: position ?? this.position,
   );
   CatalogItemRow copyWithCompanion(CatalogItemsCompanion data) {
@@ -1939,6 +1973,7 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
           : this.containerExtension,
       year: data.year.present ? data.year.value : this.year,
       rating: data.rating.present ? data.rating.value : this.rating,
+      added: data.added.present ? data.added.value : this.added,
       position: data.position.present ? data.position.value : this.position,
     );
   }
@@ -1955,6 +1990,7 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
           ..write('containerExtension: $containerExtension, ')
           ..write('year: $year, ')
           ..write('rating: $rating, ')
+          ..write('added: $added, ')
           ..write('position: $position')
           ..write(')'))
         .toString();
@@ -1971,6 +2007,7 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
     containerExtension,
     year,
     rating,
+    added,
     position,
   );
   @override
@@ -1986,6 +2023,7 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
           other.containerExtension == this.containerExtension &&
           other.year == this.year &&
           other.rating == this.rating &&
+          other.added == this.added &&
           other.position == this.position);
 }
 
@@ -1999,6 +2037,7 @@ class CatalogItemsCompanion extends UpdateCompanion<CatalogItemRow> {
   final Value<String?> containerExtension;
   final Value<int?> year;
   final Value<double?> rating;
+  final Value<int?> added;
   final Value<int> position;
   final Value<int> rowid;
   const CatalogItemsCompanion({
@@ -2011,6 +2050,7 @@ class CatalogItemsCompanion extends UpdateCompanion<CatalogItemRow> {
     this.containerExtension = const Value.absent(),
     this.year = const Value.absent(),
     this.rating = const Value.absent(),
+    this.added = const Value.absent(),
     this.position = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -2024,6 +2064,7 @@ class CatalogItemsCompanion extends UpdateCompanion<CatalogItemRow> {
     this.containerExtension = const Value.absent(),
     this.year = const Value.absent(),
     this.rating = const Value.absent(),
+    this.added = const Value.absent(),
     required int position,
     this.rowid = const Value.absent(),
   }) : profileId = Value(profileId),
@@ -2041,6 +2082,7 @@ class CatalogItemsCompanion extends UpdateCompanion<CatalogItemRow> {
     Expression<String>? containerExtension,
     Expression<int>? year,
     Expression<double>? rating,
+    Expression<int>? added,
     Expression<int>? position,
     Expression<int>? rowid,
   }) {
@@ -2054,6 +2096,7 @@ class CatalogItemsCompanion extends UpdateCompanion<CatalogItemRow> {
       if (containerExtension != null) 'container_extension': containerExtension,
       if (year != null) 'year': year,
       if (rating != null) 'rating': rating,
+      if (added != null) 'added': added,
       if (position != null) 'position': position,
       if (rowid != null) 'rowid': rowid,
     });
@@ -2069,6 +2112,7 @@ class CatalogItemsCompanion extends UpdateCompanion<CatalogItemRow> {
     Value<String?>? containerExtension,
     Value<int?>? year,
     Value<double?>? rating,
+    Value<int?>? added,
     Value<int>? position,
     Value<int>? rowid,
   }) {
@@ -2082,6 +2126,7 @@ class CatalogItemsCompanion extends UpdateCompanion<CatalogItemRow> {
       containerExtension: containerExtension ?? this.containerExtension,
       year: year ?? this.year,
       rating: rating ?? this.rating,
+      added: added ?? this.added,
       position: position ?? this.position,
       rowid: rowid ?? this.rowid,
     );
@@ -2119,6 +2164,9 @@ class CatalogItemsCompanion extends UpdateCompanion<CatalogItemRow> {
     if (rating.present) {
       map['rating'] = Variable<double>(rating.value);
     }
+    if (added.present) {
+      map['added'] = Variable<int>(added.value);
+    }
     if (position.present) {
       map['position'] = Variable<int>(position.value);
     }
@@ -2140,6 +2188,7 @@ class CatalogItemsCompanion extends UpdateCompanion<CatalogItemRow> {
           ..write('containerExtension: $containerExtension, ')
           ..write('year: $year, ')
           ..write('rating: $rating, ')
+          ..write('added: $added, ')
           ..write('position: $position, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -4895,6 +4944,7 @@ typedef $$CatalogItemsTableCreateCompanionBuilder =
       Value<String?> containerExtension,
       Value<int?> year,
       Value<double?> rating,
+      Value<int?> added,
       required int position,
       Value<int> rowid,
     });
@@ -4909,6 +4959,7 @@ typedef $$CatalogItemsTableUpdateCompanionBuilder =
       Value<String?> containerExtension,
       Value<int?> year,
       Value<double?> rating,
+      Value<int?> added,
       Value<int> position,
       Value<int> rowid,
     });
@@ -4982,6 +5033,11 @@ class $$CatalogItemsTableFilterComposer
 
   ColumnFilters<double> get rating => $composableBuilder(
     column: $table.rating,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get added => $composableBuilder(
+    column: $table.added,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5063,6 +5119,11 @@ class $$CatalogItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get added => $composableBuilder(
+    column: $table.added,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get position => $composableBuilder(
     column: $table.position,
     builder: (column) => ColumnOrderings(column),
@@ -5129,6 +5190,9 @@ class $$CatalogItemsTableAnnotationComposer
   GeneratedColumn<double> get rating =>
       $composableBuilder(column: $table.rating, builder: (column) => column);
 
+  GeneratedColumn<int> get added =>
+      $composableBuilder(column: $table.added, builder: (column) => column);
+
   GeneratedColumn<int> get position =>
       $composableBuilder(column: $table.position, builder: (column) => column);
 
@@ -5193,6 +5257,7 @@ class $$CatalogItemsTableTableManager
                 Value<String?> containerExtension = const Value.absent(),
                 Value<int?> year = const Value.absent(),
                 Value<double?> rating = const Value.absent(),
+                Value<int?> added = const Value.absent(),
                 Value<int> position = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CatalogItemsCompanion(
@@ -5205,6 +5270,7 @@ class $$CatalogItemsTableTableManager
                 containerExtension: containerExtension,
                 year: year,
                 rating: rating,
+                added: added,
                 position: position,
                 rowid: rowid,
               ),
@@ -5219,6 +5285,7 @@ class $$CatalogItemsTableTableManager
                 Value<String?> containerExtension = const Value.absent(),
                 Value<int?> year = const Value.absent(),
                 Value<double?> rating = const Value.absent(),
+                Value<int?> added = const Value.absent(),
                 required int position,
                 Value<int> rowid = const Value.absent(),
               }) => CatalogItemsCompanion.insert(
@@ -5231,6 +5298,7 @@ class $$CatalogItemsTableTableManager
                 containerExtension: containerExtension,
                 year: year,
                 rating: rating,
+                added: added,
                 position: position,
                 rowid: rowid,
               ),

@@ -23,6 +23,7 @@ class CatalogEntry {
     this.containerExtension,
     this.year,
     this.rating,
+    this.added,
   });
 
   final ContentKind kind;
@@ -33,6 +34,9 @@ class CatalogEntry {
   final String? containerExtension;
   final int? year;
   final double? rating;
+
+  /// Cuándo se agregó al servidor, si lo informa.
+  final DateTime? added;
 
   factory CatalogEntry.fromChannel(LiveChannel c) => CatalogEntry(
     kind: ContentKind.live,
@@ -50,6 +54,7 @@ class CatalogEntry {
     containerExtension: m.containerExtension,
     year: m.year,
     rating: m.rating,
+    added: m.added,
   );
 
   factory CatalogEntry.fromSeries(SeriesItem s) => CatalogEntry(
@@ -59,6 +64,7 @@ class CatalogEntry {
     categoryId: s.categoryId,
     year: s.year,
     rating: s.rating,
+    added: s.added,
   );
 
   LiveChannel toChannel() =>
@@ -71,6 +77,7 @@ class CatalogEntry {
     containerExtension: containerExtension,
     year: year,
     rating: rating,
+    added: added,
   );
 
   SeriesItem toSeries() => SeriesItem(
@@ -79,6 +86,7 @@ class CatalogEntry {
     categoryId: categoryId,
     year: year,
     rating: rating,
+    added: added,
   );
 }
 

@@ -125,6 +125,7 @@ Reglas de robustez:
 - Sin contenido, listas ni servidores precargados.
 - Sin nombres ni logos de proveedores o marcas de IPTV.
 - Pantalla de términos al primer inicio: la app es solo un reproductor; el usuario es responsable del servicio y contenido al que accede.
+- **Excepción aprobada por el dueño del proyecto:** un anuncio propio del desarrollador (botón discreto en la barra superior del inicio y en el encabezado de En vivo, Películas y Series; banner en el selector de cuentas y el login) que invita a escribir por WhatsApp. Su texto y enlace viven solo en `AppConfig` (`promoTitle`, `promoSubtitle`, `promoUrl`); no se precargan listas, servidores ni credenciales, y la app no se conecta a ningún servicio por el anuncio (solo abre el enlace cuando el usuario pulsa "Escríbenos"). El banner se cierra con ✕ solo hasta la próxima apertura de la app.
 
 ## 9. Empaquetado y distribución
 

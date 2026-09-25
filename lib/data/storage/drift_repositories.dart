@@ -230,6 +230,11 @@ class DriftCatalogCache implements CatalogCache {
               containerExtension: Value(e.containerExtension),
               year: Value(e.year),
               rating: Value(e.rating),
+              added: Value(
+                e.added == null
+                    ? null
+                    : e.added!.millisecondsSinceEpoch ~/ 1000,
+              ),
               position: i,
             ),
           );
@@ -308,21 +313,82 @@ class DriftCatalogCache implements CatalogCache {
             readsFrom: {_db.catalogItems},
           )
           .get();
-      byKind[kind] = [
-        for (final r in rows)
-          CatalogEntry(
-            kind: kind,
-            id: r.read<String>('item_id'),
-            name: r.read<String>('name'),
-            categoryId: r.readNullable<String>('category_id'),
-            number: r.readNullable<int>('number'),
-            containerExtension: r.readNullable<String>('container_extension'),
-            year: r.readNullable<int>('year'),
-            rating: r.readNullable<double>('rating'),
-          ),
-      ];
+      byKind[kind] = [for (final r in rows) _entry(kind, r.data)];
     }
     return SearchResults(byKind);
+  }
+
+  static CatalogEntry _entry(ContentKind kind, Map<String, Object?> r) =>
+      CatalogEntry(
+        kind: kind,
+        id: r['item_id']! as String,
+        name: r['name']! as String,
+        categoryId: r['category_id'] as String?,
+        number: r['number'] as int?,
+        containerExtension: r['container_extension'] as String?,
+        year: r['year'] as int?,
+        rating: (r['rating'] as num?)?.toDouble(),
+        added: switch (r['added']) {
+          final int s => DateTime.fromMillisecondsSinceEpoch(
+            s * 1000,
+            isUtc: true,
+          ),
+          _ => null,
+        },
+      );
+
+  @override
+  Future<List<CatalogEntry>> recent(
+    int profileId,
+    ContentKind kind, {
+    required int minYear,
+    int limit = 20,
+  }) async {
+    // Lo último que subió el servidor primero (fecha de alta). Sin fecha,
+    // el año y, dentro del año, más adelante en la lista del servidor suele
+    // ser más reciente (los paneles las devuelven en orden de alta).
+    final rows = await _db
+        .customSelect(
+          'SELECT * FROM catalog_items '
+          'WHERE profile_id = ? AND kind = ? AND year >= ? '
+          'ORDER BY added IS NULL, added DESC, year DESC, position DESC '
+          'LIMIT ?',
+          variables: [
+            Variable.withInt(profileId),
+            Variable.withString(kind.name),
+            Variable.withInt(minYear),
+            Variable.withInt(limit),
+          ],
+          readsFrom: {_db.catalogItems},
+        )
+        .get();
+    return [for (final r in rows) _entry(kind, r.data)];
+  }
+
+  @override
+  Future<List<CatalogEntry>> topRated(
+    int profileId,
+    ContentKind kind, {
+    int limit = 20,
+    int? minYear,
+  }) async {
+    final rows = await _db
+        .customSelect(
+          'SELECT * FROM catalog_items '
+          'WHERE profile_id = ? AND kind = ? AND rating > 0 '
+          '${minYear == null ? '' : 'AND year >= ? '}'
+          'ORDER BY rating DESC, added IS NULL, added DESC, position DESC '
+          'LIMIT ?',
+          variables: [
+            Variable.withInt(profileId),
+            Variable.withString(kind.name),
+            if (minYear != null) Variable.withInt(minYear),
+            Variable.withInt(limit),
+          ],
+          readsFrom: {_db.catalogItems},
+        )
+        .get();
+    return [for (final r in rows) _entry(kind, r.data)];
   }
 
   @override

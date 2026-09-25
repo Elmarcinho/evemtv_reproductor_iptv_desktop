@@ -5,6 +5,8 @@ import 'package:evemtv/data/providers.dart';
 import 'package:evemtv/domain/entities/live.dart';
 import 'package:evemtv/domain/entities/vod.dart';
 import 'package:evemtv/features/auth/application/session.dart';
+import 'package:evemtv/features/catalog/related.dart';
+import 'package:evemtv/features/home/promo_banner.dart';
 import 'package:evemtv/features/movies/movie_detail_screen.dart';
 import 'package:evemtv/features/movies/movies_screen.dart';
 import 'package:evemtv/features/player/vod_player_screen.dart';
@@ -34,10 +36,27 @@ class _CatalogSource extends FakeSource {
     requested.add(categoryId);
     return switch (categoryId) {
       'e' => const [
-        VodItem(id: '1', name: 'Película Uno', year: 2022, rating: 7.5),
-        VodItem(id: '2', name: 'Película Dos'),
+        VodItem(
+          id: '1',
+          name: 'Película Uno',
+          year: 2022,
+          rating: 7.5,
+          categoryId: 'e',
+        ),
+        VodItem(
+          id: '2',
+          name: 'Película Dos',
+          categoryId: 'e',
+          posterUrl: 'http://img.example.com/2.jpg',
+        ),
       ],
       'c' => const [VodItem(id: '3', name: 'Clásica Tres')],
+      // Todas: con fechas de alta ficticias (la 3 es la última agregada).
+      null => [
+        VodItem(id: '1', name: 'Película Uno', added: DateTime.utc(2026, 1, 5)),
+        const VodItem(id: '2', name: 'Película Dos'),
+        VodItem(id: '3', name: 'Clásica Tres', added: DateTime.utc(2026, 9, 1)),
+      ],
       _ => const [],
     };
   }
@@ -153,6 +172,8 @@ void main() {
   ) async {
     await pump(tester, AppRoutes.movies);
     expect(source.requested, ['e']);
+    // Anuncio discreto en el encabezado, como en el inicio.
+    expect(find.byType(PromoChip), findsOneWidget);
     expect(find.text('Película Uno'), findsWidgets);
     expect(find.text('2022  ·  ★ 7.5'), findsOneWidget);
 
@@ -162,12 +183,57 @@ void main() {
     expect(find.text('Película Uno'), findsNothing);
   });
 
+  testWidgets('películas: "Recién agregadas", lo último primero', (
+    tester,
+  ) async {
+    await pump(tester, AppRoutes.movies);
+    await tester.tap(find.text('Recién agregadas'));
+    await tester.pumpAndSettle();
+    expect(source.requested, contains(null));
+    final titles = [
+      for (final t in ['Clásica Tres', 'Película Uno', 'Película Dos'])
+        tester.getTopLeft(find.text(t).first),
+    ];
+    // Grilla: primero la más nueva, después la otra con fecha y al final
+    // la que no la tiene.
+    expect(titles[0].dx, lessThan(titles[1].dx));
+    expect(titles[1].dx, lessThan(titles[2].dx));
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.text('Buscar en Recién agregadas'), findsOneWidget);
+  });
+
   testWidgets('películas: filtro', (tester) async {
     await pump(tester, AppRoutes.movies);
     await tester.enterText(find.byType(TextField), 'dos');
     await tester.pumpAndSettle();
     expect(find.text('Película Dos'), findsWidgets);
     expect(find.text('Película Uno'), findsNothing);
+  });
+
+  testWidgets('ficha de película: "Más de" su categoría, sin ella misma', (
+    tester,
+  ) async {
+    await pump(tester, AppRoutes.movies);
+    await tester.tap(find.text('Película Uno').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Más de Estrenos'), findsOneWidget);
+    // Ficha corta: la fila va al pie de la pantalla (se ve el fondo).
+    expect(
+      tester.getBottomLeft(find.byType(RelatedRow<VodItem>)).dy,
+      closeTo(1000 - 32, 1),
+    );
+    // Película Dos (misma categoría, con póster) se recomienda.
+    final related = find.descendant(
+      of: find.byType(RelatedRow<VodItem>),
+      matching: find.text('Película Dos'),
+    );
+    // Título debajo del póster (y el de respaldo del póster, sin imagen).
+    expect(related, findsWidgets);
+    await tester.ensureVisible(related.last);
+    await tester.pumpAndSettle();
+    await tester.tap(related.last);
+    await tester.pumpAndSettle();
+    expect(find.text('Sinopsis ficticia de Película Dos.'), findsOneWidget);
   });
 
   testWidgets('ficha de película y reproducir', (tester) async {

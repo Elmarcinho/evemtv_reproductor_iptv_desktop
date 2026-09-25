@@ -9,6 +9,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/server_url.dart';
 import '../../../core/widgets/keyboard_help.dart';
 import '../../../core/widgets/state_views.dart';
+import '../../home/promo_banner.dart';
 import '../application/auth_service.dart';
 
 /// Alta de una cuenta: Xtream Codes (usuario, contraseña y URL) o lista M3U.
@@ -134,6 +135,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   Widget build(BuildContext context) {
     final hasProfiles = ref.watch(profilesProvider).value?.isNotEmpty ?? false;
     return Scaffold(
+      bottomNavigationBar: const PromoFooter(),
       body: ScreenShortcuts(
         title: 'Agregar cuenta',
         help: const [
@@ -161,11 +163,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           const AppLogo(height: 56),
                           const Spacer(),
                           if (hasProfiles)
-                            TextButton.icon(
+                            // Destacado: es la salida de esta pantalla.
+                            OutlinedButton.icon(
                               onPressed: _busy
                                   ? null
                                   : () => context.go(AppRoutes.profiles),
-                              icon: const Icon(Icons.arrow_back_rounded),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.accent,
+                                backgroundColor: AppColors.accent.withValues(
+                                  alpha: 0.12,
+                                ),
+                                side: const BorderSide(color: AppColors.accent),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 18,
+                                  vertical: 14,
+                                ),
+                                textStyle: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              icon: const Icon(
+                                Icons.arrow_back_rounded,
+                                size: 20,
+                              ),
                               label: const Text('Volver'),
                             ),
                         ],

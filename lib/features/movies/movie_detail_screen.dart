@@ -10,6 +10,7 @@ import '../../domain/entities/vod.dart';
 import '../../domain/entities/watch_progress.dart';
 import '../catalog/catalog_providers.dart';
 import '../catalog/detail_layout.dart';
+import '../catalog/related.dart';
 import '../favorites/favorite_button.dart';
 import '../favorites/favorites.dart';
 import '../player/vod_player_screen.dart';
@@ -53,6 +54,7 @@ class MovieDetailScreen extends ConsumerWidget {
         if (item.rating != null) '★ ${item.rating!.toStringAsFixed(1)}',
       ],
       plot: data?.plot,
+      related: RelatedMovies(movie: movie),
       credits: [
         if (data?.director != null) ('Dirección', data!.director!),
         if (data?.cast != null) ('Reparto', data!.cast!),

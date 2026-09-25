@@ -11,4 +11,4 @@ PRODUCT_NAME = EvemTv
 PRODUCT_BUNDLE_IDENTIFIER = com.evemtv.player
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 EvemTv. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 Godebol. All rights reserved.

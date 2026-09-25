@@ -15,14 +15,16 @@ abstract final class XtreamVodParser {
     if (m == null) return null;
     final id = JsonRead.integer(m['stream_id']);
     if (id == null || id < 0) return null;
+    final name = JsonRead.string(m['name']);
     return VodItem(
       id: '$id',
-      name: JsonRead.string(m['name']) ?? 'Película $id',
+      name: name ?? 'Película $id',
       posterUrl: httpUrl(JsonRead.string(m['stream_icon'])),
       rating: rating(m['rating']),
       categoryId: JsonRead.string(m['category_id']),
       containerExtension: _extension(m['container_extension']),
-      year: _year(m['year']) ?? _year(m['releasedate']),
+      year: _year(m['year']) ?? _year(m['releasedate']) ?? yearInName(name),
+      added: _timestamp(m['added']),
     );
   }
 
@@ -74,13 +76,19 @@ abstract final class XtreamVodParser {
     if (m == null) return null;
     final id = JsonRead.integer(m['series_id']);
     if (id == null || id < 0) return null;
+    final name = JsonRead.string(m['name']);
     return SeriesItem(
       id: '$id',
-      name: JsonRead.string(m['name']) ?? 'Serie $id',
+      name: name ?? 'Serie $id',
       posterUrl: httpUrl(JsonRead.string(m['cover'])),
       rating: rating(m['rating']),
       categoryId: JsonRead.string(m['category_id']),
-      year: _year(m['releaseDate']) ?? _year(m['release_date']),
+      year:
+          _year(m['releaseDate']) ??
+          _year(m['release_date']) ??
+          _year(m['year']) ??
+          yearInName(name),
+      added: _timestamp(m['last_modified']),
     );
   }
 
@@ -237,6 +245,31 @@ abstract final class XtreamVodParser {
     final ext = JsonRead.string(value)?.toLowerCase();
     if (ext == null || !RegExp(r'^[a-z0-9]{1,5}$').hasMatch(ext)) return null;
     return ext;
+  }
+
+  /// Año escrito en el nombre, como hacen muchos paneles que no llenan el
+  /// campo: `"Título (2026)"`, `"Título [2026]"` o `"Título - 2026"`. Un año
+  /// suelto al final no cuenta ("Blade Runner 2049" no es de 2049).
+  static int? yearInName(String? name) {
+    if (name == null) return null;
+    final match = _yearInName.firstMatch(name.trim());
+    final year = int.tryParse(match?.group(1) ?? match?.group(2) ?? '');
+    if (year == null || year < 1900 || year > 2100) return null;
+    return year;
+  }
+
+  static final RegExp _yearInName = RegExp(
+    r'[\(\[](\d{4})[\)\]]|\s[-–]\s(\d{4})$',
+  );
+
+  /// Fecha Unix en segundos (`"1767225600"`), o `null` si no es válida.
+  static DateTime? _timestamp(Object? value) {
+    final seconds = JsonRead.integer(value);
+    // Entre 2000 y 2100: descarta 0, valores en milisegundos y basura.
+    if (seconds == null || seconds < 946684800 || seconds > 4102444800) {
+      return null;
+    }
+    return DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true);
   }
 
   /// Año de 4 cifras al inicio de un texto (`"2021-05-01"`) o numérico.

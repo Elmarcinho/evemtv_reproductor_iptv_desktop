@@ -4,6 +4,7 @@ import 'package:evemtv/core/theme/app_theme.dart';
 import 'package:evemtv/data/providers.dart';
 import 'package:evemtv/domain/entities/live.dart';
 import 'package:evemtv/features/auth/application/session.dart';
+import 'package:evemtv/features/home/promo_banner.dart';
 import 'package:evemtv/features/live/live_screen.dart';
 import 'package:evemtv/features/player/live_player_provider.dart';
 import 'package:flutter/material.dart';
@@ -139,6 +140,8 @@ void main() {
     await pumpLive(tester);
     expect(find.text('Noticias Uno'), findsWidgets);
     expect(source.requestedCategories, ['n']);
+    // Anuncio discreto en el encabezado, como en el inicio.
+    expect(find.byType(PromoChip), findsOneWidget);
   });
 
   testWidgets('detalle con programa actual y siguiente', (tester) async {

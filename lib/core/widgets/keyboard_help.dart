@@ -24,7 +24,14 @@ abstract final class ShortcutCatalog {
 
   static const List<ShortcutDoc> home = [
     (keys: 'Ctrl+F', action: 'Buscar en vivo, películas y series'),
-    (keys: 'Flechas / Enter', action: 'Elegir una sección o seguir viendo'),
+    (
+      keys: 'Flechas / Enter',
+      action: 'Elegir una sección, novedad o seguir viendo',
+    ),
+    (
+      keys: '← / → en Novedades',
+      action: 'Pasar tarjetas (Enter abre la ficha)',
+    ),
   ];
 
   static const List<ShortcutDoc> liveList = [

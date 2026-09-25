@@ -74,6 +74,9 @@ class CatalogItems extends Table {
   TextColumn get containerExtension => text().nullable()();
   IntColumn get year => integer().nullable()();
   RealColumn get rating => real().nullable()();
+
+  /// Cuándo se agregó al servidor (segundos Unix), si lo informa.
+  IntColumn get added => integer().nullable()();
   IntColumn get position => integer()();
 
   @override
@@ -138,7 +141,7 @@ class AppDatabase extends _$AppDatabase {
   /// imagen y con categoría (la imagen se resuelve desde el catálogo).
   /// 4: catálogo local con búsqueda FTS5 y "seguir viendo".
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   /// Índice de búsqueda FTS5: sin tildes ni mayúsculas ("futbol" encuentra
   /// "Fútbol"). Tabla independiente: se escribe junto con `catalog_items`
@@ -166,6 +169,11 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(catalogItems);
         await m.createTable(catalogSync);
         await m.createTable(watchProgressEntries);
+      } else if (from < 5) {
+        await m.addColumn(catalogItems, catalogItems.added);
+        // El catálogo guardado no tiene fechas: se borra la marca de
+        // actualización para que se vuelva a descargar al abrir la sesión.
+        await customStatement('DELETE FROM catalog_sync');
       }
     },
     // Necesario para que funcione el borrado en cascada por perfil.

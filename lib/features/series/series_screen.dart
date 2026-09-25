@@ -32,6 +32,7 @@ class SeriesScreen extends StatelessWidget {
       fromFavorite: (f) => f.toSeries(),
       resolvedFavoritesProvider: resolvedSeriesFavoritesProvider,
       idOf: (s) => s.id,
+      recentProvider: recentSeriesProvider,
       favoritesEmptyMessage:
           'Todavía no tienes series favoritas.\n'
           'Márcalas con ★ en la ficha de la serie.',

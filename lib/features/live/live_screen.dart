@@ -234,6 +234,7 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
                                   id: favoritesCategoryId,
                                   name: 'Favoritos',
                                   icon: Icons.star_rounded,
+                                  color: null,
                                 ),
                               ],
                             ),

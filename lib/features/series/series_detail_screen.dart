@@ -11,6 +11,7 @@ import '../../domain/entities/vod.dart';
 import '../../domain/entities/watch_progress.dart';
 import '../catalog/catalog_providers.dart';
 import '../catalog/detail_layout.dart';
+import '../catalog/related.dart';
 import '../favorites/favorite_button.dart';
 import '../favorites/favorites.dart';
 import '../images/app_images.dart';
@@ -110,6 +111,7 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
               ref.read(favoritesServiceProvider).toggleSeries(series),
         ),
       ],
+      related: RelatedSeries(series: widget.series),
       below: detail.hasError
           ? SliverToBoxAdapter(
               child: ErrorView(

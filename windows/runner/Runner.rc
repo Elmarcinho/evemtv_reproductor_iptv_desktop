@@ -89,11 +89,11 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "EvemTv" "\0"
+            VALUE "CompanyName", "Godebol" "\0"
             VALUE "FileDescription", "EvemTv" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "evemtv" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 EvemTv. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Godebol. All rights reserved." "\0"
             VALUE "OriginalFilename", "evemtv.exe" "\0"
             VALUE "ProductName", "EvemTv" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"

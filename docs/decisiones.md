@@ -517,3 +517,106 @@ La consulta HTTP de diagnóstico del reproductor de películas (el primer
 byte, para distinguir un 404 de un fallo pasajero) usa un token enlazado al
 del reproductor y al de la sesión: al cerrar cualquiera de los dos, la
 conexión se corta en lugar de esperar la respuesta o el tiempo límite.
+
+## 15. Inicio: barra superior, secciones y novedades
+
+- **Barra superior:** logo, búsqueda global con forma de campo (abre la
+  pantalla de búsqueda; Ctrl+F) y, a la derecha, usuario y fecha de
+  vencimiento juntos (solo la fecha; en amarillo si faltan menos de 7 días,
+  en rojo si venció o está bloqueada). Cambiar cuenta, cerrar sesión y
+  actualizar los datos de la cuenta están en el menú del usuario. El resto
+  de los datos de la cuenta ya no se muestra.
+- **Secciones compactas** (En vivo, Películas, Series): icono a la
+  izquierda, nombre y la cantidad del catálogo local ("1.240 canales").
+  Nada arranca resaltado: el foco está en la pantalla y la primera flecha
+  entra a los controles, que desde ahí muestran el foco como siempre.
+- **Arreglo según "Seguir viendo":**
+  - Sin nada a medio ver: secciones grandes arriba y, debajo, tres
+    carruseles alineados con ellas (uno por columna): películas nuevas,
+    series nuevas y "Mejor valoradas" (películas y series por puntaje del
+    servidor, de los últimos 5 años si hay suficientes). En cada columna,
+    la tarjeta del frente, el título de la sección y los datos quedan
+    centrados; las de atrás asoman a la izquierda. Un clic en la tarjeta
+    abre la ficha.
+  - Con algo a medio ver: "Seguir viendo" ocupa el área principal y las
+    novedades pasan a una columna compacta a la derecha.
+  - Hasta saber cuál corresponde se muestran solo las secciones, y el cambio
+    se anima con un fundido: no se ve un arreglo y enseguida el otro.
+- **Novedades ("estrenos recién agregados"):** carruseles de tarjetas
+  apiladas con las películas y series del año en curso, primero las que el
+  servidor subió último (fecha de alta). Así no aparecen películas viejas
+  subidas hace poco (esas están en "Recién agregadas"), y entre los
+  estrenos se ve primero lo más fresco del servidor. Salen del
+  catálogo local (año y orden del servidor) y los pósters se resuelven en
+  memoria desde la lista de su categoría: no se guarda ninguna URL. El año
+  sale del reloj (el 1 de enero pasa solo al nuevo). Si hay menos de 6 del
+  año, se suman las del anterior ("Películas recientes"); si aun así
+  faltan, o el panel no informa años, se completa con las de mejor puntaje
+  ("Películas destacadas"). Los paneles no informan qué es lo más visto:
+  el puntaje es lo más cercano. Sin nada que mostrar, ese carrusel no
+  aparece. Muchos paneles no llenan el año: se toma del
+  nombre si viene como "(2026)", "[2026]" o "- 2026" (un número suelto al
+  final no cuenta: "Blade Runner 2049"). Al mostrarlo se limpia el nombre:
+  sin el año ni etiquetas técnicas del final ("FHD", "4K", "Latino"…).
+- **Carga:** resolver los pósters obliga a pedir la lista de cada categoría
+  al servidor, lo que puede tardar al abrir la app; mientras tanto se ven
+  tarjetas de muestra con un pulso suave en el mismo lugar.
+- **Avance:** cada tarjeta queda 3 s al frente; una barra fina se llena
+  mientras tanto y un contador indica la posición ("3 / 12"). Se detiene
+  con el mouse encima o con el foco. Sin flechas: un clic en la barra salta
+  a esa parte de la lista, un clic en una tarjeta de atrás la trae al
+  frente, y ← / → y Enter funcionan con el teclado. El texto sobre el póster
+  lleva un degradado fuerte para no mezclarse con el del propio póster.
+
+### "Recién agregadas"
+
+- Categoría fija en Películas y Series (junto a Favoritos): lo último que
+  agregó el servidor, hasta 200. Sale de la lista completa en memoria
+  ordenada por la fecha de alta que informa el panel (`added` en
+  películas; en series, `last_modified`, que también cambia al sumar
+  episodios). Sin fecha van al final; en listas M3U, que no la traen, se
+  usa el orden inverso de la lista.
+- La fecha también se guarda en el catálogo local (columna `added`,
+  esquema v5; no es un dato sensible) y ordena los carruseles dentro de
+  cada año. La migración borra la marca de actualización del catálogo para
+  que se descargue de nuevo, ya con fechas, al abrir la sesión.
+
+### Anuncio del desarrollador
+
+- Excepción a la neutralidad (CLAUDE.md §8) pedida y aprobada por el dueño
+  del proyecto, a sabiendas de sus riesgos: la app deja de ser un
+  reproductor 100 % neutral, y el número de WhatsApp queda en el
+  repositorio público.
+- Banner verde en el inicio, debajo de las novedades (o de "Seguir
+  viendo"): "¿Buscas un servicio de IPTV?" / "Fútbol nacional e
+  internacional, últimas películas y series del año." y el botón
+  "Escríbenos", que abre `wa.me` con el mensaje ya escrito ("vi el anuncio
+  en EvemTv"). Así se sabe qué contactos llegaron por la app sin rastrear a
+  nadie: la app no envía nada por su cuenta.
+- En el inicio (barra superior, junto al usuario) y en el encabezado de
+  En vivo, Películas y Series (junto al filtro) es un botón chico con
+  borde verde ("¿Buscas IPTV? +591 33217668"; en ventanas angostas,
+  solo el número): siempre visible, sin ✕ y sin ocupar espacio del
+  contenido. En el selector de cuentas y el login va el banner completo,
+  sobre la firma. El número (`AppConfig.promoPhone`) está siempre a la
+  vista, para quien ve la pantalla y quiere anotarlo; un test comprueba que
+  coincide con el del enlace.
+- En el banner completo, ✕ lo cierra solo hasta que se vuelve a abrir la
+  app: no se guarda en ningún lado, así el anuncio aparece en cada
+  apertura y quien no quiera verlo lo cierra cada vez. Si el enlace no se
+  puede abrir, se avisa.
+- El enlace se abre con `url_launcher` (paquete oficial de Flutter,
+  mantenido; verificado en pub.dev: 6.3.2).
+
+### Fichas: fondo y recomendaciones
+
+- La imagen de fondo de la ficha se ve más (60 %), con un degradado que
+  oscurece la izquierda (texto) y el pie (recomendaciones) para leer bien.
+- **"Más de <categoría>"** al pie de las fichas de películas y series: de
+  su misma categoría (lista ya en memoria, sin peticiones nuevas), primero
+  las que comparten palabras del título (sagas y secuelas), luego las de
+  año cercano y mejor puntaje. Los paneles no informan géneros en las
+  listas: comparar por género exigiría pedir la ficha de cada candidata al
+  servidor, así que se usa la categoría, que en la mayoría de los paneles
+  ya agrupa por género.
+

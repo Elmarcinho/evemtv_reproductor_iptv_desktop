@@ -9,6 +9,7 @@ import '../../../core/widgets/global_messenger.dart';
 import '../../../core/widgets/keyboard_help.dart';
 import '../../../core/widgets/state_views.dart';
 import '../../../domain/entities/profile.dart';
+import '../../home/promo_banner.dart';
 import '../application/auth_service.dart';
 
 /// Selector de cuentas guardadas, al iniciar la app.
@@ -25,6 +26,7 @@ class ProfilesScreen extends ConsumerWidget {
         (keys: 'Enter', action: 'Entrar con la cuenta elegida'),
       ],
       child: Scaffold(
+        bottomNavigationBar: const PromoFooter(),
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(48, 40, 48, 24),

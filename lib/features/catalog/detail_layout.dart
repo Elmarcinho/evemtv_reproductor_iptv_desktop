@@ -22,8 +22,11 @@ class DetailLayout extends ConsumerWidget {
     this.credits = const [],
     this.actions = const [],
     this.below,
+    this.related,
     this.loading = false,
   });
+
+  /// Recomendaciones al pie, después de [below].
 
   final String title;
   final String? posterUrl;
@@ -38,6 +41,9 @@ class DetailLayout extends ConsumerWidget {
   final List<(String, String)> credits;
   final List<Widget> actions;
   final Widget? below;
+
+  /// Recomendaciones al final (sliver), después de [below].
+  final Widget? related;
 
   /// Se muestra una barra de carga mientras llega la ficha completa.
   final bool loading;
@@ -57,22 +63,43 @@ class DetailLayout extends ConsumerWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
+            // Imagen de la obra bien visible a la derecha; a la izquierda
+            // (texto) y abajo (recomendaciones) se oscurece para leer bien.
             if (backdrop != null)
               Opacity(
-                opacity: 0.18,
+                opacity: 0.6,
                 child: Image(
-                  image: appImage(ref, backdrop, cacheWidth: 960),
+                  image: appImage(ref, backdrop, cacheWidth: 1280),
                   fit: BoxFit.cover,
+                  alignment: Alignment.topCenter,
                   errorBuilder: (_, _, _) => const SizedBox.shrink(),
                 ),
               ),
             const DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    Color(0xF00D1117),
+                    Color(0xC00D1117),
+                    Color(0x400D1117),
+                  ],
+                  stops: [0, 0.45, 1],
+                ),
+              ),
+            ),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0x660D1117), AppColors.background],
-                  stops: [0, 0.7],
+                  colors: [
+                    Color(0x000D1117),
+                    Color(0x000D1117),
+                    AppColors.background,
+                  ],
+                  stops: [0, 0.55, 0.95],
                 ),
               ),
             ),
@@ -176,6 +203,17 @@ class DetailLayout extends ConsumerWidget {
                     ),
                   ),
                   ?below,
+                  // Las recomendaciones van al pie de la pantalla (si la
+                  // ficha es corta), así se aprecia la imagen de fondo; si la
+                  // ficha es larga, siguen debajo como siempre.
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [?related, const SizedBox(height: 32)],
+                    ),
+                  ),
                 ],
               ),
             ),

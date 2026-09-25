@@ -1,4 +1,6 @@
 // Catálogo local, búsqueda FTS5 y "seguir viendo" (datos ficticios).
+import 'dart:io';
+
 import 'package:drift/drift.dart' show Table, TableInfo, Variable;
 import 'package:drift/native.dart';
 import 'package:evemtv/data/storage/app_database.dart';
@@ -280,7 +282,53 @@ void main() {
         hasLength(1),
       );
       final v = await old.customSelect('PRAGMA user_version').getSingle();
-      expect(v.data.values.single, 4);
+      expect(v.data.values.single, 5);
     },
   );
+
+  test('migración v4 → v5: agrega la fecha de alta y fuerza a descargar el '
+      'catálogo de nuevo', () async {
+    final dir = Directory.systemTemp.createTempSync('evemtv_db_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/db.sqlite');
+
+    // Base v5 con catálogo, convertida a v4 (sin la columna added).
+    final v5 = AppDatabase(NativeDatabase(file));
+    await DriftProfileRepository(v5).create(name: 'A', type: SourceType.xtream);
+    await DriftCatalogCache(v5).replace(1, ContentKind.movie, const [], const [
+      CatalogEntry(kind: ContentKind.movie, id: '1', name: 'Película'),
+    ]);
+    await v5.close();
+    // Al reabrir, antes de migrar, se deja como una base v4.
+    final migrated = AppDatabase(
+      NativeDatabase(
+        file,
+        setup: (raw) {
+          raw.execute('ALTER TABLE catalog_items DROP COLUMN added;');
+          raw.execute('PRAGMA user_version = 4;');
+        },
+      ),
+    );
+    addTearDown(migrated.close);
+    final cache = DriftCatalogCache(migrated);
+    // Se conserva lo guardado (la búsqueda sigue funcionando)…
+    expect(
+      (await cache.search(1, 'pelicula')).byKind[ContentKind.movie],
+      hasLength(1),
+    );
+    // …pero la marca de actualización se borra: se descarga de nuevo.
+    expect(await cache.syncInfo(1, ContentKind.movie), isNull);
+    // Y la fecha de alta ya se guarda.
+    await cache.replace(1, ContentKind.movie, const [], [
+      CatalogEntry(
+        kind: ContentKind.movie,
+        id: '2',
+        name: 'Nueva',
+        year: 2026,
+        added: DateTime.utc(2026, 9, 1),
+      ),
+    ]);
+    final recent = await cache.recent(1, ContentKind.movie, minYear: 2026);
+    expect(recent.single.added, DateTime.utc(2026, 9, 1));
+  });
 }

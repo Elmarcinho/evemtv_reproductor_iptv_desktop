@@ -21,6 +21,24 @@ abstract interface class CatalogCache {
     int limitPerKind = 30,
   });
 
+  /// Elementos de [kind] de [minYear] en adelante: primero los últimos que
+  /// agregó el servidor (fecha de alta) y, sin fecha, los de año más nuevo.
+  Future<List<CatalogEntry>> recent(
+    int profileId,
+    ContentKind kind, {
+    required int minYear,
+    int limit = 20,
+  });
+
+  /// Elementos de [kind] con mejor puntaje del servidor (los que no tienen
+  /// puntaje no entran). Con [minYear], solo de ese año en adelante.
+  Future<List<CatalogEntry>> topRated(
+    int profileId,
+    ContentKind kind, {
+    int limit = 20,
+    int? minYear,
+  });
+
   /// Nombre de cada categoría de un tipo, para mostrar en los resultados.
   Future<Map<String, String>> categoryNames(int profileId, ContentKind kind);
 }

@@ -15,6 +15,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'fixtures/xtream_fixtures.dart';
 import 'helpers/fakes.dart';
 
+/// Búsqueda global de la barra superior del inicio.
+final homeSearch = find.text('Buscar canales, películas y series');
+
+/// Abre el menú de la cuenta (usuario y vencimiento) del inicio.
+Future<void> openAccountMenu(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('Cuenta'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   late LogSink originalSink;
   setUp(() {
@@ -98,14 +107,14 @@ void main() {
       await settleIo(tester);
       await tester.pumpAndSettle();
 
-      expect(find.text('Tu cuenta'), findsOneWidget);
-      // Búsqueda global junto a las tres secciones.
-      expect(find.text('Explorar'), findsOneWidget);
-      expect(find.text('Búsqueda global'), findsOneWidget);
-      expect(find.text('Activa'), findsOneWidget);
-      expect(find.text('1 activas de 2'), findsOneWidget);
+      // Barra superior: búsqueda global y, juntos, usuario y vencimiento.
+      expect(homeSearch, findsOneWidget);
       // Se muestra el usuario (en memoria), no "Cuenta 1".
       expect(find.text('demo'), findsOneWidget);
+      expect(find.textContaining('Vence el '), findsOneWidget);
+      // Del resto de los datos de la cuenta no se muestra nada.
+      expect(find.text('Tu cuenta'), findsNothing);
+      expect(find.text('1 activas de 2'), findsNothing);
 
       // Cada sección se abre dentro del contenedor de la sesión (si algún
       // provider de sesión no declarara sus dependencias, fallaría aquí).
@@ -123,18 +132,19 @@ void main() {
         );
         await tester.tap(find.byTooltip('Volver (Esc)'));
         await tester.pumpAndSettle();
-        expect(find.text('Tu cuenta'), findsOneWidget, reason: section);
+        expect(homeSearch, findsOneWidget, reason: section);
       }
-      await tester.tap(find.text('Búsqueda global'));
+      await tester.tap(homeSearch);
       await settleIo(tester);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       await tester.tap(find.byTooltip('Volver (Esc)'));
       await tester.pumpAndSettle();
-      expect(find.text('Tu cuenta'), findsOneWidget);
+      expect(homeSearch, findsOneWidget);
 
       // Cerrar sesión borra la cuenta y vuelve al selector vacío.
-      await tester.tap(find.widgetWithText(TextButton, 'Cerrar sesión'));
+      await openAccountMenu(tester);
+      await tester.tap(find.text('Cerrar sesión'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, 'Cerrar sesión'));
       // Cerrar sesión también borra la caché de imágenes del perfil (E/S real
@@ -196,13 +206,14 @@ void main() {
     await tester.tap(find.text('Conectar'));
     await settleIo(tester);
     await tester.pumpAndSettle();
-    expect(find.text('Tu cuenta'), findsOneWidget);
+    expect(homeSearch, findsOneWidget);
 
     // Ya hay clave de imágenes (se crea al mostrar la primera) y el llavero
     // la "borra" pero la entrada sigue ahí.
     await tester.runAsync(() => ImageCacheKeyStore(storage).keyFor(1));
     storage.ignoreDeleteOf = (k) => k.contains('image_cache_key');
-    await tester.tap(find.widgetWithText(TextButton, 'Cerrar sesión'));
+    await openAccountMenu(tester);
+    await tester.tap(find.text('Cerrar sesión'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Cerrar sesión'));
     await settleIo(tester);
@@ -267,6 +278,7 @@ void main() {
     await tester.tap(find.text('Conectar'));
     await settleIo(tester);
     await tester.pumpAndSettle();
+    await openAccountMenu(tester);
     await tester.tap(find.text('Cambiar cuenta'));
     await settleIo(tester);
     await tester.pumpAndSettle();

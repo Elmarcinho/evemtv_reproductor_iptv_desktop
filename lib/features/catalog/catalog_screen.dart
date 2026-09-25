@@ -15,6 +15,7 @@ import '../favorites/favorite_button.dart';
 import '../favorites/favorites.dart';
 import '../images/poster.dart';
 import '../search/section_header.dart';
+import 'catalog_providers.dart';
 
 /// Cómo mostrar un elemento del catálogo en la grilla.
 class CatalogItemView {
@@ -51,8 +52,12 @@ class CatalogScreen<T> extends ConsumerStatefulWidget {
     required this.resolvedFavoritesProvider,
     required this.idOf,
     required this.favoritesEmptyMessage,
+    required this.recentProvider,
     this.icon = Icons.movie_outlined,
   });
+
+  /// Categoría fija "Recién agregadas": lo último que agregó el servidor.
+  final FutureProvider<List<T>> recentProvider;
 
   final String title;
   final String allLabel;
@@ -102,6 +107,7 @@ class _CatalogScreenState<T> extends ConsumerState<CatalogScreen<T>> {
   String _scopeLabel(String? categoryId, List<ContentCategory>? categories) {
     if (categoryId == null) return widget.allLabel.toLowerCase();
     if (categoryId == favoritesCategoryId) return 'Favoritos';
+    if (categoryId == recentlyAddedCategoryId) return 'Recién agregadas';
     return categories?.where((c) => c.id == categoryId).firstOrNull?.name ??
         'esta categoría';
   }
@@ -161,9 +167,16 @@ class _CatalogScreenState<T> extends ConsumerState<CatalogScreen<T>> {
                           allLabel: widget.allLabel,
                           pinned: const [
                             (
+                              id: recentlyAddedCategoryId,
+                              name: 'Recién agregadas',
+                              icon: Icons.new_releases_outlined,
+                              color: AppColors.accent,
+                            ),
+                            (
                               id: favoritesCategoryId,
                               name: 'Favoritos',
                               icon: Icons.star_rounded,
+                              color: null,
                             ),
                           ],
                         ),
@@ -183,7 +196,9 @@ class _CatalogScreenState<T> extends ConsumerState<CatalogScreen<T>> {
 
   Widget _buildGrid(String? categoryId) {
     final isFavorites = categoryId == favoritesCategoryId;
-    final provider = widget.itemsProvider(categoryId);
+    final provider = categoryId == recentlyAddedCategoryId
+        ? widget.recentProvider
+        : widget.itemsProvider(categoryId);
     final items = isFavorites
         ? ref
               .watch(favoritesProvider(widget.favoriteKind))

@@ -11,11 +11,15 @@ class VodItem {
     this.categoryId,
     this.containerExtension,
     this.year,
+    this.added,
   });
 
   final String id;
   final String name;
   final String? posterUrl;
+
+  /// Cuándo se agregó al servidor, si lo informa (para "Recién agregadas").
+  final DateTime? added;
 
   /// Puntaje de 0 a 10, si el panel lo informa.
   final double? rating;
@@ -66,6 +70,7 @@ class SeriesItem {
     this.rating,
     this.categoryId,
     this.year,
+    this.added,
   });
 
   final String id;
@@ -74,6 +79,10 @@ class SeriesItem {
   final double? rating;
   final String? categoryId;
   final int? year;
+
+  /// Última vez que el servidor la agregó o actualizó (p. ej. episodios
+  /// nuevos), si lo informa (para "Recién agregadas").
+  final DateTime? added;
 
   @override
   bool operator ==(Object other) => other is SeriesItem && other.id == id;

@@ -31,6 +31,7 @@ class MoviesScreen extends StatelessWidget {
       fromFavorite: (f) => f.toMovie(),
       resolvedFavoritesProvider: resolvedMovieFavoritesProvider,
       idOf: (m) => m.id,
+      recentProvider: recentMoviesProvider,
       favoritesEmptyMessage:
           'Todavía no tienes películas favoritas.\n'
           'Márcalas con ★ en la ficha de la película.',

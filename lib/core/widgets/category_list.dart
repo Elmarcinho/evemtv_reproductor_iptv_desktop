@@ -4,7 +4,13 @@ import '../../domain/entities/live.dart';
 import '../theme/app_theme.dart';
 
 /// Fila fija al principio de la lista (p. ej. "Favoritos").
-typedef PinnedCategory = ({String id, String name, IconData icon});
+/// Categoría fija. [color] del icono: por defecto el de favoritos.
+typedef PinnedCategory = ({
+  String id,
+  String name,
+  IconData icon,
+  Color? color,
+});
 
 /// Lista de categorías con una primera fila "todo" (`id == null`) y filas
 /// fijas opcionales ([pinned]) antes de las categorías del proveedor.
@@ -31,7 +37,12 @@ class CategoryList extends StatelessWidget {
     final rows = <({String? id, String name, IconData? icon, Color? color})>[
       (id: null, name: allLabel, icon: Icons.apps_rounded, color: null),
       for (final p in pinned)
-        (id: p.id, name: p.name, icon: p.icon, color: AppColors.favorite),
+        (
+          id: p.id,
+          name: p.name,
+          icon: p.icon,
+          color: p.color ?? AppColors.favorite,
+        ),
       for (final c in categories)
         (id: c.id, name: c.name, icon: null, color: null),
     ];
