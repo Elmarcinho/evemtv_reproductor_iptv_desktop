@@ -12,15 +12,14 @@ import '../live/live_providers.dart';
 /// Id de la categoría virtual "Favoritos" en En vivo, Películas y Series.
 const String favoritesCategoryId = '__favoritos__';
 
-/// Favoritos de un tipo en el perfil activo, en tiempo real.
+/// Favoritos de un tipo en el perfil de la sesión, en tiempo real.
 final favoritesProvider = StreamProvider.family<List<Favorite>, FavoriteKind>((
   ref,
   kind,
 ) {
-  final profileId = ref.watch(sessionProvider.select((s) => s?.profile.id));
-  if (profileId == null) return Stream.value(const []);
+  final profileId = ref.watch(sessionContextProvider).profileId;
   return ref.watch(favoritesRepositoryProvider).watch(profileId, kind);
-});
+}, dependencies: [sessionContextProvider]);
 
 /// Ids favoritos de un tipo, para marcar filas y pósters.
 final favoriteIdsProvider = Provider.family<Set<String>, FavoriteKind>((
@@ -29,7 +28,7 @@ final favoriteIdsProvider = Provider.family<Set<String>, FavoriteKind>((
 ) {
   final list = ref.watch(favoritesProvider(kind)).value ?? const [];
   return {for (final f in list) f.itemId};
-});
+}, dependencies: [favoritesProvider]);
 
 /// Completa los favoritos con los datos del catálogo (logo, póster,
 /// puntaje), buscándolos en la lista de su categoría. Esas listas ya quedan
@@ -69,7 +68,7 @@ final resolvedLiveFavoritesProvider =
         (c) => c.id,
         (f) => f.toChannel(),
       );
-    });
+    }, dependencies: [favoritesProvider, liveChannelsProvider]);
 
 final resolvedMovieFavoritesProvider =
     FutureProvider.autoDispose<List<VodItem>>((ref) async {
@@ -83,7 +82,7 @@ final resolvedMovieFavoritesProvider =
         (m) => m.id,
         (f) => f.toMovie(),
       );
-    });
+    }, dependencies: [favoritesProvider, vodItemsProvider]);
 
 final resolvedSeriesFavoritesProvider =
     FutureProvider.autoDispose<List<SeriesItem>>((ref) async {
@@ -97,13 +96,15 @@ final resolvedSeriesFavoritesProvider =
         (s) => s.id,
         (f) => f.toSeries(),
       );
-    });
+    }, dependencies: [favoritesProvider, seriesItemsProvider]);
 
-/// Agregar y quitar favoritos del perfil activo. No se guarda ninguna URL.
+/// Agregar y quitar favoritos de UN perfil, fijado al crearse (el de su
+/// sesión). No se guarda ninguna URL.
 class FavoritesService {
-  FavoritesService(this._ref);
+  FavoritesService(this._ref, this.profileId);
 
   final Ref _ref;
+  final int profileId;
 
   Future<void> toggleChannel(LiveChannel c) => _toggle(
     FavoriteKind.live,
@@ -150,8 +151,6 @@ class FavoritesService {
     String itemId,
     Favorite Function() build,
   ) async {
-    final profileId = _ref.read(sessionProvider)?.profile.id;
-    if (profileId == null) return;
     final repo = _ref.read(favoritesRepositoryProvider);
     final isFavorite = _ref.read(favoriteIdsProvider(kind)).contains(itemId);
     if (isFavorite) {
@@ -164,7 +163,8 @@ class FavoritesService {
 }
 
 final favoritesServiceProvider = Provider<FavoritesService>(
-  FavoritesService.new,
+  (ref) => FavoritesService(ref, ref.watch(sessionContextProvider).profileId),
+  dependencies: [sessionContextProvider, favoriteIdsProvider],
 );
 
 /// Lista a mostrar: la versión completada con el catálogo si ya está lista

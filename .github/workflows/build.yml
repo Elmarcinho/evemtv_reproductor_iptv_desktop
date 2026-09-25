@@ -6,7 +6,8 @@ name: Compilar
 
 on:
   push:
-    branches: [main]
+    # main y las ramas de refactorización (se prueban antes de unir).
+    branches: [main, 'refactor/**']
   pull_request:
   workflow_dispatch:
 

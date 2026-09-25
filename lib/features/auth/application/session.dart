@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/logging/redactor.dart';
-import '../../../data/providers.dart';
 import '../../../domain/entities/account_info.dart';
 import '../../../domain/entities/profile.dart';
 import '../../../domain/entities/source_credentials.dart';
-import '../../../domain/repositories/content_source.dart';
+
+export 'session_scope.dart';
 
 /// Sesión activa: perfil elegido y sus credenciales (solo en memoria).
 class Session {
@@ -25,12 +25,11 @@ class Session {
 
 /// Marca de la época en que empezó una operación asíncrona.
 ///
-/// Mecanismo común para descartar resultados obsoletos: toda operación que
-/// dependa de la sesión o de un perfil toma un [SessionToken] al empezar y,
-/// después de cada `await`, comprueba [SessionController.isCurrent] antes de
-/// aplicar su resultado. La época cambia al abrir o terminar una sesión y al
-/// eliminar un perfil, así que cualquier resultado pendiente de "antes" queda
-/// invalidado de una sola vez.
+/// Solo para lo que ocurre **fuera** de una sesión (abrir un perfil desde el
+/// selector): lo que pasa dentro de una sesión vive en su contenedor
+/// ([SessionScope]) y se descarta al destruirlo. La época cambia al abrir o
+/// terminar una sesión y al eliminar un perfil, así que una apertura
+/// pendiente de "antes" queda invalidada.
 extension type const SessionToken._(int epoch) {}
 
 /// Sesión activa, o `null` si no hay ninguna.
@@ -70,15 +69,3 @@ class SessionController extends Notifier<Session?> {
 final sessionProvider = NotifierProvider<SessionController, Session?>(
   SessionController.new,
 );
-
-/// Fuente de contenido de la sesión activa.
-final contentSourceProvider = Provider<ContentSource?>((ref) {
-  final session = ref.watch(sessionProvider);
-  if (session == null) return null;
-  final source = ref
-      .watch(contentSourceFactoryProvider)
-      .create(session.credentials);
-  // Al cambiar o terminar la sesión: cancela la cola pendiente (EPG).
-  ref.onDispose(source.dispose);
-  return source;
-});

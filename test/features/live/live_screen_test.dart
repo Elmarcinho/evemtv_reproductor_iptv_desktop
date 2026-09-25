@@ -120,6 +120,7 @@ void main() {
           contentSourceProvider.overrideWithValue(source),
           livePlayerProvider.overrideWith(_FakePlayer.new),
           sessionProvider.overrideWith(FixedSession.new),
+          sessionContextProvider.overrideWithValue(testSessionContext()),
           favoritesRepositoryProvider.overrideWithValue(
             InMemoryFavoritesRepository(),
           ),

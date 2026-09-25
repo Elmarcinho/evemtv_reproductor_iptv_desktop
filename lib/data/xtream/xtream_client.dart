@@ -15,10 +15,14 @@ import '../../domain/entities/source_credentials.dart';
 /// Nunca registra la URL ni el cuerpo: solo eventos con la acción y el
 /// código HTTP.
 class XtreamClient {
-  XtreamClient(this._dio, this.credentials);
+  XtreamClient(this._dio, this.credentials, {this._cancelToken});
 
   final Dio _dio;
   final XtreamCredentials credentials;
+
+  /// Token de la sesión dueña del cliente: al cancelarse, las peticiones en
+  /// curso se cortan y las nuevas fallan sin salir a la red.
+  final CancelToken? _cancelToken;
 
   /// `{servidor}/player_api.php?username=…&password=…[&action=…]`.
   Uri apiUri([Map<String, String> params = const {}]) {
@@ -69,6 +73,7 @@ class XtreamClient {
     try {
       response = await _dio.getUri<String>(
         uri,
+        cancelToken: _cancelToken,
         options: Options(
           responseType: ResponseType.plain,
           extra: <String, Object?>{RetryInterceptor.maxRetriesKey: ?maxRetries},

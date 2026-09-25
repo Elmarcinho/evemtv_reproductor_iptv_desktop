@@ -4,17 +4,16 @@ import '../../domain/entities/live.dart';
 import '../../domain/entities/vod.dart';
 import '../auth/application/session.dart';
 
-// Películas y series. Igual que En vivo: dependen de `contentSourceProvider`,
-// así que al cambiar de sesión se recalculan y los resultados tardíos de la
-// sesión anterior se descartan.
+// Películas y series. Viven en el contenedor de la sesión (dependen de
+// `contentSourceProvider`): se destruyen con ella y la siguiente sesión
+// arranca sin ningún valor de la anterior.
 
 final vodCategoriesProvider = FutureProvider<List<ContentCategory>>((
   ref,
 ) async {
   final source = ref.watch(contentSourceProvider);
-  if (source == null) return const [];
   return source.vodCategories();
-});
+}, dependencies: [contentSourceProvider]);
 
 /// Películas de una categoría (`null` = todas), en memoria durante la sesión.
 final vodItemsProvider = FutureProvider.family<List<VodItem>, String?>((
@@ -22,25 +21,23 @@ final vodItemsProvider = FutureProvider.family<List<VodItem>, String?>((
   categoryId,
 ) async {
   final source = ref.watch(contentSourceProvider);
-  if (source == null) return const [];
   return source.vodItems(categoryId: categoryId);
-});
+}, dependencies: [contentSourceProvider]);
 
 final vodDetailProvider = FutureProvider.autoDispose.family<VodDetail, VodItem>(
   (ref, item) async {
     final source = ref.watch(contentSourceProvider);
-    if (source == null) return VodDetail(item: item);
     return source.vodDetail(item);
   },
+  dependencies: [contentSourceProvider],
 );
 
 final seriesCategoriesProvider = FutureProvider<List<ContentCategory>>((
   ref,
 ) async {
   final source = ref.watch(contentSourceProvider);
-  if (source == null) return const [];
   return source.seriesCategories();
-});
+}, dependencies: [contentSourceProvider]);
 
 /// Series de una categoría (`null` = todas), en memoria durante la sesión.
 final seriesItemsProvider = FutureProvider.family<List<SeriesItem>, String?>((
@@ -48,15 +45,11 @@ final seriesItemsProvider = FutureProvider.family<List<SeriesItem>, String?>((
   categoryId,
 ) async {
   final source = ref.watch(contentSourceProvider);
-  if (source == null) return const [];
   return source.seriesItems(categoryId: categoryId);
-});
+}, dependencies: [contentSourceProvider]);
 
 final seriesDetailProvider = FutureProvider.autoDispose
     .family<SeriesDetail, SeriesItem>((ref, series) async {
       final source = ref.watch(contentSourceProvider);
-      if (source == null) {
-        return SeriesDetail(series: series, seasons: const []);
-      }
       return source.seriesDetail(series);
-    });
+    }, dependencies: [contentSourceProvider]);

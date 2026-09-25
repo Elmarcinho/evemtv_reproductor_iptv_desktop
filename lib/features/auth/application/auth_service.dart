@@ -20,12 +20,10 @@ class AuthService {
     required this._credentials,
     required this._sources,
     required this._session,
-    this._cleaners = const [],
+    required this._imageCaches,
   });
 
-  /// Limpiezas extra al eliminar un perfil (p. ej. caché de imágenes). Sus
-  /// errores se registran pero no impiden la eliminación.
-  final List<Future<void> Function(int profileId)> _cleaners;
+  final ImageCacheRegistry _imageCaches;
 
   final ProfileRepository _profiles;
   final CredentialStore _credentials;
@@ -91,33 +89,39 @@ class AuthService {
   /// Vuelve al selector de perfiles sin borrar nada.
   void switchProfile() => _session.end();
 
-  /// Cierra sesión: borra credenciales y todos los datos locales del perfil
-  /// y, **solo si el borrado se completó**, termina la sesión. Si falla,
-  /// lanza [StorageFailure] (`deleteFailed`) y la sesión sigue abierta, así
-  /// el inicio puede mostrar el error y el usuario reintentar.
-  Future<void> logout(Profile profile) async {
-    await removeProfile(profile);
-    _session.end();
-  }
+  /// Cierra sesión y borra todo lo del perfil, en este orden:
+  ///
+  /// 1. Cierra su caché de imágenes: rechaza escrituras, cancela descargas
+  ///    y espera las que estaban en curso.
+  /// 2. Borra credenciales y datos locales. Si falla, lanza
+  ///    [StorageFailure] (`deleteFailed`), reabre la caché y la sesión
+  ///    **sigue abierta** para reintentar.
+  /// 3. Termina la sesión (se destruye su contenedor).
+  /// 4. Borra la carpeta de imágenes y su clave, y comprueba que ya no
+  ///    estén. Si algo quedó, lanza [StorageFailure] (`cleanupIncomplete`):
+  ///    la sesión ya se cerró, pero no se informa éxito.
+  Future<void> logout(Profile profile) =>
+      removeProfile(profile, endSession: true);
 
-  /// Elimina un perfil guardado y sus credenciales. Invalida primero las
-  /// operaciones pendientes (aperturas, actualizaciones de cuenta) para que
-  /// ninguna reviva el perfil al terminar.
-  Future<void> removeProfile(Profile profile) async {
+  /// Elimina un perfil guardado y todo lo suyo (ver [logout]). Invalida
+  /// primero las aperturas pendientes para que ninguna reviva el perfil.
+  Future<void> removeProfile(Profile profile, {bool endSession = false}) async {
     _session.invalidatePending();
+    await _imageCaches.close(profile.id);
     try {
       await _credentials.delete(profile.id);
       await _profiles.delete(profile.id);
     } on Object catch (e) {
+      _imageCaches.reopen(profile.id);
       AppLogger.e('No se pudo eliminar el perfil', e);
       throw StorageFailure(StorageFailureKind.deleteFailed, cause: e);
     }
-    for (final clean in _cleaners) {
-      try {
-        await clean(profile.id);
-      } on Object catch (e) {
-        AppLogger.w('Limpieza del perfil incompleta', e);
-      }
+    if (endSession) _session.end();
+    try {
+      await _imageCaches.purge(profile.id);
+    } on Object catch (e) {
+      AppLogger.e('Limpieza del perfil incompleta', e);
+      throw StorageFailure(StorageFailureKind.cleanupIncomplete, cause: e);
     }
     AppLogger.event('profile.removed', {'profile': profile.id});
   }
@@ -135,6 +139,16 @@ class AuthService {
       name: cleanName.length > 60 ? cleanName.substring(0, 60) : cleanName,
       type: credentials.type,
     );
+    // Los ids se reutilizan: si quedaron imágenes o clave de un perfil
+    // anterior con este id (limpieza fallida), no deben heredarse: si no
+    // se pueden borrar, el perfil no se crea.
+    try {
+      await _imageCaches.purge(profile.id);
+    } on Object catch (e) {
+      await _profiles.delete(profile.id);
+      AppLogger.e('Restos de caché de imágenes sin borrar', e);
+      throw StorageFailure(StorageFailureKind.readWrite, cause: e);
+    }
     try {
       await _credentials.write(profile.id, credentials);
     } on Object {
@@ -163,9 +177,7 @@ final authServiceProvider = Provider<AuthService>(
     credentials: ref.watch(credentialStoreProvider),
     sources: ref.watch(contentSourceFactoryProvider),
     session: ref.watch(sessionProvider.notifier),
-    cleaners: [
-      (id) => clearProfileImageCache(ref.read(imageCacheKeyStoreProvider), id),
-    ],
+    imageCaches: ref.watch(imageCacheRegistryProvider),
   ),
 );
 

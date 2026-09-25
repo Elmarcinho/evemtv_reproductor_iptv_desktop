@@ -201,6 +201,7 @@ void main() {
       c = ProviderContainer.test(
         overrides: [
           sessionProvider.overrideWith(FixedSession.new),
+          sessionContextProvider.overrideWithValue(testSessionContext()),
           favoritesRepositoryProvider.overrideWithValue(
             InMemoryFavoritesRepository(),
           ),

@@ -204,7 +204,7 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
   Future<void> _openCurrent() async {
     final source = ref.read(contentSourceProvider);
     final playback = _playback;
-    if (source == null || playback == null) return;
+    if (playback == null) return;
     try {
       final url = _current.candidates(source).urls.first;
       final resumeAt = await _resumePosition(_current);

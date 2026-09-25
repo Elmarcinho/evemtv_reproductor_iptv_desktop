@@ -137,6 +137,7 @@ void main() {
         overrides: [
           contentSourceProvider.overrideWithValue(source),
           sessionProvider.overrideWith(FixedSession.new),
+          sessionContextProvider.overrideWithValue(testSessionContext()),
           favoritesRepositoryProvider.overrideWithValue(
             InMemoryFavoritesRepository(),
           ),

@@ -4,23 +4,26 @@ import '../../core/logging/app_logger.dart';
 import '../../data/providers.dart';
 import '../../domain/entities/vod.dart';
 import '../../domain/entities/watch_progress.dart';
+import '../../domain/repositories/watch_progress_repository.dart';
 import '../auth/application/session.dart';
 
-/// Todo el progreso del perfil activo (los más recientes primero). Las
-/// entradas terminadas se borran, así que la lista se mantiene chica.
+/// Todo el progreso del perfil de la sesión (los más recientes primero).
+/// Las entradas terminadas se borran, así que la lista se mantiene chica.
+///
+/// Vive en el contenedor de la sesión: otra sesión empieza sin valor previo
+/// (cargando), nunca con la lista del perfil anterior.
 final allWatchProgressProvider = StreamProvider<List<WatchProgress>>((ref) {
-  final profileId = ref.watch(sessionProvider.select((s) => s?.profile.id));
-  if (profileId == null) return Stream.value(const []);
+  final profileId = ref.watch(sessionContextProvider).profileId;
   return ref
       .watch(watchProgressRepositoryProvider)
       .watchRecent(profileId, limit: 500);
-});
+}, dependencies: [sessionContextProvider]);
 
 /// Fila "Seguir viendo" del inicio.
 final continueWatchingProvider = Provider<List<WatchProgress>>((ref) {
   final all = ref.watch(allWatchProgressProvider).value ?? const [];
   return all.take(20).toList();
-});
+}, dependencies: [allWatchProgressProvider]);
 
 /// Progreso de una película o episodio concreto, o `null`.
 final progressForProvider =
@@ -32,7 +35,7 @@ final progressForProvider =
       return all
           .where((p) => p.kind == key.kind && p.itemId == key.id)
           .firstOrNull;
-    });
+    }, dependencies: [allWatchProgressProvider]);
 
 /// Último episodio visto de una serie, o `null`.
 final seriesProgressProvider = Provider.family<WatchProgress?, String>((
@@ -43,41 +46,32 @@ final seriesProgressProvider = Provider.family<WatchProgress?, String>((
   return all
       .where((p) => p.kind == ProgressKind.episode && p.seriesId == seriesId)
       .firstOrNull;
-});
+}, dependencies: [allWatchProgressProvider]);
 
-/// Guarda y consulta el progreso del perfil activo.
+/// Guarda y consulta el progreso de UN perfil, fijado al crearse: nunca
+/// vuelve a leer el perfil activo. Una escritura que termina después de
+/// cambiar de perfil sigue yendo al perfil donde empezó (y si ese perfil
+/// se borró, la clave foránea la rechaza).
 class WatchProgressService {
-  WatchProgressService(this._ref);
+  WatchProgressService(this._repository, this.profileId);
 
-  final Ref _ref;
+  final WatchProgressRepository _repository;
+  final int profileId;
 
-  int? get _profileId => _ref.read(sessionProvider)?.profile.id;
-
-  Future<WatchProgress?> find(ProgressKind kind, String id) async {
-    final profileId = _profileId;
-    if (profileId == null) return null;
-    return _ref.read(watchProgressRepositoryProvider).get(profileId, kind, id);
-  }
+  Future<WatchProgress?> find(ProgressKind kind, String id) =>
+      _repository.get(profileId, kind, id);
 
   Future<void> save(WatchProgress progress) async {
-    final profileId = _profileId;
-    if (profileId == null) return;
     try {
-      await _ref
-          .read(watchProgressRepositoryProvider)
-          .save(profileId, progress);
+      await _repository.save(profileId, progress);
     } on Object catch (e) {
       AppLogger.w('No se pudo guardar el progreso', e);
     }
   }
 
   Future<void> remove(ProgressKind kind, String id) async {
-    final profileId = _profileId;
-    if (profileId == null) return;
     try {
-      await _ref
-          .read(watchProgressRepositoryProvider)
-          .remove(profileId, kind, id);
+      await _repository.remove(profileId, kind, id);
     } on Object catch (e) {
       AppLogger.w('No se pudo quitar el progreso', e);
     }
@@ -120,7 +114,11 @@ class WatchProgressService {
 }
 
 final watchProgressServiceProvider = Provider<WatchProgressService>(
-  WatchProgressService.new,
+  (ref) => WatchProgressService(
+    ref.watch(watchProgressRepositoryProvider),
+    ref.watch(sessionContextProvider).profileId,
+  ),
+  dependencies: [sessionContextProvider],
 );
 
 /// Qué necesita el seguimiento de un contenido reproducible.

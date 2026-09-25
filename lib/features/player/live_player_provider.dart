@@ -41,13 +41,12 @@ class LivePlayerState {
 }
 
 /// Se crea al reproducir el primer canal y se libera al salir de En vivo
-/// (autoDispose) o al cambiar de sesión.
+/// (autoDispose) o con el contenedor de la sesión.
 class LivePlayerNotifier extends Notifier<LivePlayerState> {
   Future<LivePlayerHandle>? _creating;
 
   @override
   LivePlayerState build() {
-    ref.watch(sessionProvider);
     ref.onDispose(() {
       final creating = _creating;
       _creating = null;
@@ -100,7 +99,6 @@ class LivePlayerNotifier extends Notifier<LivePlayerState> {
     // Lanza PlayerUnavailableFailure si libmpv no está disponible.
     ref.read(mediaEngineProvider).ensureReady();
     final source = ref.read(contentSourceProvider);
-    if (source == null) throw StateError('sin sesión');
     final engine = await MediaKitEngine.create();
     return LivePlayerHandle(
       engine: engine,
@@ -119,6 +117,7 @@ class LivePlayerNotifier extends Notifier<LivePlayerState> {
 final livePlayerProvider =
     NotifierProvider.autoDispose<LivePlayerNotifier, LivePlayerState>(
       LivePlayerNotifier.new,
+      dependencies: [contentSourceProvider, accountInfoProvider],
     );
 
 /// Canal que suena en el reproductor compartido, o `null` si todavía no se
@@ -139,4 +138,5 @@ class PlayingChannelNotifier extends Notifier<LiveChannel?> {
 final playingLiveChannelProvider =
     NotifierProvider.autoDispose<PlayingChannelNotifier, LiveChannel?>(
       PlayingChannelNotifier.new,
+      dependencies: [livePlayerProvider],
     );

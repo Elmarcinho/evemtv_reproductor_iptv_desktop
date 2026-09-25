@@ -24,7 +24,8 @@ import 'm3u_parser.dart';
 /// películas y series) en otro isolate y se mantiene en memoria. Las listas no traen EPG corta: la guía XMLTV
 /// completa llega en la Fase 6.
 class M3uSource implements ContentSource {
-  M3uSource(this._dio, this.credentials);
+  M3uSource(this._dio, this.credentials, {CancelToken? cancelToken})
+    : _sessionToken = cancelToken;
 
   /// Bytes que se leen para reconocer la cabecera sin descargar la lista
   /// completa (puede pesar decenas de MB).
@@ -38,6 +39,9 @@ class M3uSource implements ContentSource {
   final Dio _dio;
   final M3uCredentials credentials;
 
+  /// Token de la sesión dueña de la fuente (ver [_requestToken]).
+  final CancelToken? _sessionToken;
+
   Future<M3uCatalog>? _catalogFuture;
   final Map<String, Uri> _urls = {};
 
@@ -49,7 +53,7 @@ class M3uSource implements ContentSource {
 
   @override
   Future<AccountInfo?> verify() async {
-    final cancel = CancelToken();
+    final cancel = _requestToken();
     final List<int> head;
     try {
       final response = await _open(cancel, maxRetries: 1);
@@ -187,7 +191,7 @@ class M3uSource implements ContentSource {
   Future<String> _download() async {
     try {
       final response = await _open(
-        CancelToken(),
+        _requestToken(),
         receiveTimeout: const Duration(minutes: 3),
       );
       final bytes = BytesBuilder(copy: false);
@@ -201,6 +205,23 @@ class M3uSource implements ContentSource {
     } on DioException catch (e) {
       throw _mapError(e);
     }
+  }
+
+  /// Token propio de una petición, enlazado al de la sesión: se cancela
+  /// solo (p. ej. tras leer la cabecera) o cuando termina la sesión.
+  CancelToken _requestToken() {
+    final token = CancelToken();
+    final session = _sessionToken;
+    if (session != null) {
+      if (session.isCancelled) {
+        token.cancel();
+      } else {
+        session.whenCancel.then((_) {
+          if (!token.isCancelled) token.cancel();
+        });
+      }
+    }
+    return token;
   }
 
   Future<Response<ResponseBody>> _open(

@@ -12,8 +12,15 @@ class ContentSourceFactory {
 
   final Dio _dio;
 
-  ContentSource create(SourceCredentials credentials) => switch (credentials) {
-    XtreamCredentials() => XtreamSource(XtreamClient(_dio, credentials)),
-    M3uCredentials() => M3uSource(_dio, credentials),
+  /// [cancelToken]: el de la sesión; al cancelarse, todas las peticiones
+  /// de la fuente se cortan (las nuevas fallan al instante).
+  ContentSource create(
+    SourceCredentials credentials, {
+    CancelToken? cancelToken,
+  }) => switch (credentials) {
+    XtreamCredentials() => XtreamSource(
+      XtreamClient(_dio, credentials, cancelToken: cancelToken),
+    ),
+    M3uCredentials() => M3uSource(_dio, credentials, cancelToken: cancelToken),
   };
 }

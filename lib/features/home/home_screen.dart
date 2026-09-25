@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/date_format.dart';
+import '../../core/widgets/global_messenger.dart';
 import '../../core/widgets/keyboard_help.dart';
 import '../../core/widgets/state_views.dart';
 import '../../domain/entities/account_info.dart';
@@ -51,17 +52,15 @@ class HomeScreen extends ConsumerWidget {
     try {
       await ref.read(authServiceProvider).logout(profile);
     } on Object catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(userMessageFor(e))));
-      }
+      // Global: si la sesión ya se cerró (limpieza incompleta), esta
+      // pantalla ya no existe y el aviso igual debe verse.
+      showGlobalMessage(userMessageFor(e));
     }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final session = ref.watch(sessionProvider);
-    if (session == null) return const Scaffold(body: LoadingView());
+    final session = ref.watch(sessionContextProvider);
     final profile = session.profile;
     // Mantiene el catálogo local (búsqueda) al día en segundo plano.
     ref.listen(catalogSyncProvider, (_, _) {});

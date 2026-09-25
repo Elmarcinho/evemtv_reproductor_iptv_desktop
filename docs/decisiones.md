@@ -183,10 +183,9 @@ disponible. En ese caso se muestra un error claro al reproducir.
   abierta, se muestra el error y se puede reintentar.
 - **Resultados obsoletos (época de sesión):** `SessionController` lleva un
   contador que cambia al abrir o terminar una sesión y al eliminar un perfil.
-  Toda operación asíncrona que depende de la sesión (abrir un perfil,
-  actualizar los datos de la cuenta y, en adelante, catálogo y EPG) toma un
-  `SessionToken` al empezar y descarta su resultado si la época cambió. Un
-  solo mecanismo en lugar de parches por pantalla.
+  Desde la revisión de la Fase 4 solo lo usa la apertura de un perfil (que
+  ocurre fuera de toda sesión); lo demás vive en el contenedor de la sesión
+  (ver §14).
 - **Abrir un perfil guardado no espera al servidor:** se entra al inicio y los
   datos de la cuenta se cargan ahí, con "Reintentar" si fallan. Así un servidor
   caído no bloquea el acceso a la app.
@@ -373,8 +372,8 @@ Solo compila y prueba; el empaquetado y la publicación son de la Fase 5.
 - **Actualización en segundo plano:** al abrir la sesión, cada tipo (vivo,
   películas, series) con más de 12 h se vuelve a descargar completo, de a
   uno. El JSON grande se decodifica en otro isolate y drift escribe en el
-  suyo: la interfaz no se bloquea. Si la sesión cambia a mitad de camino, lo
-  descargado se descarta. En la búsqueda se ve el estado y hay un botón
+  suyo: la interfaz no se bloquea. Si la sesión termina a mitad de camino, la
+  petición en curso se cancela y no sale ninguna otra (ver §14). En la búsqueda se ve el estado y hay un botón
   "Actualizar".
 - **La navegación sigue usando la red + memoria** (con imágenes); el
   catálogo local sirve para la búsqueda. Mostrar las listas desde la base
@@ -382,7 +381,8 @@ Solo compila y prueba; el empaquetado y la publicación son de la Fase 5.
 - **Búsqueda global con FTS5** (`catalog_search`): sin tildes ni mayúsculas
   (`remove_diacritics`), cada palabra como prefijo y todas obligatorias. Lo
   que escribe el usuario nunca llega como sintaxis FTS: cada palabra va
-  entre comillas. Imágenes de los resultados resueltas en memoria solo para
+  entre comillas, y los caracteres de control (U+0000–U+001F y
+  U+007F–U+009F, incluido NUL) se tratan como separadores. Imágenes de los resultados resueltas en memoria solo para
   las filas visibles.
 - **"Seguir viendo"** (`watch_progress`): posición y duración por película o
   episodio, sin URLs. Se guarda cada 10 s, al cambiar de episodio y al salir;
@@ -396,7 +396,7 @@ Solo compila y prueba; el empaquetado y la publicación son de la Fase 5.
   archivo (ni probar contraseñas candidatas). Solo se guardan los bytes de
   la imagen, 5 MB máximo cada una, 300 MB por perfil (se borran primero las
   menos usadas). Se borra con la clave al cerrar sesión. Sin llavero, se
-  cargan de la red como antes.
+  cargan de la red como antes. Validación y tope por escritura: ver §14.
 - **Atajos de teclado:** un catálogo único (`ShortcutCatalog`) con los de
   cada pantalla; `?` o F1 muestran la ayuda (el `?` no se captura mientras se
   escribe en un campo). Sin botón visible, para no recargar los encabezados.
@@ -407,3 +407,85 @@ Solo compila y prueba; el empaquetado y la publicación son de la Fase 5.
   especificación: en vivo ↑/↓ canal y ←/→ volumen; en películas ←/→ ±10 s y
   ↑/↓ volumen.
 
+## 14. Contenedor por sesión (revisión de la Fase 4)
+
+La revisión encontró varios errores con la misma causa: operaciones de una
+sesión que seguían vivas o leían "el perfil activo" después de cambiar de
+perfil o cerrar sesión (el progreso de A escrito en B, valores de A
+mostrados un instante en B, una descarga que recreaba la carpeta borrada,
+la actualización del catálogo pidiendo datos tras cerrar sesión). En lugar
+de parchear cada caso, el estado de la sesión tiene ahora **su propio
+contenedor**.
+
+- **`SessionScope`:** las rutas que necesitan sesión (inicio, En vivo y su
+  reproductor, Películas, Series, fichas, búsqueda y reproductor de VOD)
+  están bajo un `ShellRoute` envuelto en un `ProviderScope` nuevo por
+  sesión (con clave por sesión). Todos los providers de la sesión declaran
+  `dependencies` y dependen de `sessionContextProvider`, así que Riverpod
+  los crea en ese contenedor. Al cambiar de perfil o cerrar sesión, el
+  contenedor se destruye entero: se ejecutan todos sus `onDispose`
+  (reproductor, temporizadores, cachés) y la sesión nueva empieza **sin
+  ningún valor previo** (cargando, no con la lista del perfil anterior).
+- **`SessionContext`** (perfil, credenciales, datos de la cuenta del login y
+  `SessionLifetime`) es fijo durante la sesión. Los servicios que escriben
+  (favoritos, progreso, catálogo, caché de imágenes) reciben el id del
+  perfil **al crearse** y nunca vuelven a leer el perfil activo: una
+  escritura que empezó en A termina en A. Si A se eliminó mientras tanto,
+  la clave foránea la rechaza. Guardar la posición de A al salir por un
+  cambio de perfil es correcto: es de A.
+- **`SessionLifetime`:** se cierra al destruirse el contenedor. Lleva un
+  `CancelToken` de Dio que usan todas las peticiones de la fuente (Xtream y
+  M3U): al cerrarse, la petición en curso se corta y una nueva falla sin
+  salir a la red. Las operaciones largas llaman a `ensureActive()` entre
+  pasos (la actualización del catálogo, entre categorías y elementos).
+- **Fuera de las sesiones** quedan solo: base de datos, almacén seguro, Dio,
+  lista de perfiles, términos, la sesión activa (`sessionProvider`) y el
+  registro de cachés de imágenes. La época de sesión se conserva solo para
+  abrir un perfil desde el selector.
+- **Diálogos:** los de la app no leen datos de sesión (usan el `ref` de la
+  pantalla que los abre), así que no importa que se muestren en el
+  navegador raíz.
+- **Prueba de humo:** el flujo completo de la app recorre inicio, En vivo,
+  Películas, Series y búsqueda dentro del contenedor real; un provider que
+  olvide declarar sus dependencias se evalúa fuera de la sesión y la
+  pantalla muestra un error, que la prueba detecta.
+
+### Caché de imágenes
+
+- **Solo se guardan imágenes válidas:** PNG, JPEG o WebP reconocidos por sus
+  primeros bytes (no por la URL ni el `Content-Type`) **y** que el motor de
+  Flutter decodifica (primer cuadro, a tamaño reducido). Una página HTML, un
+  error del panel o cualquier otra cosa se muestra si se puede, pero nunca
+  llega al disco. Un archivo inválido guardado por una versión anterior se
+  descarta al leerlo.
+- **Riesgo residual (metadatos):** no se reconstruyen los archivos para
+  quitar metadatos (EXIF, XMP, ICC, comentarios). Es código binario delicado
+  y el riesgo reproducido —guardar HTML u otro contenido que no es imagen—
+  ya está cubierto. Un servidor podría incluir texto en los metadatos de
+  una imagen válida y ese texto quedaría en disco, en la carpeta privada de
+  la app, con nombre ilegible sin la clave, dentro del tope de 300 MB y
+  borrado al cerrar sesión. Si en el futuro hiciera falta, la opción es
+  volver a codificar la imagen decodificada (lo que descarta todo metadato)
+  a costa de CPU y calidad.
+- **Tope en cada escritura:** la caché lleva la cuenta de los bytes en
+  disco (recontados al abrir) y las escrituras van de a una. Si la imagen
+  nueva no entra, antes se borran las usadas hace más tiempo: los 300 MB se
+  cumplen siempre, no solo tras una limpieza periódica.
+- **Cierre:** `close()` rechaza cargas y escrituras nuevas, cancela las
+  descargas y espera las operaciones en curso. Un registro por perfil, fuera
+  de las sesiones, permite cerrarlas antes de borrar la carpeta. Al crear un
+  perfil se borran restos de caché y clave con ese id (los ids de SQLite se
+  pueden reutilizar); si no se pueden borrar, el perfil no se crea.
+
+### Orden del cierre de sesión
+
+1. Cerrar la caché de imágenes del perfil (rechaza escrituras, cancela
+   descargas, espera lo que estaba en curso).
+2. Borrar credenciales y datos locales. Si falla, la caché se reabre, la
+   sesión **sigue abierta** y se muestra el error para reintentar.
+3. Terminar la sesión: se destruye su contenedor.
+4. Borrar la carpeta de imágenes y su clave, y **comprobar** que ya no
+   existen. Si algo quedó, se avisa con el mensajero global de la app (la
+   pantalla de inicio ya no existe): "Se cerró la sesión, pero no se
+   pudieron borrar todas las imágenes guardadas de esta cuenta en el
+   equipo." Nunca se informa éxito en ese caso.

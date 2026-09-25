@@ -43,23 +43,26 @@ class CatalogSyncState {
   );
 }
 
-/// Mantiene el catálogo local (y el índice de búsqueda) de la sesión activa.
+/// Mantiene el catálogo local (y el índice de búsqueda) de la sesión.
 ///
 /// - Al abrir la sesión, actualiza en segundo plano los tipos con más de
 ///   [maxAge] (o nunca descargados): en vivo, películas y series, de a uno.
 /// - Las descargas grandes se decodifican en otro isolate y drift escribe en
 ///   su propio isolate: la interfaz no se bloquea.
-/// - Si la sesión cambia a mitad de camino, lo descargado se descarta
-///   (mismo mecanismo de época que el resto de la app).
+/// - Vive en el contenedor de la sesión y usa su perfil fijo. Al terminar
+///   la sesión, la petición en curso se cancela y, entre un paso y otro,
+///   [SessionLifetime.ensureActive] corta la sincronización: no sale
+///   ninguna petición nueva ni se escribe nada.
 class CatalogSyncController extends Notifier<CatalogSyncState> {
   static const Duration maxAge = Duration(hours: 12);
 
   @override
   CatalogSyncState build() {
-    final session = ref.watch(sessionProvider);
-    if (session == null) return const CatalogSyncState();
+    ref.watch(sessionContextProvider);
     // Arranca después de construir, sin bloquear.
-    Future.microtask(() => sync());
+    Future.microtask(() {
+      if (ref.mounted) unawaited(sync());
+    });
     return const CatalogSyncState();
   }
 
@@ -68,97 +71,105 @@ class CatalogSyncController extends Notifier<CatalogSyncState> {
   /// del primer `await`).
   Future<void>? _inFlight;
 
-  /// Época de sesión de [_inFlight]: si cambió, esa sincronización ya no
-  /// sirve (se descartará sola) y hay que empezar otra.
-  SessionToken? _inFlightToken;
-
   /// Actualiza los tipos vencidos, o todos si [force].
-  Future<void> sync({bool force = false}) {
-    final token = ref.read(sessionProvider.notifier).token;
-    final existing = _inFlight;
-    if (existing != null && _inFlightToken == token) return existing;
-    _inFlightToken = token;
-    late final Future<void> current;
-    current = _sync(force: force).whenComplete(() {
-      // Solo limpia la suya: la de una sesión nueva puede estar en curso.
-      if (identical(_inFlight, current)) _inFlight = null;
-    });
-    return _inFlight = current;
-  }
+  Future<void> sync({bool force = false}) =>
+      _inFlight ??= _sync(force: force).whenComplete(() => _inFlight = null);
 
   Future<void> _sync({bool force = false}) async {
-    final sessions = ref.read(sessionProvider.notifier);
-    final token = sessions.token;
-    final profileId = ref.read(sessionProvider)?.profile.id;
+    final ctx = ref.read(sessionContextProvider);
+    final lifetime = ctx.lifetime;
+    final profileId = ctx.profileId;
     final source = ref.read(contentSourceProvider);
-    if (profileId == null || source == null) return;
     final cache = ref.read(catalogCacheProvider);
+    // `false` si la sesión terminó: no se sigue ni se toca el estado.
+    bool alive() => ref.mounted && lifetime.isActive;
 
-    // Estado actual del índice.
-    final info = <ContentKind, CatalogSyncInfo>{};
-    for (final kind in ContentKind.values) {
-      final i = await cache.syncInfo(profileId, kind);
-      if (i != null) info[kind] = i;
-    }
-    if (!ref.mounted || !sessions.isCurrent(token)) return;
-    state = state.copyWith(info: info);
-
-    final now = DateTime.now();
-    final pending = [
-      for (final kind in ContentKind.values)
-        if (force ||
-            info[kind] == null ||
-            now.difference(info[kind]!.syncedAt) > maxAge)
-          kind,
-    ];
-    if (pending.isEmpty) return;
-
-    state = state.copyWith(running: true, failed: {});
-    final failed = <ContentKind>{};
-    for (final kind in pending) {
-      if (!ref.mounted || !sessions.isCurrent(token)) return;
-      state = state.copyWith(current: kind);
-      try {
-        final (categories, items) = await _download(source, kind);
-        if (!ref.mounted || !sessions.isCurrent(token)) return;
-        await cache.replace(profileId, kind, categories, items);
-        final updated = await cache.syncInfo(profileId, kind);
-        if (!ref.mounted || !sessions.isCurrent(token)) return;
-        state = state.copyWith(info: {...state.info, kind: ?updated});
-        AppLogger.event('catalog.synced', {
-          'kind': kind,
-          'items': items.length,
-        });
-      } on Object catch (e) {
-        failed.add(kind);
-        AppLogger.w('No se pudo actualizar el catálogo', e);
+    try {
+      // Estado actual del índice.
+      final info = <ContentKind, CatalogSyncInfo>{};
+      for (final kind in ContentKind.values) {
+        final i = await cache.syncInfo(profileId, kind);
+        if (i != null) info[kind] = i;
       }
+      if (!alive()) return;
+      state = state.copyWith(info: info);
+
+      final now = DateTime.now();
+      final pending = [
+        for (final kind in ContentKind.values)
+          if (force ||
+              info[kind] == null ||
+              now.difference(info[kind]!.syncedAt) > maxAge)
+            kind,
+      ];
+      if (pending.isEmpty) return;
+
+      state = state.copyWith(running: true, failed: {});
+      final failed = <ContentKind>{};
+      for (final kind in pending) {
+        if (!alive()) return;
+        state = state.copyWith(current: kind);
+        try {
+          final (categories, items) = await _download(source, kind, lifetime);
+          lifetime.ensureActive();
+          await cache.replace(profileId, kind, categories, items);
+          final updated = await cache.syncInfo(profileId, kind);
+          if (!alive()) return;
+          state = state.copyWith(info: {...state.info, kind: ?updated});
+          AppLogger.event('catalog.synced', {
+            'kind': kind,
+            'items': items.length,
+          });
+        } on SessionClosedException {
+          rethrow;
+        } on Object catch (e) {
+          if (!alive()) return;
+          failed.add(kind);
+          AppLogger.w('No se pudo actualizar el catálogo', e);
+        }
+      }
+      if (!alive()) return;
+      state = state.copyWith(
+        running: false,
+        clearCurrent: true,
+        failed: failed,
+      );
+    } on SessionClosedException {
+      AppLogger.event('catalog.sync_stopped', {'reason': 'session_closed'});
     }
-    if (!ref.mounted || !sessions.isCurrent(token)) return;
-    state = state.copyWith(running: false, clearCurrent: true, failed: failed);
   }
 
+  /// Descarga categorías y elementos de un tipo. Entre una petición y otra
+  /// comprueba que la sesión siga activa.
   static Future<(List<ContentCategory>, List<CatalogEntry>)> _download(
     ContentSource source,
     ContentKind kind,
+    SessionLifetime lifetime,
   ) async {
+    lifetime.ensureActive();
     switch (kind) {
       case ContentKind.live:
+        final categories = await source.liveCategories();
+        lifetime.ensureActive();
         return (
-          await source.liveCategories(),
+          categories,
           [
             for (final c in await source.liveChannels())
               CatalogEntry.fromChannel(c),
           ],
         );
       case ContentKind.movie:
+        final categories = await source.vodCategories();
+        lifetime.ensureActive();
         return (
-          await source.vodCategories(),
+          categories,
           [for (final m in await source.vodItems()) CatalogEntry.fromMovie(m)],
         );
       case ContentKind.series:
+        final categories = await source.seriesCategories();
+        lifetime.ensureActive();
         return (
-          await source.seriesCategories(),
+          categories,
           [
             for (final s in await source.seriesItems())
               CatalogEntry.fromSeries(s),
@@ -171,30 +182,23 @@ class CatalogSyncController extends Notifier<CatalogSyncState> {
 final catalogSyncProvider =
     NotifierProvider<CatalogSyncController, CatalogSyncState>(
       CatalogSyncController.new,
+      dependencies: [sessionContextProvider, contentSourceProvider],
     );
 
-/// Resultados de la búsqueda global en el catálogo local del perfil activo.
+/// Resultados de la búsqueda global en el catálogo local de la sesión.
 final searchResultsProvider = FutureProvider.autoDispose
     .family<SearchResults, String>((ref, query) async {
-      final profileId = ref.watch(sessionProvider.select((s) => s?.profile.id));
-      if (profileId == null || query.trim().isEmpty) {
-        return SearchResults.empty;
-      }
+      final profileId = ref.watch(sessionContextProvider).profileId;
+      if (query.trim().isEmpty) return SearchResults.empty;
       // Se vuelve a buscar cuando termina una actualización del catálogo.
       ref.watch(catalogSyncProvider.select((s) => s.info));
       return ref.watch(catalogCacheProvider).search(profileId, query);
-    });
+    }, dependencies: [sessionContextProvider, catalogSyncProvider]);
 
 /// Nombres de categorías de un tipo, para mostrar en los resultados.
 final categoryNamesProvider = FutureProvider.autoDispose
     .family<Map<String, String>, ContentKind>((ref, kind) async {
-      final profileId = ref.watch(sessionProvider.select((s) => s?.profile.id));
-      if (profileId == null) return const {};
+      final profileId = ref.watch(sessionContextProvider).profileId;
       ref.watch(catalogSyncProvider.select((s) => s.info[kind]));
       return ref.watch(catalogCacheProvider).categoryNames(profileId, kind);
-    });
-
-/// Mantiene viva la actualización del catálogo mientras haya sesión (se
-/// escucha desde el inicio).
-void keepCatalogSyncAlive(WidgetRef ref) =>
-    ref.listen(catalogSyncProvider, (_, _) {});
+    }, dependencies: [sessionContextProvider, catalogSyncProvider]);

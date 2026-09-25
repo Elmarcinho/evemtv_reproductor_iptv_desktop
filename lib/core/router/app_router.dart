@@ -86,65 +86,75 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.login,
         builder: (context, state) => const LoginScreen(),
       ),
-      GoRoute(
-        path: AppRoutes.home,
-        builder: (context, state) => const HomeScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.live,
-        builder: (context, state) => const LiveScreen(),
+      // Todo lo que necesita una sesión vive en su propio contenedor de
+      // Riverpod (SessionScope): al cerrar sesión o cambiar de perfil se
+      // destruye entero, con sus descargas, temporizadores y valores.
+      ShellRoute(
+        builder: (context, state, child) => SessionScope(child: child),
         routes: [
           GoRoute(
-            path: 'player',
-            // Usa el reproductor compartido con el mini reproductor.
-            builder: (context, state) => LivePlayerScreen(
-              start: state.extra is LiveStart
-                  ? state.extra! as LiveStart
+            path: AppRoutes.home,
+            builder: (context, state) => const HomeScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.live,
+            builder: (context, state) => const LiveScreen(),
+            routes: [
+              GoRoute(
+                path: 'player',
+                // Usa el reproductor compartido con el mini reproductor.
+                builder: (context, state) => LivePlayerScreen(
+                  start: state.extra is LiveStart
+                      ? state.extra! as LiveStart
+                      : null,
+                ),
+              ),
+            ],
+          ),
+          // Las fichas y el reproductor reciben el elemento en `extra`. Sin él
+          // (p. ej. tras un reinicio en caliente) se vuelve al catálogo.
+          GoRoute(
+            path: AppRoutes.movies,
+            builder: (context, state) => const MoviesScreen(),
+            routes: [
+              GoRoute(
+                path: 'detail',
+                redirect: (context, state) =>
+                    state.extra is VodItem ? null : AppRoutes.movies,
+                builder: (context, state) =>
+                    MovieDetailScreen(movie: state.extra! as VodItem),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: AppRoutes.series,
+            builder: (context, state) => const SeriesScreen(),
+            routes: [
+              GoRoute(
+                path: 'detail',
+                redirect: (context, state) =>
+                    state.extra is SeriesItem ? null : AppRoutes.series,
+                builder: (context, state) =>
+                    SeriesDetailScreen(series: state.extra! as SeriesItem),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: AppRoutes.search,
+            builder: (context, state) => SearchScreen(
+              initialQuery: state.extra is String
+                  ? state.extra! as String
                   : null,
             ),
           ),
-        ],
-      ),
-      // Las fichas y el reproductor reciben el elemento en `extra`. Sin él
-      // (p. ej. tras un reinicio en caliente) se vuelve al catálogo.
-      GoRoute(
-        path: AppRoutes.movies,
-        builder: (context, state) => const MoviesScreen(),
-        routes: [
           GoRoute(
-            path: 'detail',
+            path: AppRoutes.vodPlayer,
             redirect: (context, state) =>
-                state.extra is VodItem ? null : AppRoutes.movies,
+                state.extra is VodPlayable ? null : AppRoutes.home,
             builder: (context, state) =>
-                MovieDetailScreen(movie: state.extra! as VodItem),
+                VodPlayerScreen(playable: state.extra! as VodPlayable),
           ),
         ],
-      ),
-      GoRoute(
-        path: AppRoutes.series,
-        builder: (context, state) => const SeriesScreen(),
-        routes: [
-          GoRoute(
-            path: 'detail',
-            redirect: (context, state) =>
-                state.extra is SeriesItem ? null : AppRoutes.series,
-            builder: (context, state) =>
-                SeriesDetailScreen(series: state.extra! as SeriesItem),
-          ),
-        ],
-      ),
-      GoRoute(
-        path: AppRoutes.search,
-        builder: (context, state) => SearchScreen(
-          initialQuery: state.extra is String ? state.extra! as String : null,
-        ),
-      ),
-      GoRoute(
-        path: AppRoutes.vodPlayer,
-        redirect: (context, state) =>
-            state.extra is VodPlayable ? null : AppRoutes.home,
-        builder: (context, state) =>
-            VodPlayerScreen(playable: state.extra! as VodPlayable),
       ),
     ],
   );

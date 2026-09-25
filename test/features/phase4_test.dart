@@ -92,6 +92,7 @@ void main() {
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
           sessionProvider.overrideWith(FixedSession.new),
+          sessionContextProvider.overrideWithValue(testSessionContext()),
           contentSourceProvider.overrideWithValue(source),
         ],
       );
@@ -117,35 +118,40 @@ void main() {
     });
 
     test('al cambiar de cuenta, la nueva sesión sincroniza la suya', () async {
-      final sync = c.read(catalogSyncProvider.notifier);
-      final old = sync.sync();
-      c.read(sessionProvider.notifier).end();
-      c
-          .read(sessionProvider.notifier)
-          .start(
-            Session(
-              profile: Profile(
-                id: 1,
-                name: 'Cuenta 1',
-                type: SourceType.xtream,
-                createdAt: DateTime(2026),
-              ),
-              credentials: FixedSession().build()!.credentials,
-            ),
-          );
-      final fresh = sync.sync();
+      final session = FixedSession().build()!;
+      final a = sessionContainerFor(
+        c,
+        session,
+        overrides: [contentSourceProvider.overrideWithValue(source)],
+      );
+      final old = a.read(catalogSyncProvider.notifier).sync();
+      a.dispose();
+      final b = sessionContainerFor(
+        c,
+        session,
+        overrides: [contentSourceProvider.overrideWithValue(source)],
+      );
+      addTearDown(b.dispose);
+      final fresh = b.read(catalogSyncProvider.notifier).sync();
       expect(identical(old, fresh), isFalse);
       await Future.wait([old, fresh]);
       expect(
-        c.read(catalogSyncProvider).info.keys,
+        b.read(catalogSyncProvider).info.keys,
         containsAll(ContentKind.values),
       );
     });
 
-    test('si cambia la sesión a mitad de camino, no escribe', () async {
-      final sync = c.read(catalogSyncProvider.notifier);
-      final running = sync.sync();
-      c.read(sessionProvider.notifier).end();
+    test('si la sesión termina a mitad de camino, no escribe', () async {
+      final lifetime = SessionLifetime();
+      final s = sessionContainerFor(
+        c,
+        FixedSession().build()!,
+        lifetime: lifetime,
+        overrides: [contentSourceProvider.overrideWithValue(source)],
+      );
+      final running = s.read(catalogSyncProvider.notifier).sync();
+      lifetime.close();
+      s.dispose();
       await running;
       final rows = await db.select(db.catalogItems).get();
       expect(rows, isEmpty);
@@ -171,6 +177,7 @@ void main() {
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
           sessionProvider.overrideWith(FixedSession.new),
+          sessionContextProvider.overrideWithValue(testSessionContext()),
         ],
       );
       service = c.read(watchProgressServiceProvider);
@@ -256,14 +263,14 @@ void main() {
 
     setUp(() async {
       dir = await Directory.systemTemp.createTemp('evemtv_img_');
-      http = FakeHttpAdapter(
-        (_) => ResponseBody.fromBytes(List<int>.filled(1000, 7), 200),
-      );
+      http = FakeHttpAdapter((_) => ResponseBody.fromBytes(fakePng(1000), 200));
       cache = ImageDiskCache(
         directory: dir,
         key: List<int>.generate(32, (i) => i),
         dio: testDio(http),
         maxBytes: 3500,
+        // La decodificación real se prueba aparte (necesita el motor).
+        verifyDecodes: (_) async => true,
       );
     });
     tearDown(() => dir.delete(recursive: true));
@@ -295,17 +302,32 @@ void main() {
       expect(other.fileNameFor(url), isNot(cache.fileNameFor(url)));
     });
 
-    test('se limita el tamaño borrando las menos usadas', () async {
-      for (var i = 0; i < 6; i++) {
-        await cache.load('http://img.example.com/$i.png');
+    int diskBytes() => dir.listSync().whereType<File>().fold<int>(
+      0,
+      (a, f) => a + f.lengthSync(),
+    );
+
+    // Informe Codex Fase 4, punto 5: el tope se cumple en CADA escritura,
+    // sin depender de una limpieza periódica (aquí nunca se llama a prune).
+    test('el tope se cumple en cada escritura, sin llamar a prune', () async {
+      String u(int i) => 'http://img.example.com/$i.png';
+      for (var i = 0; i < 12; i++) {
+        await cache.load(u(i));
+        expect(diskBytes(), lessThanOrEqualTo(3500), reason: 'escritura $i');
         await Future<void>.delayed(const Duration(milliseconds: 5));
       }
+      // Se borraron las usadas hace más tiempo; la última sigue.
+      final names = dir.listSync().map((f) => f.uri.pathSegments.last);
+      expect(names, contains(cache.fileNameFor(u(11))));
+      expect(names, isNot(contains(cache.fileNameFor(u(0)))));
+    });
+
+    test('prune deja una carpeta sobredimensionada en el 80 %', () async {
+      for (var i = 0; i < 5; i++) {
+        File('${dir.path}/viejo$i').writeAsBytesSync(fakePng(1000));
+      }
       await cache.prune();
-      final total = dir.listSync().whereType<File>().fold<int>(
-        0,
-        (a, f) => a + f.lengthSync(),
-      );
-      expect(total, lessThanOrEqualTo(3500 * 0.8));
+      expect(diskBytes(), lessThanOrEqualTo(3500 * 0.8));
     });
 
     test('imágenes enormes no se guardan', () async {
@@ -408,6 +430,7 @@ void main() {
           overrides: [
             appDatabaseProvider.overrideWithValue(db),
             sessionProvider.overrideWith(FixedSession.new),
+            sessionContextProvider.overrideWithValue(testSessionContext()),
             contentSourceProvider.overrideWithValue(_CatalogSource()),
           ],
           child: MaterialApp.router(

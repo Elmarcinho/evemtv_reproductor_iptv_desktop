@@ -269,7 +269,10 @@ class DriftCatalogCache implements CatalogCache {
   /// palabra entre comillas (sin operadores del usuario) y como prefijo.
   /// "fut arg" → `"fut"* "arg"*` (todas las palabras deben aparecer).
   static String? ftsQuery(String input) {
+    // Los caracteres de control (incluido NUL, que corta el texto en SQLite
+    // y rompe la sintaxis de FTS5) se tratan como separadores.
     final words = input
+        .replaceAll(RegExp('[\u0000-\u001F\u007F-\u009F]'), ' ')
         .split(RegExp(r'\s+'))
         .map((w) => w.replaceAll('"', '').trim())
         .where((w) => w.isNotEmpty)

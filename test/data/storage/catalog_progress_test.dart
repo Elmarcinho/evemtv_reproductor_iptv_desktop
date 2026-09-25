@@ -108,6 +108,20 @@ void main() {
       expect(DriftCatalogCache.ftsQuery('   '), isNull);
     });
 
+    // Informe Codex Fase 4, punto 7.
+    test('NUL y otros caracteres de control no rompen la búsqueda', () async {
+      expect(DriftCatalogCache.ftsQuery('\u0000'), isNull);
+      expect(DriftCatalogCache.ftsQuery('a\u0000b'), '"a"* "b"*');
+      expect(DriftCatalogCache.ftsQuery('fut\u0007\u009Fbol'), '"fut"* "bol"*');
+      for (final q in ['\u0000', 'a\u0000b', 'fut\u0000', '\u007F\u0085']) {
+        await cache.search(a, q); // no lanza
+      }
+      expect(
+        (await cache.search(a, 'futbol\u0000')).byKind[ContentKind.movie],
+        hasLength(1),
+      );
+    });
+
     test(
       'reemplazar un tipo borra lo anterior de ese tipo solamente',
       () async {

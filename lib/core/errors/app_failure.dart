@@ -110,6 +110,10 @@ enum StorageFailureKind {
   deleteFailed(
     'No se pudieron borrar los datos de esta cuenta. La cuenta sigue '
     'guardada; intenta de nuevo.',
+  ),
+  cleanupIncomplete(
+    'Se cerró la sesión, pero no se pudieron borrar todas las imágenes '
+    'guardadas de esta cuenta en el equipo.',
   );
 
   const StorageFailureKind(this.message);

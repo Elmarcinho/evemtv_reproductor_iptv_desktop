@@ -30,4 +30,8 @@ class ImageCacheKeyStore {
   }
 
   Future<void> delete(int profileId) => _storage.delete(key: _key(profileId));
+
+  /// `true` si el perfil todavía tiene clave guardada.
+  Future<bool> exists(int profileId) async =>
+      await _storage.read(key: _key(profileId)) != null;
 }

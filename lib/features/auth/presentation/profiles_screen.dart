@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_format.dart';
+import '../../../core/widgets/global_messenger.dart';
 import '../../../core/widgets/keyboard_help.dart';
 import '../../../core/widgets/state_views.dart';
 import '../../../domain/entities/profile.dart';
@@ -136,9 +137,7 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
     try {
       await ref.read(authServiceProvider).open(widget.profile);
     } on Object catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(userMessageFor(e))));
+      showGlobalMessage(userMessageFor(e));
     } finally {
       if (mounted) setState(() => _opening = false);
     }

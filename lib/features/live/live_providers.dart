@@ -7,18 +7,16 @@ import '../../core/utils/task_pool.dart';
 import '../../domain/entities/live.dart';
 import '../auth/application/session.dart';
 
-// Todos dependen de `contentSourceProvider`: al cambiar de sesión se
-// recalculan y Riverpod descarta los resultados que llegan tarde de la
-// sesión anterior.
+// Todos viven en el contenedor de la sesión (dependen de
+// `contentSourceProvider`): se destruyen con ella, junto con sus peticiones.
 
 /// Categorías de TV en vivo (se cargan primero; los canales, bajo demanda).
 final liveCategoriesProvider = FutureProvider<List<ContentCategory>>((
   ref,
 ) async {
   final source = ref.watch(contentSourceProvider);
-  if (source == null) return const [];
   return source.liveCategories();
-});
+}, dependencies: [contentSourceProvider]);
 
 /// Canales de una categoría, o todos con `null`. Se mantienen en memoria
 /// durante la sesión para volver rápido a una categoría ya vista.
@@ -27,9 +25,8 @@ final liveChannelsProvider = FutureProvider.family<List<LiveChannel>, String?>((
   categoryId,
 ) async {
   final source = ref.watch(contentSourceProvider);
-  if (source == null) return const [];
   return source.liveChannels(categoryId: categoryId);
-});
+}, dependencies: [contentSourceProvider]);
 
 /// EPG corta de un canal. Es informativa: si falla, lista vacía (la fila
 /// simplemente no muestra programa). Lo obtenido se guarda 5 minutos tras
@@ -37,7 +34,6 @@ final liveChannelsProvider = FutureProvider.family<List<LiveChannel>, String?>((
 final shortEpgProvider = FutureProvider.autoDispose
     .family<List<EpgEntry>, LiveChannel>((ref, channel) async {
       final source = ref.watch(contentSourceProvider);
-      if (source == null) return const [];
       // Si la fila deja de verse antes de que le toque el turno, la
       // petición se descarta (evita colas largas al recorrer la lista).
       var disposed = false;
@@ -58,7 +54,7 @@ final shortEpgProvider = FutureProvider.autoDispose
         AppLogger.w('EPG corta no disponible', e);
         return const [];
       }
-    });
+    }, dependencies: [contentSourceProvider]);
 
 /// Programa en emisión y el siguiente, a partir de la EPG corta.
 ({EpgEntry? now, EpgEntry? next}) nowAndNext(

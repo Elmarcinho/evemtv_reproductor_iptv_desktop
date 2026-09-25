@@ -39,6 +39,7 @@ void main() {
         }),
         secureStorageProvider.overrideWithValue(storage),
         dioProvider.overrideWithValue(testDio(http)),
+        tempImageCacheRoot(),
       ],
     );
   });
@@ -240,8 +241,11 @@ void main() {
 
       storage.readGate = Completer<void>();
       final opening = auth().open(profile);
-      await auth().removeProfile(profile);
+      // La eliminación empieza (e invalida la apertura) mientras la lectura
+      // sigue esperando; el borrado de imágenes también lee el almacén.
+      final removing = auth().removeProfile(profile);
       storage.readGate!.complete();
+      await removing;
 
       expect(await opening, isFalse);
       expect(container.read(sessionProvider), isNull);
@@ -288,18 +292,31 @@ void main() {
           return jsonBody(loginOk);
         };
 
+        // Cada sesión tiene su contenedor, como en la app (SessionScope).
         await addDemo(user: 'usuarioA');
-        final sub = container.listen(accountInfoProvider, (_, _) {});
-        addTearDown(sub.close);
-        await container.read(accountInfoProvider.future);
+        final sessionA = sessionContainerFor(
+          container,
+          container.read(sessionProvider)!,
+        );
+        final subA = sessionA.listen(accountInfoProvider, (_, _) {});
+        await sessionA.read(accountInfoProvider.future);
 
         holdA = Completer<void>();
-        final refreshA = container.read(accountInfoProvider.notifier).refresh();
+        final refreshA = sessionA.read(accountInfoProvider.notifier).refresh();
 
         auth().switchProfile();
+        subA.close();
+        sessionA.dispose();
         await addDemo(user: 'usuarioB');
+        final sessionB = sessionContainerFor(
+          container,
+          container.read(sessionProvider)!,
+        );
+        addTearDown(sessionB.dispose);
+        final subB = sessionB.listen(accountInfoProvider, (_, _) {});
+        addTearDown(subB.close);
         expect(
-          (await container.read(accountInfoProvider.future))?.maxConnections,
+          (await sessionB.read(accountInfoProvider.future))?.maxConnections,
           2,
         );
 
@@ -309,7 +326,7 @@ void main() {
           container.read(sessionProvider)?.credentials.displayName,
           'usuarioB',
         );
-        expect(container.read(accountInfoProvider).value?.maxConnections, 2);
+        expect(sessionB.read(accountInfoProvider).value?.maxConnections, 2);
       },
     );
   });

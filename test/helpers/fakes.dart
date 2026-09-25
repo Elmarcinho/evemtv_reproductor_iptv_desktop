@@ -1,5 +1,7 @@
 // Dobles de prueba compartidos. Sin datos reales.
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:evemtv/core/network/retry_interceptor.dart';
@@ -8,7 +10,10 @@ import 'package:evemtv/domain/entities/profile.dart';
 import 'package:evemtv/domain/entities/source_credentials.dart';
 import 'package:evemtv/domain/repositories/favorites_repository.dart';
 import 'package:evemtv/features/auth/application/session.dart';
+import 'package:evemtv/features/images/app_images.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -69,6 +74,10 @@ class FakeSecureStorage extends Fake implements FlutterSecureStorage {
   /// Solo falla al borrar (simula un llavero que se bloquea a mitad).
   PlatformException? failDeleteWith;
 
+  /// Claves cuyo borrado "funciona" pero no borra nada (simula un llavero
+  /// que no elimina la entrada).
+  bool Function(String key)? ignoreDeleteOf;
+
   /// Si no es `null`, las lecturas esperan a que se complete (para simular
   /// un llavero lento y solapar operaciones).
   Completer<void>? readGate;
@@ -124,6 +133,7 @@ class FakeSecureStorage extends Fake implements FlutterSecureStorage {
   }) async {
     _maybeFail();
     if (failDeleteWith != null) throw failDeleteWith!;
+    if (ignoreDeleteOf?.call(key) ?? false) return;
     values.remove(key);
   }
 }
@@ -190,4 +200,66 @@ class FixedSession extends SessionController {
           password: 'claveDemo',
         ),
   );
+}
+
+/// Contexto de sesión ficticio (el mismo perfil que [FixedSession]).
+SessionContext testSessionContext({
+  SourceCredentials? credentials,
+  SessionLifetime? lifetime,
+}) => SessionContext.fromSession(
+  FixedSession(credentials).build()!,
+  lifetime ?? SessionLifetime(),
+);
+
+/// Contenedor de una sesión, hijo de [root], como el que crea
+/// [SessionScope]. Se destruye con [ProviderContainer.dispose].
+ProviderContainer sessionContainerFor(
+  ProviderContainer root,
+  Session session, {
+  SessionLifetime? lifetime,
+  List<Override> overrides = const [],
+}) {
+  final ctx = SessionContext.fromSession(
+    session,
+    lifetime ?? SessionLifetime(),
+  );
+  final container = ProviderContainer.test(
+    parent: root,
+    overrides: [sessionContextProvider.overrideWithValue(ctx), ...overrides],
+  );
+  addTearDown(ctx.lifetime.close);
+  return container;
+}
+
+/// Carpeta temporal para las cachés de imágenes (se borra al terminar).
+Override tempImageCacheRoot() {
+  final dir = Directory.systemTemp.createTempSync('evemtv_img_');
+  addTearDown(() {
+    if (dir.existsSync()) dir.deleteSync(recursive: true);
+  });
+  return imageCacheRootProvider.overrideWithValue(() async => dir);
+}
+
+/// PNG real de 1×1 píxel, generado para las pruebas.
+final Uint8List tinyPng = base64.decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/'
+  'iZk9HQAAAABJRU5ErkJggg==',
+);
+
+/// [size] bytes con cabecera PNG y relleno: pasa la comprobación de formato
+/// pero no decodifica (para pruebas con la decodificación simulada).
+Uint8List fakePng(int size) =>
+    Uint8List(size)
+      ..setRange(0, 8, const [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+
+/// Deja avanzar E/S real (disco, almacén seguro) intercalada con el reloj
+/// simulado de testWidgets: cada paso de E/S termina fuera y continúa al
+/// bombear.
+Future<void> settleIo(WidgetTester tester) async {
+  for (var i = 0; i < 20; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }
