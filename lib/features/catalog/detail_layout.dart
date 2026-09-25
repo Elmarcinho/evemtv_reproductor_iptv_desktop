@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../../core/widgets/poster.dart';
+import '../../core/widgets/keyboard_help.dart';
+import '../images/app_images.dart';
+import '../images/poster.dart';
 
 /// Estructura común de las fichas de película y serie: fondo con la imagen
 /// de la obra atenuada, póster, título, datos, sinopsis, acciones y, debajo,
 /// contenido extra (temporadas y episodios).
-class DetailLayout extends StatelessWidget {
+class DetailLayout extends ConsumerWidget {
   const DetailLayout({
     super.key,
     required this.title,
@@ -40,11 +43,13 @@ class DetailLayout extends StatelessWidget {
   final bool loading;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
     final backdrop = backdropUrl ?? posterUrl;
     return Scaffold(
-      body: CallbackShortcuts(
+      body: ScreenShortcuts(
+        title: 'Ficha',
+        help: ShortcutCatalog.detail,
         bindings: {
           const SingleActivator(LogicalKeyboardKey.escape): () =>
               Navigator.of(context).maybePop(),
@@ -55,10 +60,9 @@ class DetailLayout extends StatelessWidget {
             if (backdrop != null)
               Opacity(
                 opacity: 0.18,
-                child: Image.network(
-                  backdrop,
+                child: Image(
+                  image: appImage(ref, backdrop, cacheWidth: 960),
                   fit: BoxFit.cover,
-                  cacheWidth: 960,
                   errorBuilder: (_, _, _) => const SizedBox.shrink(),
                 ),
               ),

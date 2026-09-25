@@ -7,6 +7,7 @@ import '../../../core/errors/app_failure.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/server_url.dart';
+import '../../../core/widgets/keyboard_help.dart';
 import '../../../core/widgets/state_views.dart';
 import '../application/auth_service.dart';
 
@@ -133,7 +134,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   Widget build(BuildContext context) {
     final hasProfiles = ref.watch(profilesProvider).value?.isNotEmpty ?? false;
     return Scaffold(
-      body: CallbackShortcuts(
+      body: ScreenShortcuts(
+        title: 'Agregar cuenta',
+        help: const [
+          (keys: 'Tab', action: 'Pasar de un campo a otro'),
+          (keys: 'Enter', action: 'Conectar'),
+        ],
         bindings: {
           const SingleActivator(LogicalKeyboardKey.escape): () {
             if (hasProfiles && !_busy) context.go(AppRoutes.profiles);

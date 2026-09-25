@@ -16,7 +16,6 @@ class SeriesScreen extends StatelessWidget {
     return CatalogScreen<SeriesItem>(
       title: 'Series',
       allLabel: 'Todas las series',
-      filterHint: 'Filtrar series de esta categoría',
       emptyMessage: 'Esta categoría no tiene series.',
       icon: Icons.video_library_outlined,
       categoriesProvider: seriesCategoriesProvider,

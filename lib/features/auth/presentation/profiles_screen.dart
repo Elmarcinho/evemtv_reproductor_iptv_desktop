@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_format.dart';
+import '../../../core/widgets/keyboard_help.dart';
 import '../../../core/widgets/state_views.dart';
 import '../../../domain/entities/profile.dart';
 import '../application/auth_service.dart';
@@ -16,33 +17,40 @@ class ProfilesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profiles = ref.watch(profilesProvider);
-    return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(48, 40, 48, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const AppLogo(height: 72),
-              const SizedBox(height: 32),
-              Text(
-                'Elige una cuenta',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-              const SizedBox(height: 24),
-              Expanded(
-                child: profiles.when(
-                  loading: () => const LoadingView(),
-                  error: (e, _) => ErrorView(
-                    error: e,
-                    onRetry: () => ref.invalidate(profilesProvider),
-                  ),
-                  data: (list) => list.isEmpty
-                      ? const _EmptyProfiles()
-                      : _ProfileGrid(profiles: list),
+    return ScreenShortcuts(
+      title: 'Cuentas',
+      help: const [
+        (keys: 'Flechas / Tab', action: 'Elegir una cuenta'),
+        (keys: 'Enter', action: 'Entrar con la cuenta elegida'),
+      ],
+      child: Scaffold(
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(48, 40, 48, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const AppLogo(height: 72),
+                const SizedBox(height: 32),
+                Text(
+                  'Elige una cuenta',
+                  style: Theme.of(context).textTheme.headlineMedium,
                 ),
-              ),
-            ],
+                const SizedBox(height: 24),
+                Expanded(
+                  child: profiles.when(
+                    loading: () => const LoadingView(),
+                    error: (e, _) => ErrorView(
+                      error: e,
+                      onRetry: () => ref.invalidate(profilesProvider),
+                    ),
+                    data: (list) => list.isEmpty
+                        ? const _EmptyProfiles()
+                        : _ProfileGrid(profiles: list),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -213,7 +213,8 @@ void main() {
 
     await tester.enterText(find.byType(TextField), 'zzz');
     await tester.pumpAndSettle();
-    expect(find.text('Ningún canal coincide con "zzz".'), findsOneWidget);
+    expect(find.text('Nada coincide con "zzz" en Noticias.'), findsOneWidget);
+    expect(find.text('Buscar «zzz» en todo el catálogo'), findsOneWidget);
   });
 
   testWidgets('Esc vuelve al inicio', (tester) async {
@@ -276,5 +277,29 @@ void main() {
       find.textContaining('Todavía no tienes canales favoritos'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('el filtro dice en qué selección busca', (tester) async {
+    await pumpLive(tester);
+    // Se abre la primera categoría.
+    expect(find.text('Buscar en Noticias'), findsOneWidget);
+    await tester.tap(find.text('Favoritos'));
+    await tester.pumpAndSettle();
+    expect(find.text('Buscar en Favoritos'), findsOneWidget);
+    await tester.tap(find.text('Todos los canales'));
+    await tester.pumpAndSettle();
+    expect(find.text('Buscar en todos los canales'), findsOneWidget);
+    // La búsqueda global está en el inicio, no en cada sección.
+    expect(find.text('Búsqueda global'), findsNothing);
+    expect(find.byIcon(Icons.keyboard_outlined), findsNothing);
+  });
+
+  testWidgets('sin coincidencias: la ✕ borra el filtro', (tester) async {
+    await pumpLive(tester);
+    await tester.enterText(find.byType(TextField), 'zzz');
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Borrar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Noticias Uno'), findsWidgets);
   });
 }

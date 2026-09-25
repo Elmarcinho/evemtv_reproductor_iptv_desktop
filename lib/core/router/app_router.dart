@@ -15,6 +15,7 @@ import '../../features/movies/movie_detail_screen.dart';
 import '../../features/movies/movies_screen.dart';
 import '../../features/player/live_player_screen.dart';
 import '../../features/player/vod_player_screen.dart';
+import '../../features/search/search_screen.dart';
 import '../../features/series/series_detail_screen.dart';
 import '../../features/series/series_screen.dart';
 
@@ -31,6 +32,7 @@ abstract final class AppRoutes {
   static const String series = '/series';
   static const String seriesDetail = '/series/detail';
   static const String vodPlayer = '/play';
+  static const String search = '/search';
 
   /// Pantallas accesibles sin sesión.
   static const Set<String> _public = {profiles, login};
@@ -95,7 +97,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'player',
             // Usa el reproductor compartido con el mini reproductor.
-            builder: (context, state) => const LivePlayerScreen(),
+            builder: (context, state) => LivePlayerScreen(
+              start: state.extra is LiveStart
+                  ? state.extra! as LiveStart
+                  : null,
+            ),
           ),
         ],
       ),
@@ -126,6 +132,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 SeriesDetailScreen(series: state.extra! as SeriesItem),
           ),
         ],
+      ),
+      GoRoute(
+        path: AppRoutes.search,
+        builder: (context, state) => SearchScreen(
+          initialQuery: state.extra is String ? state.extra! as String : null,
+        ),
       ),
       GoRoute(
         path: AppRoutes.vodPlayer,

@@ -364,3 +364,46 @@ Solo compila y prueba; el empaquetado y la publicación son de la Fase 5.
   ruta no tenga `/series/` (salvo URLs claramente de vivo). En Xtream, una
   lista de listas sin `season` toma las temporadas declaradas.
 
+## 13. Catálogo local, búsqueda, "seguir viendo" y caché de pósters (Fase 4)
+
+- **Catálogo en drift por perfil** (`catalog_categories`, `catalog_items`,
+  `catalog_sync`, esquema v4): nombres, ids, categoría, número, extensión,
+  año y puntaje. **Sin URLs** (ni stream ni imagen), por la misma razón que
+  los favoritos.
+- **Actualización en segundo plano:** al abrir la sesión, cada tipo (vivo,
+  películas, series) con más de 12 h se vuelve a descargar completo, de a
+  uno. El JSON grande se decodifica en otro isolate y drift escribe en el
+  suyo: la interfaz no se bloquea. Si la sesión cambia a mitad de camino, lo
+  descargado se descarta. En la búsqueda se ve el estado y hay un botón
+  "Actualizar".
+- **La navegación sigue usando la red + memoria** (con imágenes); el
+  catálogo local sirve para la búsqueda. Mostrar las listas desde la base
+  obligaría a guardar URLs de imágenes o a mostrar listas sin imágenes.
+- **Búsqueda global con FTS5** (`catalog_search`): sin tildes ni mayúsculas
+  (`remove_diacritics`), cada palabra como prefijo y todas obligatorias. Lo
+  que escribe el usuario nunca llega como sintaxis FTS: cada palabra va
+  entre comillas. Imágenes de los resultados resueltas en memoria solo para
+  las filas visibles.
+- **"Seguir viendo"** (`watch_progress`): posición y duración por película o
+  episodio, sin URLs. Se guarda cada 10 s, al cambiar de episodio y al salir;
+  con menos de 30 s no se guarda. Al pasar el 95 % (o faltar menos de 90 s)
+  se quita y, en series, queda listo el siguiente episodio. Al reabrir se
+  retoma 5 s antes, con un botón "Desde el principio".
+- **Caché de pósters en disco:** sí conviene (cada apertura volvía a
+  descargar miles de imágenes). Archivos nombrados con HMAC-SHA256 de la URL
+  y una clave aleatoria por perfil en el almacén seguro: en disco no queda
+  la URL, y sin la clave no se puede comprobar a qué URL corresponde un
+  archivo (ni probar contraseñas candidatas). Solo se guardan los bytes de
+  la imagen, 5 MB máximo cada una, 300 MB por perfil (se borran primero las
+  menos usadas). Se borra con la clave al cerrar sesión. Sin llavero, se
+  cargan de la red como antes.
+- **Atajos de teclado:** un catálogo único (`ShortcutCatalog`) con los de
+  cada pantalla; `?` o F1 muestran la ayuda (el `?` no se captura mientras se
+  escribe en un campo). Sin botón visible, para no recargar los encabezados.
+  Ctrl+F abre la búsqueda desde inicio, En vivo, Películas y Series.
+- **Búsqueda global en el inicio** ("Explorar", junto a las tres secciones).
+  En En vivo, Películas y Series solo está el filtro de la categoría
+  elegida, con una etiqueta que la nombra ("Buscar en Favoritos"). Las flechas en los reproductores siguen la
+  especificación: en vivo ↑/↓ canal y ←/→ volumen; en películas ←/→ ±10 s y
+  ↑/↓ volumen.
+

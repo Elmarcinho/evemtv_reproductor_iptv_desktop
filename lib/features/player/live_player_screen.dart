@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/date_format.dart';
+import '../../core/widgets/keyboard_help.dart';
 import '../../core/widgets/state_views.dart';
 import '../../domain/entities/live.dart';
 import '../live/live_providers.dart';
@@ -18,6 +19,14 @@ import 'live_player_provider.dart';
 import 'widgets/playback_status_view.dart';
 import 'widgets/player_bar.dart';
 
+/// Canales con los que abrir el reproductor.
+class LiveStart {
+  const LiveStart({required this.channels, this.index = 0});
+
+  final List<LiveChannel> channels;
+  final int index;
+}
+
 /// Reproductor de TV en vivo a pantalla grande. Usa el mismo reproductor
 /// que el mini reproductor de En vivo ([livePlayerProvider]): entrar y salir
 /// no corta el stream.
@@ -26,7 +35,11 @@ import 'widgets/player_bar.dart';
 /// de pantalla completa o vuelve, ↑/↓ cambian de canal, ←/→ volumen,
 /// M silencio, L lista de canales.
 class LivePlayerScreen extends ConsumerStatefulWidget {
-  const LivePlayerScreen({super.key});
+  const LivePlayerScreen({super.key, this.start});
+
+  /// Canales para empezar a reproducir al abrir (p. ej. desde la búsqueda).
+  /// Sin esto, se usa lo que ya suena en el reproductor compartido.
+  final LiveStart? start;
 
   @override
   ConsumerState<LivePlayerScreen> createState() => _LivePlayerScreenState();
@@ -43,6 +56,19 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
   void initState() {
     super.initState();
     _bumpOverlay();
+    final start = widget.start;
+    if (start != null) {
+      // Después del primer frame: la pantalla ya escucha el proveedor y el
+      // reproductor compartido no se libera antes de tiempo.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(
+          ref
+              .read(livePlayerProvider.notifier)
+              .play(start.channels, start.index),
+        );
+      });
+    }
   }
 
   @override
@@ -152,7 +178,9 @@ class _LivePlayerScreenState extends ConsumerState<LivePlayerScreen> {
     final playback = handle.playback;
     return Scaffold(
       backgroundColor: Colors.black,
-      body: CallbackShortcuts(
+      body: ScreenShortcuts(
+        title: 'Reproductor en vivo',
+        help: ShortcutCatalog.livePlayer,
         bindings: _shortcuts,
         child: Focus(
           focusNode: _focus,

@@ -8,11 +8,14 @@ import '../../core/utils/date_format.dart';
 import '../../core/widgets/state_views.dart';
 import '../../domain/entities/favorite.dart';
 import '../../domain/entities/vod.dart';
+import '../../domain/entities/watch_progress.dart';
 import '../catalog/catalog_providers.dart';
 import '../catalog/detail_layout.dart';
 import '../favorites/favorite_button.dart';
 import '../favorites/favorites.dart';
+import '../images/app_images.dart';
 import '../player/vod_player_screen.dart';
+import '../player/watch_progress.dart';
 
 /// Ficha de una serie con selector de temporada y lista de episodios.
 class SeriesDetailScreen extends ConsumerStatefulWidget {
@@ -50,6 +53,13 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
     final series = widget.series;
 
     final seasons = data?.seasons ?? const <Season>[];
+    // Último episodio a medio ver (o el siguiente de uno terminado).
+    final lastProgress = ref.watch(seriesProgressProvider(series.id));
+    final resumeEpisode = lastProgress == null
+        ? null
+        : [for (final s in seasons) ...s.episodes]
+              .where((e) => e.id == lastProgress.itemId)
+              .firstOrNull;
     final season = seasons.isEmpty
         ? null
         : seasons.firstWhere(
@@ -76,9 +86,18 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
         if (data?.cast != null) ('Reparto', data!.cast!),
       ],
       actions: [
-        if (data != null && season != null && season.episodes.isNotEmpty)
+        if (data != null && resumeEpisode != null)
           FilledButton.icon(
             autofocus: true,
+            onPressed: () => _play(data, resumeEpisode),
+            icon: const Icon(Icons.play_arrow_rounded),
+            label: Text(
+              'Continuar T${resumeEpisode.season} · E${resumeEpisode.number}',
+            ),
+          ),
+        if (data != null && season != null && season.episodes.isNotEmpty)
+          (resumeEpisode == null ? FilledButton.icon : OutlinedButton.icon)(
+            autofocus: resumeEpisode == null,
             onPressed: () => _play(data, seasons.first.episodes.first),
             icon: const Icon(Icons.play_arrow_rounded),
             label: const Text('Ver desde el principio'),
@@ -128,6 +147,12 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
                     separatorBuilder: (_, _) => const Divider(),
                     itemBuilder: (context, i) => _EpisodeTile(
                       episode: season.episodes[i],
+                      progress: ref.watch(
+                        progressForProvider((
+                          kind: ProgressKind.episode,
+                          id: season.episodes[i].id,
+                        )),
+                      ),
                       onPlay: () => _play(data, season.episodes[i]),
                     ),
                   ),
@@ -166,14 +191,21 @@ class _SeasonSelector extends StatelessWidget {
   }
 }
 
-class _EpisodeTile extends StatelessWidget {
-  const _EpisodeTile({required this.episode, required this.onPlay});
+class _EpisodeTile extends ConsumerWidget {
+  const _EpisodeTile({
+    required this.episode,
+    required this.onPlay,
+    this.progress,
+  });
 
   final Episode episode;
   final VoidCallback onPlay;
 
+  /// Progreso guardado, si está a medio ver.
+  final WatchProgress? progress;
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final text = Theme.of(context).textTheme;
     return InkWell(
       onTap: onPlay,
@@ -195,12 +227,11 @@ class _EpisodeTile extends StatelessWidget {
             if (episode.imageUrl != null) ...[
               ClipRRect(
                 borderRadius: BorderRadius.circular(6),
-                child: Image.network(
-                  episode.imageUrl!,
+                child: Image(
+                  image: appImage(ref, episode.imageUrl!, cacheWidth: 320),
                   width: 160,
                   height: 90,
                   fit: BoxFit.cover,
-                  cacheWidth: 320,
                   errorBuilder: (_, _, _) => const SizedBox(width: 160),
                 ),
               ),
@@ -211,6 +242,18 @@ class _EpisodeTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(episode.title, style: text.titleSmall),
+                  if (progress != null && progress!.fraction > 0) ...[
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      width: 200,
+                      child: LinearProgressIndicator(
+                        value: progress!.fraction,
+                        minHeight: 3,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                  ],
                   if (episode.duration != null)
                     Text(
                       DateFormatEs.runtime(episode.duration!),

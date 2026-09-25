@@ -140,7 +140,10 @@ void main() {
         .add(profile.id, fav(FavoriteKind.live, '1'));
     expect(await db.select(db.favorites).get(), hasLength(1));
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.data.values.single, 3);
+    expect(
+      version.data.values.single,
+      AppDatabase(NativeDatabase.memory()).schemaVersion,
+    );
   });
 
   test('migración v2 → v3: descarta las URLs de imagen y conserva los favoritos', () async {

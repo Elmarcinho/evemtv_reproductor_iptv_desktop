@@ -16,7 +16,6 @@ class MoviesScreen extends StatelessWidget {
     return CatalogScreen<VodItem>(
       title: 'Películas',
       allLabel: 'Todas las películas',
-      filterHint: 'Filtrar películas de esta categoría',
       emptyMessage: 'Esta categoría no tiene películas.',
       categoriesProvider: vodCategoriesProvider,
       itemsProvider: vodItemsProvider.call,

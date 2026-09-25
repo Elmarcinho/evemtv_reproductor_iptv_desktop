@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/date_format.dart';
+import '../../core/widgets/keyboard_help.dart';
 import '../../core/widgets/state_views.dart';
 import '../../domain/entities/account_info.dart';
 import '../../domain/entities/profile.dart';
 import '../auth/application/auth_service.dart';
 import '../auth/application/session.dart';
+import '../search/catalog_sync.dart';
 import 'account_info_controller.dart';
+import 'continue_watching_row.dart';
 
 /// Inicio: acceso a En vivo, Películas y Series, y datos de la cuenta.
 class HomeScreen extends ConsumerWidget {
@@ -59,67 +63,115 @@ class HomeScreen extends ConsumerWidget {
     final session = ref.watch(sessionProvider);
     if (session == null) return const Scaffold(body: LoadingView());
     final profile = session.profile;
+    // Mantiene el catálogo local (búsqueda) al día en segundo plano.
+    ref.listen(catalogSyncProvider, (_, _) {});
 
-    return Scaffold(
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(40, 28, 40, 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const AppLogo(height: 52),
-                  const Spacer(),
-                  Text(
-                    session.credentials.displayName ?? profile.name,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(width: 16),
-                  OutlinedButton.icon(
-                    onPressed: () =>
-                        ref.read(authServiceProvider).switchProfile(),
-                    icon: const Icon(Icons.switch_account_outlined),
-                    label: const Text('Cambiar cuenta'),
-                  ),
-                  const SizedBox(width: 8),
-                  TextButton.icon(
-                    onPressed: () => _confirmLogout(context, ref, profile),
-                    icon: const Icon(Icons.logout_rounded),
-                    label: const Text('Cerrar sesión'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 40),
-              Expanded(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final wide = constraints.maxWidth >= 1100;
-                    final tiles = const _SectionTiles();
-                    final account = _AccountPanel(type: profile.type);
-                    return wide
-                        ? Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Expanded(child: _SectionTiles()),
-                              const SizedBox(width: 32),
-                              SizedBox(width: 340, child: account),
-                            ],
-                          )
-                        : ListView(
-                            children: [
-                              SizedBox(height: 220, child: tiles),
-                              const SizedBox(height: 24),
-                              account,
-                            ],
-                          );
-                  },
+    return ScreenShortcuts(
+      title: 'Inicio',
+      help: ShortcutCatalog.home,
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
+            context.push(AppRoutes.search),
+      },
+      child: Scaffold(
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(40, 28, 40, 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const AppLogo(height: 52),
+                    const Spacer(),
+                    Text(
+                      session.credentials.displayName ?? profile.name,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(width: 16),
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          ref.read(authServiceProvider).switchProfile(),
+                      icon: const Icon(Icons.switch_account_outlined),
+                      label: const Text('Cambiar cuenta'),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      onPressed: () => _confirmLogout(context, ref, profile),
+                      icon: const Icon(Icons.logout_rounded),
+                      label: const Text('Cerrar sesión'),
+                    ),
+                  ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 40),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final wide = constraints.maxWidth >= 1100;
+                      final tiles = const _SectionTiles();
+                      final account = _AccountPanel(type: profile.type);
+                      return wide
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: ListView(
+                                    children: [
+                                      const _ExploreHeader(),
+                                      const SizedBox(height: 16),
+                                      SizedBox(height: 260, child: tiles),
+                                      const SizedBox(height: 32),
+                                      const ContinueWatchingRow(),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 32),
+                                SizedBox(width: 340, child: account),
+                              ],
+                            )
+                          : ListView(
+                              children: [
+                                const _ExploreHeader(),
+                                const SizedBox(height: 16),
+                                SizedBox(height: 220, child: tiles),
+                                const SizedBox(height: 24),
+                                const ContinueWatchingRow(),
+                                const SizedBox(height: 24),
+                                account,
+                              ],
+                            );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Título de las secciones con la búsqueda global al lado: busca en
+/// canales, películas y series a la vez.
+class _ExploreHeader extends StatelessWidget {
+  const _ExploreHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text('Explorar', style: Theme.of(context).textTheme.titleLarge),
+        const Spacer(),
+        Tooltip(
+          message: 'Buscar en todos los canales, películas y series (Ctrl+F)',
+          child: FilledButton.tonalIcon(
+            onPressed: () => context.push(AppRoutes.search),
+            icon: const Icon(Icons.travel_explore_rounded),
+            label: const Text('Búsqueda global'),
+          ),
+        ),
+      ],
     );
   }
 }

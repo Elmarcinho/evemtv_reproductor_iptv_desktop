@@ -10,6 +10,7 @@ import '../../../domain/entities/profile.dart';
 import '../../../domain/entities/source_credentials.dart';
 import '../../../domain/repositories/credential_store.dart';
 import '../../../domain/repositories/profile_repository.dart';
+import '../../images/app_images.dart';
 import 'session.dart';
 
 /// Casos de uso de autenticación y perfiles.
@@ -19,7 +20,12 @@ class AuthService {
     required this._credentials,
     required this._sources,
     required this._session,
+    this._cleaners = const [],
   });
+
+  /// Limpiezas extra al eliminar un perfil (p. ej. caché de imágenes). Sus
+  /// errores se registran pero no impiden la eliminación.
+  final List<Future<void> Function(int profileId)> _cleaners;
 
   final ProfileRepository _profiles;
   final CredentialStore _credentials;
@@ -106,6 +112,13 @@ class AuthService {
       AppLogger.e('No se pudo eliminar el perfil', e);
       throw StorageFailure(StorageFailureKind.deleteFailed, cause: e);
     }
+    for (final clean in _cleaners) {
+      try {
+        await clean(profile.id);
+      } on Object catch (e) {
+        AppLogger.w('Limpieza del perfil incompleta', e);
+      }
+    }
     AppLogger.event('profile.removed', {'profile': profile.id});
   }
 
@@ -150,6 +163,9 @@ final authServiceProvider = Provider<AuthService>(
     credentials: ref.watch(credentialStoreProvider),
     sources: ref.watch(contentSourceFactoryProvider),
     session: ref.watch(sessionProvider.notifier),
+    cleaners: [
+      (id) => clearProfileImageCache(ref.read(imageCacheKeyStoreProvider), id),
+    ],
   ),
 );
 

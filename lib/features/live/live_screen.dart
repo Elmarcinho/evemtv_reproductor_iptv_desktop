@@ -9,12 +9,14 @@ import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/date_format.dart';
 import '../../core/widgets/category_list.dart';
+import '../../core/widgets/keyboard_help.dart';
 import '../../core/widgets/state_views.dart';
 import '../../domain/entities/favorite.dart';
 import '../../domain/entities/live.dart';
 import '../favorites/favorite_button.dart';
 import '../favorites/favorites.dart';
 import '../player/live_player_provider.dart';
+import '../search/section_header.dart';
 import 'live_providers.dart';
 import 'widgets/channel_logo.dart';
 import 'widgets/mini_player.dart';
@@ -76,6 +78,17 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     });
     if (_listController.hasClients) _listController.jumpTo(0);
     _listFocus.requestFocus();
+  }
+
+  /// Nombre de la selección actual, para el filtro ("Buscar en …").
+  static String _scopeLabel(
+    String? categoryId,
+    List<ContentCategory>? categories,
+  ) {
+    if (categoryId == null) return 'todos los canales';
+    if (categoryId == favoritesCategoryId) return 'Favoritos';
+    return categories?.where((c) => c.id == categoryId).firstOrNull?.name ??
+        'esta categoría';
   }
 
   List<LiveChannel> _visible(List<LiveChannel> channels) {
@@ -168,15 +181,21 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     final categoryId = _categoryChosen ? _categoryId : firstCategory;
 
     return Scaffold(
-      body: CallbackShortcuts(
+      body: ScreenShortcuts(
+        title: 'En vivo',
+        help: ShortcutCatalog.liveList,
         bindings: {
           const SingleActivator(LogicalKeyboardKey.escape): () =>
               context.go(AppRoutes.home),
+          const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
+              context.push(AppRoutes.search),
         },
         child: SafeArea(
           child: Column(
             children: [
-              _Header(
+              SectionHeader(
+                title: 'En vivo',
+                scopeLabel: _scopeLabel(categoryId, categories.value),
                 controller: _filterController,
                 onFilter: (v) => setState(() {
                   _filter = v;
@@ -259,15 +278,22 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
       data: (all) {
         final list = _visible(all);
         _visibleChannels = list;
+        if (list.isEmpty && _filter.isNotEmpty) {
+          return NoMatchesInScope(
+            query: _filter.trim(),
+            scopeLabel: _scopeLabel(
+              categoryId,
+              ref.read(liveCategoriesProvider).value,
+            ),
+          );
+        }
         if (list.isEmpty) {
           return Center(
             child: Text(
-              _filter.isEmpty
-                  ? (isFavorites
-                        ? 'Todavía no tienes canales favoritos.\n'
-                              'Márcalos con ★ en el panel del canal.'
-                        : 'Esta categoría no tiene canales.')
-                  : 'Ningún canal coincide con "$_filter".',
+              isFavorites
+                  ? 'Todavía no tienes canales favoritos.\n'
+                        'Márcalos con ★ en el panel del canal.'
+                  : 'Esta categoría no tiene canales.',
               style: const TextStyle(color: AppColors.textSecondary),
             ),
           );
@@ -329,50 +355,6 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _Header extends StatelessWidget {
-  const _Header({
-    required this.controller,
-    required this.onFilter,
-    required this.onSubmitted,
-  });
-
-  final TextEditingController controller;
-  final ValueChanged<String> onFilter;
-  final VoidCallback onSubmitted;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 24, 12),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: 'Volver (Esc)',
-            onPressed: () => context.go(AppRoutes.home),
-            icon: const Icon(Icons.arrow_back_rounded),
-          ),
-          const SizedBox(width: 8),
-          Text('En vivo', style: Theme.of(context).textTheme.headlineSmall),
-          const Spacer(),
-          SizedBox(
-            width: 320,
-            child: TextField(
-              controller: controller,
-              onChanged: onFilter,
-              onSubmitted: (_) => onSubmitted(),
-              decoration: const InputDecoration(
-                isDense: true,
-                hintText: 'Filtrar canales de esta categoría',
-                prefixIcon: Icon(Icons.search_rounded),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

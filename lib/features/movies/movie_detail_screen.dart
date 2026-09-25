@@ -7,11 +7,13 @@ import '../../core/utils/date_format.dart';
 import '../../core/widgets/state_views.dart';
 import '../../domain/entities/favorite.dart';
 import '../../domain/entities/vod.dart';
+import '../../domain/entities/watch_progress.dart';
 import '../catalog/catalog_providers.dart';
 import '../catalog/detail_layout.dart';
 import '../favorites/favorite_button.dart';
 import '../favorites/favorites.dart';
 import '../player/vod_player_screen.dart';
+import '../player/watch_progress.dart';
 
 /// Ficha de una película. Muestra enseguida lo que ya se sabe (póster y
 /// nombre) y completa sinopsis, reparto y duración al llegar la ficha.
@@ -26,8 +28,17 @@ class MovieDetailScreen extends ConsumerWidget {
     final data = detail.value;
     final item = data?.item ?? movie;
 
-    void play() =>
-        context.push(AppRoutes.vodPlayer, extra: MoviePlayable(item));
+    void play({bool startOver = false}) => context.push(
+      AppRoutes.vodPlayer,
+      extra: MoviePlayable(item, startOver: startOver),
+    );
+    final progress = ref.watch(
+      progressForProvider((kind: ProgressKind.movie, id: item.id)),
+    );
+    final canResume =
+        progress != null &&
+        !WatchProgress.isTooEarly(progress.position) &&
+        !WatchProgress.isFinished(progress.position, progress.duration);
 
     return DetailLayout(
       title: item.name,
@@ -52,8 +63,18 @@ class MovieDetailScreen extends ConsumerWidget {
           autofocus: true,
           onPressed: play,
           icon: const Icon(Icons.play_arrow_rounded),
-          label: const Text('Reproducir'),
+          label: Text(
+            canResume
+                ? 'Continuar desde ${DateFormatEs.clock(progress.position)}'
+                : 'Reproducir',
+          ),
         ),
+        if (canResume)
+          OutlinedButton.icon(
+            onPressed: () => play(startOver: true),
+            icon: const Icon(Icons.replay_rounded),
+            label: const Text('Desde el principio'),
+          ),
         FavoriteButton(
           isFavorite: ref
               .watch(favoriteIdsProvider(FavoriteKind.movie))

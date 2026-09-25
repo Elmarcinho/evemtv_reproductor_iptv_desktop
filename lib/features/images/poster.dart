@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../theme/app_theme.dart';
+import '../../core/theme/app_theme.dart';
+import 'app_images.dart';
 
-/// Póster 2:3 con carga diferida, decodificado al tamaño mostrado y con un
-/// respaldo si no hay imagen o falla la descarga.
-class Poster extends StatelessWidget {
+/// Póster 2:3 con carga diferida y caché en disco, decodificado al tamaño
+/// mostrado y con un respaldo si no hay imagen o falla la descarga.
+class Poster extends ConsumerWidget {
   const Poster({
     super.key,
     required this.url,
@@ -19,7 +21,7 @@ class Poster extends StatelessWidget {
   final IconData icon;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final fallback = ColoredBox(
       color: AppColors.surfaceHigh,
       child: Center(
@@ -53,12 +55,15 @@ class Poster extends StatelessWidget {
           aspectRatio: 2 / 3,
           child: url == null
               ? fallback
-              : Image.network(
-                  url!,
+              : Image(
+                  // Caché en disco + decodificado al tamaño mostrado: miles
+                  // de pósters sin disparar la memoria ni la red.
+                  image: appImage(
+                    ref,
+                    url!,
+                    cacheWidth: w.isFinite ? (w * dpr).round() : null,
+                  ),
                   fit: BoxFit.cover,
-                  // Decodifica al tamaño mostrado: miles de pósters sin
-                  // disparar la memoria.
-                  cacheWidth: w.isFinite ? (w * dpr).round() : null,
                   errorBuilder: (_, _, _) => fallback,
                   frameBuilder: (context, child, frame, sync) =>
                       frame == null && !sync ? fallback : child,

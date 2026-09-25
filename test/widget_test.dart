@@ -93,6 +93,9 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Tu cuenta'), findsOneWidget);
+      // Búsqueda global junto a las tres secciones.
+      expect(find.text('Explorar'), findsOneWidget);
+      expect(find.text('Búsqueda global'), findsOneWidget);
       expect(find.text('Activa'), findsOneWidget);
       expect(find.text('1 activas de 2'), findsOneWidget);
       // Se muestra el usuario (en memoria), no "Cuenta 1".
@@ -102,6 +105,11 @@ void main() {
       await tester.tap(find.widgetWithText(TextButton, 'Cerrar sesión'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, 'Cerrar sesión'));
+      // Cerrar sesión también borra la caché de imágenes del perfil (E/S real
+      // de disco y almacén seguro), que no avanza con el reloj simulado.
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 300)),
+      );
       await tester.pumpAndSettle();
       expect(find.text('Todavía no hay cuentas guardadas'), findsOneWidget);
 

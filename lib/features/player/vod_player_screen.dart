@@ -10,30 +10,45 @@ import 'package:window_manager/window_manager.dart';
 import '../../core/errors/app_failure.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/date_format.dart';
+import '../../core/widgets/keyboard_help.dart';
 import '../../core/widgets/state_views.dart';
 import '../../data/providers.dart';
 import '../../domain/entities/live.dart';
 import '../../domain/entities/vod.dart';
+import '../../domain/entities/watch_progress.dart';
 import '../../domain/repositories/content_source.dart';
 import '../auth/application/session.dart';
 import 'media_engine_provider.dart';
 import 'playback_engine.dart';
 import 'stream_probe.dart';
 import 'vod_playback_controller.dart';
+import 'watch_progress.dart';
 import 'widgets/player_bar.dart';
 
 /// Qué reproducir: una película o un episodio (con la lista de episodios
 /// para pasar al siguiente).
-sealed class VodPlayable {
-  const VodPlayable();
+sealed class VodPlayable implements ProgressTarget {
+  const VodPlayable({this.startOver = false});
+
+  /// Empezar desde el principio aunque haya una posición guardada.
+  @override
+  final bool startOver;
 
   String get title;
   String? get subtitle;
   PlaybackCandidates candidates(ContentSource source);
+
+  /// Clave de "seguir viendo".
+  @override
+  ({ProgressKind kind, String id}) get progressKey;
+
+  /// Registro de "seguir viendo" en [position] (sin URLs).
+  @override
+  WatchProgress progressAt(Duration position, Duration duration);
 }
 
 class MoviePlayable extends VodPlayable {
-  const MoviePlayable(this.movie);
+  const MoviePlayable(this.movie, {super.startOver});
 
   final VodItem movie;
 
@@ -46,6 +61,21 @@ class MoviePlayable extends VodPlayable {
   @override
   PlaybackCandidates candidates(ContentSource source) =>
       source.movieStream(movie);
+
+  @override
+  ProgressTarget? get nextTarget => null;
+
+  @override
+  ({ProgressKind kind, String id}) get progressKey =>
+      (kind: ProgressKind.movie, id: movie.id);
+
+  @override
+  WatchProgress progressAt(Duration position, Duration duration) =>
+      WatchProgressService.forMovie(
+        movie,
+        position: position,
+        duration: duration,
+      );
 }
 
 class EpisodePlayable extends VodPlayable {
@@ -53,6 +83,7 @@ class EpisodePlayable extends VodPlayable {
     required this.series,
     required this.episodes,
     required this.index,
+    super.startOver,
   });
 
   final SeriesItem series;
@@ -77,6 +108,22 @@ class EpisodePlayable extends VodPlayable {
   @override
   PlaybackCandidates candidates(ContentSource source) =>
       source.episodeStream(episode);
+
+  @override
+  ProgressTarget? get nextTarget => next;
+
+  @override
+  ({ProgressKind kind, String id}) get progressKey =>
+      (kind: ProgressKind.episode, id: episode.id);
+
+  @override
+  WatchProgress progressAt(Duration position, Duration duration) =>
+      WatchProgressService.forEpisode(
+        series,
+        episode,
+        position: position,
+        duration: duration,
+      );
 }
 
 /// Reproductor de películas y episodios con barra de progreso.
@@ -110,6 +157,18 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
   static const int _nextEpisodeDelay = 10;
 
   final FocusNode _focus = FocusNode(debugLabel: 'reproductor-vod');
+
+  /// "Seguir viendo": se guarda cada [_saveEvery], al cambiar de episodio y
+  /// al salir. El servicio se toma al iniciar para poder usarlo en dispose.
+  late final VodProgressTracker _progress = VodProgressTracker(
+    ref.read(watchProgressServiceProvider),
+  );
+  Timer? _saveTimer;
+  static const Duration _saveEvery = Duration(seconds: 10);
+
+  /// Posición desde la que se reanudó (para el aviso "Desde el principio").
+  Duration? _resumedAt;
+  Timer? _resumedTimer;
 
   @override
   void initState() {
@@ -148,15 +207,56 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
     if (source == null || playback == null) return;
     try {
       final url = _current.candidates(source).urls.first;
-      await playback.open(url);
+      final resumeAt = await _resumePosition(_current);
+      if (!mounted) return;
+      await playback.open(url, resumeAt: resumeAt);
+      _showResumed(resumeAt);
+      _saveTimer?.cancel();
+      _saveTimer = Timer.periodic(_saveEvery, (_) => _saveProgress());
     } on Object catch (e) {
       if (mounted) setState(() => _startError = e);
     }
   }
 
+  Future<Duration?> _resumePosition(VodPlayable playable) =>
+      _progress.resumePosition(playable);
+
+  void _showResumed(Duration? at) {
+    _resumedTimer?.cancel();
+    setState(() => _resumedAt = at);
+    if (at == null) return;
+    _resumedTimer = Timer(const Duration(seconds: 8), () {
+      if (mounted) setState(() => _resumedAt = null);
+    });
+  }
+
+  void _startOver() {
+    _resumedTimer?.cancel();
+    setState(() => _resumedAt = null);
+    unawaited(_engine?.player.seek(Duration.zero));
+  }
+
+  /// Guarda la posición actual (ver [VodProgressTracker.save]).
+  void _saveProgress({bool completed = false}) {
+    final playback = _playback;
+    if (playback == null) return;
+    unawaited(
+      _progress.save(
+        _current,
+        position: playback.position,
+        duration: playback.duration,
+        completed: completed,
+      ),
+    );
+  }
+
   void _onPlaybackChanged() {
     final playback = _playback;
     if (playback == null || !mounted) return;
+    if (playback.status == VodPlaybackStatus.completed) {
+      _saveTimer?.cancel();
+      _saveProgress(completed: true);
+    }
     if (playback.status == VodPlaybackStatus.completed &&
         _nextEpisode != null &&
         _nextCountdown == null) {
@@ -195,6 +295,8 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
     final next = _nextEpisode;
     if (next == null) return;
     _countdownTimer?.cancel();
+    // Si se salta a mitad del episodio, se guarda dónde quedó.
+    if (_playback?.status != VodPlaybackStatus.completed) _saveProgress();
     setState(() {
       _current = next;
       _nextCountdown = null;
@@ -205,6 +307,9 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
 
   @override
   void dispose() {
+    _saveTimer?.cancel();
+    _resumedTimer?.cancel();
+    if (_playback?.status != VodPlaybackStatus.completed) _saveProgress();
     _hideTimer?.cancel();
     _countdownTimer?.cancel();
     _focus.dispose();
@@ -309,7 +414,9 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
     }
     return Scaffold(
       backgroundColor: Colors.black,
-      body: CallbackShortcuts(
+      body: ScreenShortcuts(
+        title: 'Reproductor',
+        help: ShortcutCatalog.vodPlayer,
         bindings: _shortcuts,
         child: Focus(
           focusNode: _focus,
@@ -346,6 +453,35 @@ class _VodPlayerScreenState extends ConsumerState<VodPlayerScreen> {
                     onBack: () => Navigator.of(context).maybePop(),
                   ),
                 ),
+                // Aviso de reanudación, con opción de empezar de nuevo.
+                if (_resumedAt != null)
+                  Positioned(
+                    left: 24,
+                    bottom: 120,
+                    child: Material(
+                      color: const Color(0xE6151B23),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.history_rounded, size: 20),
+                            const SizedBox(width: 10),
+                            Text(
+                              'Continuando desde '
+                              '${DateFormatEs.clock(_resumedAt!)}',
+                            ),
+                            const SizedBox(width: 12),
+                            TextButton(
+                              onPressed: _startOver,
+                              child: const Text('Desde el principio'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 AnimatedOpacity(
                   opacity: _overlayVisible ? 1 : 0,
                   duration: const Duration(milliseconds: 200),

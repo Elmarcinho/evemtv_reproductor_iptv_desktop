@@ -7,12 +7,14 @@ import 'package:go_router/go_router.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/category_list.dart';
-import '../../core/widgets/poster.dart';
+import '../../core/widgets/keyboard_help.dart';
 import '../../core/widgets/state_views.dart';
 import '../../domain/entities/favorite.dart';
 import '../../domain/entities/live.dart';
 import '../favorites/favorite_button.dart';
 import '../favorites/favorites.dart';
+import '../images/poster.dart';
+import '../search/section_header.dart';
 
 /// Cómo mostrar un elemento del catálogo en la grilla.
 class CatalogItemView {
@@ -39,7 +41,6 @@ class CatalogScreen<T> extends ConsumerStatefulWidget {
     super.key,
     required this.title,
     required this.allLabel,
-    required this.filterHint,
     required this.emptyMessage,
     required this.categoriesProvider,
     required this.itemsProvider,
@@ -55,7 +56,6 @@ class CatalogScreen<T> extends ConsumerStatefulWidget {
 
   final String title;
   final String allLabel;
-  final String filterHint;
   final String emptyMessage;
   final FutureProvider<List<ContentCategory>> categoriesProvider;
   final FutureProvider<List<T>> Function(String? categoryId) itemsProvider;
@@ -98,6 +98,14 @@ class _CatalogScreenState<T> extends ConsumerState<CatalogScreen<T>> {
     if (_gridController.hasClients) _gridController.jumpTo(0);
   }
 
+  /// Nombre de la selección actual, para el filtro ("Buscar en …").
+  String _scopeLabel(String? categoryId, List<ContentCategory>? categories) {
+    if (categoryId == null) return widget.allLabel.toLowerCase();
+    if (categoryId == favoritesCategoryId) return 'Favoritos';
+    return categories?.where((c) => c.id == categoryId).firstOrNull?.name ??
+        'esta categoría';
+  }
+
   List<T> _visible(List<T> items) {
     final query = _filter.trim().toLowerCase();
     if (query.isEmpty) return items;
@@ -114,43 +122,23 @@ class _CatalogScreenState<T> extends ConsumerState<CatalogScreen<T>> {
     final categoryId = _categoryChosen ? _categoryId : firstCategory;
 
     return Scaffold(
-      body: CallbackShortcuts(
+      body: ScreenShortcuts(
+        title: widget.title,
+        help: ShortcutCatalog.catalog,
         bindings: {
           const SingleActivator(LogicalKeyboardKey.escape): () =>
               context.go(AppRoutes.home),
+          const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
+              context.push(AppRoutes.search),
         },
         child: SafeArea(
           child: Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 24, 12),
-                child: Row(
-                  children: [
-                    IconButton(
-                      tooltip: 'Volver (Esc)',
-                      onPressed: () => context.go(AppRoutes.home),
-                      icon: const Icon(Icons.arrow_back_rounded),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      widget.title,
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const Spacer(),
-                    SizedBox(
-                      width: 320,
-                      child: TextField(
-                        controller: _filterController,
-                        onChanged: (v) => setState(() => _filter = v),
-                        decoration: InputDecoration(
-                          isDense: true,
-                          hintText: widget.filterHint,
-                          prefixIcon: const Icon(Icons.search_rounded),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              SectionHeader(
+                title: widget.title,
+                scopeLabel: _scopeLabel(categoryId, categories.value),
+                controller: _filterController,
+                onFilter: (v) => setState(() => _filter = v),
               ),
               const Divider(),
               Expanded(
@@ -215,14 +203,20 @@ class _CatalogScreenState<T> extends ConsumerState<CatalogScreen<T>> {
           ErrorView(error: e, onRetry: () => ref.invalidate(provider)),
       data: (all) {
         final list = _visible(all);
+        if (list.isEmpty && _filter.trim().isNotEmpty) {
+          return NoMatchesInScope(
+            query: _filter.trim(),
+            scopeLabel: _scopeLabel(
+              categoryId,
+              ref.read(widget.categoriesProvider).value,
+            ),
+          );
+        }
         if (list.isEmpty) {
           return Center(
             child: Text(
-              _filter.isEmpty
-                  ? (isFavorites
-                        ? widget.favoritesEmptyMessage
-                        : widget.emptyMessage)
-                  : 'Nada coincide con "$_filter".',
+              isFavorites ? widget.favoritesEmptyMessage : widget.emptyMessage,
+              textAlign: TextAlign.center,
               style: const TextStyle(color: AppColors.textSecondary),
             ),
           );

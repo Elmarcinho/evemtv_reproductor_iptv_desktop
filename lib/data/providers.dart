@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../core/network/dio_factory.dart';
+import '../domain/repositories/catalog_cache.dart';
 import '../domain/repositories/credential_store.dart';
 import '../domain/repositories/favorites_repository.dart';
 import '../domain/repositories/profile_repository.dart';
 import '../domain/repositories/settings_repository.dart';
+import '../domain/repositories/watch_progress_repository.dart';
 import 'content_source_factory.dart';
 import 'storage/app_database.dart';
 import 'storage/drift_repositories.dart';
@@ -50,4 +52,12 @@ final contentSourceFactoryProvider = Provider<ContentSourceFactory>(
 
 final favoritesRepositoryProvider = Provider<FavoritesRepository>(
   (ref) => DriftFavoritesRepository(ref.watch(appDatabaseProvider)),
+);
+
+final catalogCacheProvider = Provider<CatalogCache>(
+  (ref) => DriftCatalogCache(ref.watch(appDatabaseProvider)),
+);
+
+final watchProgressRepositoryProvider = Provider<WatchProgressRepository>(
+  (ref) => DriftWatchProgressRepository(ref.watch(appDatabaseProvider)),
 );
