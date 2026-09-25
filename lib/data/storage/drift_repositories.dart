@@ -366,6 +366,27 @@ class DriftCatalogCache implements CatalogCache {
   }
 
   @override
+  Future<List<CatalogEntry>> recentlyAdded(
+    int profileId,
+    ContentKind kind, {
+    int limit = 50,
+  }) async {
+    final rows = await _db
+        .customSelect(
+          'SELECT * FROM catalog_items WHERE profile_id = ? AND kind = ? '
+          'ORDER BY added IS NULL, added DESC, position DESC LIMIT ?',
+          variables: [
+            Variable.withInt(profileId),
+            Variable.withString(kind.name),
+            Variable.withInt(limit),
+          ],
+          readsFrom: {_db.catalogItems},
+        )
+        .get();
+    return [for (final r in rows) _entry(kind, r.data)];
+  }
+
+  @override
   Future<List<CatalogEntry>> topRated(
     int profileId,
     ContentKind kind, {

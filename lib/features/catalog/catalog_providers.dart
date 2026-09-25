@@ -1,8 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/providers.dart';
+import '../../domain/entities/catalog.dart';
 import '../../domain/entities/live.dart';
 import '../../domain/entities/vod.dart';
 import '../auth/application/session.dart';
+import '../search/catalog_sync.dart';
+import 'category_cache.dart';
 
 // Películas y series. Viven en el contenedor de la sesión (dependen de
 // `contentSourceProvider`): se destruyen con ella y la siguiente sesión
@@ -15,14 +19,15 @@ final vodCategoriesProvider = FutureProvider<List<ContentCategory>>((
   return source.vodCategories();
 }, dependencies: [contentSourceProvider]);
 
-/// Películas de una categoría (`null` = todas), en memoria durante la sesión.
-final vodItemsProvider = FutureProvider.family<List<VodItem>, String?>((
-  ref,
-  categoryId,
-) async {
-  final source = ref.watch(contentSourceProvider);
-  return source.vodItems(categoryId: categoryId);
-}, dependencies: [contentSourceProvider]);
+/// Películas de una categoría (`null` = todas). En memoria solo las últimas
+/// categorías usadas (ver [CategoryListCache]).
+final vodItemsProvider = FutureProvider.autoDispose
+    .family<List<VodItem>, String?>((ref, categoryId) async {
+      final source = ref.watch(contentSourceProvider);
+      final items = await source.vodItems(categoryId: categoryId);
+      if (ref.mounted) keepRecentCategory(ref, ('vod', categoryId));
+      return items;
+    }, dependencies: [contentSourceProvider, categoryListCacheProvider]);
 
 final vodDetailProvider = FutureProvider.autoDispose.family<VodDetail, VodItem>(
   (ref, item) async {
@@ -39,14 +44,15 @@ final seriesCategoriesProvider = FutureProvider<List<ContentCategory>>((
   return source.seriesCategories();
 }, dependencies: [contentSourceProvider]);
 
-/// Series de una categoría (`null` = todas), en memoria durante la sesión.
-final seriesItemsProvider = FutureProvider.family<List<SeriesItem>, String?>((
-  ref,
-  categoryId,
-) async {
-  final source = ref.watch(contentSourceProvider);
-  return source.seriesItems(categoryId: categoryId);
-}, dependencies: [contentSourceProvider]);
+/// Series de una categoría (`null` = todas). En memoria solo las últimas
+/// categorías usadas (ver [CategoryListCache]).
+final seriesItemsProvider = FutureProvider.autoDispose
+    .family<List<SeriesItem>, String?>((ref, categoryId) async {
+      final source = ref.watch(contentSourceProvider);
+      final items = await source.seriesItems(categoryId: categoryId);
+      if (ref.mounted) keepRecentCategory(ref, ('series', categoryId));
+      return items;
+    }, dependencies: [contentSourceProvider, categoryListCacheProvider]);
 
 final seriesDetailProvider = FutureProvider.autoDispose
     .family<SeriesDetail, SeriesItem>((ref, series) async {
@@ -58,45 +64,27 @@ final seriesDetailProvider = FutureProvider.autoDispose
 const String recentlyAddedCategoryId = '__recientes__';
 
 /// Cuántos elementos muestra "Recién agregadas".
-const int recentlyAddedLimit = 200;
+const int recentlyAddedLimit = 50;
 
-/// Lo más nuevo primero según la fecha en que el servidor lo agregó. Los
-/// que no tienen fecha van después; si ninguno la tiene (listas M3U), se
-/// usa el orden inverso de la lista, que suele ir de lo más viejo a lo más
-/// nuevo.
-List<T> newestFirst<T>(List<T> items, DateTime? Function(T item) addedOf) {
-  final reversed = items.reversed.toList();
-  final dated = [
-    for (final item in reversed)
-      if (addedOf(item) != null) item,
-  ];
-  // sort no es estable: se desempata por la posición en la lista.
-  final index = {for (final (i, item) in reversed.indexed) item: i};
-  dated.sort((a, b) {
-    final byDate = addedOf(b)!.compareTo(addedOf(a)!);
-    return byDate != 0 ? byDate : index[a]!.compareTo(index[b]!);
-  });
-  return [
-    ...dated,
-    for (final item in reversed)
-      if (addedOf(item) == null) item,
-  ].take(recentlyAddedLimit).toList();
-}
+/// Películas recién agregadas: las últimas [recentlyAddedLimit] según el
+/// catálogo local (fecha de alta del servidor). Se consultan a la base, sin
+/// cargar la lista completa del servidor; los pósters se resuelven solo
+/// para las filas visibles (ver [CatalogItemView.imageKey]).
+final recentMoviesProvider = FutureProvider<List<VodItem>>((ref) async {
+  final profileId = ref.watch(sessionContextProvider).profileId;
+  ref.watch(catalogSyncProvider.select((s) => s.info[ContentKind.movie]));
+  final entries = await ref
+      .watch(catalogCacheProvider)
+      .recentlyAdded(profileId, ContentKind.movie, limit: recentlyAddedLimit);
+  return [for (final e in entries) e.toMovie()];
+}, dependencies: [sessionContextProvider, catalogSyncProvider]);
 
-/// Películas recién agregadas (de la lista completa, en memoria).
-final recentMoviesProvider = FutureProvider<List<VodItem>>(
-  (ref) async => newestFirst(
-    await ref.watch(vodItemsProvider(null).future),
-    (m) => m.added,
-  ),
-  dependencies: [vodItemsProvider],
-);
-
-/// Series recién agregadas o con episodios nuevos (de la lista completa).
-final recentSeriesProvider = FutureProvider<List<SeriesItem>>(
-  (ref) async => newestFirst(
-    await ref.watch(seriesItemsProvider(null).future),
-    (s) => s.added,
-  ),
-  dependencies: [seriesItemsProvider],
-);
+/// Series recién agregadas o con episodios nuevos (catálogo local).
+final recentSeriesProvider = FutureProvider<List<SeriesItem>>((ref) async {
+  final profileId = ref.watch(sessionContextProvider).profileId;
+  ref.watch(catalogSyncProvider.select((s) => s.info[ContentKind.series]));
+  final entries = await ref
+      .watch(catalogCacheProvider)
+      .recentlyAdded(profileId, ContentKind.series, limit: recentlyAddedLimit);
+  return [for (final e in entries) e.toSeries()];
+}, dependencies: [sessionContextProvider, catalogSyncProvider]);

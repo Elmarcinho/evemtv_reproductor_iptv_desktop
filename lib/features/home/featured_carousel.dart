@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -405,11 +407,13 @@ class _CarouselSkeletonState extends State<CarouselSkeleton>
 }
 
 /// Tarjetas apiladas: la del frente completa y las siguientes asomando
-/// por detrás a la izquierda. Debajo, una barra que se llena mientras la
-/// tarjeta está al frente y un contador ("3 / 12").
+/// por detrás a la izquierda. Debajo, una barra con la posición en la
+/// lista y un contador ("3 / 12").
 ///
-/// Avanza sola cada [FeaturedCarousel.interval] y se detiene con el mouse
-/// encima o con el foco; ← / → y Enter con el teclado. Un clic en la del
+/// Avanza sola cada [FeaturedCarousel.interval] (un temporizador: entre un
+/// avance y otro no se redibuja nada) y se detiene con el mouse encima, con
+/// el foco, con la ventana inactiva o minimizada y cuando la pantalla queda
+/// tapada por otra; ← / → y Enter con el teclado. Un clic en la del
 /// frente la abre, un clic en una de atrás la trae al frente y un clic en
 /// la barra salta a esa parte de la lista.
 class StackedCarousel extends StatefulWidget {
@@ -452,23 +456,43 @@ class StackedCarousel extends StatefulWidget {
 }
 
 class _StackedCarouselState extends State<StackedCarousel>
-    with SingleTickerProviderStateMixin {
+    with WidgetsBindingObserver {
   int _index = 0;
   bool _hovered = false;
   bool _focused = false;
 
-  /// Tiempo de la tarjeta al frente: al completarse, pasa a la siguiente.
-  late final AnimationController _progress =
-      AnimationController(vsync: this, duration: FeaturedCarousel.interval)
-        ..addStatusListener((status) {
-          if (status == AnimationStatus.completed) _go(1);
-        });
+  /// La app está al frente (no minimizada ni con la ventana inactiva).
+  bool _appActive = true;
+
+  /// La pantalla está visible (no tapada por otra ruta).
+  bool _tickerEnabled = true;
+
+  /// Avance automático. Es un temporizador, no una animación: entre un
+  /// avance y otro no se redibuja nada (solo la transición de 420 ms).
+  Timer? _timer;
 
   int get _count => widget.items.length;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    final state = WidgetsBinding.instance.lifecycleState;
+    _appActive = state == null || state == AppLifecycleState.resumed;
+    _resume();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _tickerEnabled = TickerMode.valuesOf(context).enabled;
+    _resume();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Ventana inactiva, minimizada u oculta: el carrusel se detiene.
+    _appActive = state == AppLifecycleState.resumed;
     _resume();
   }
 
@@ -479,7 +503,6 @@ class _StackedCarouselState extends State<StackedCarousel>
       // La lista se acortó: vuelve a la primera y lo avisa, así la ficha
       // de al lado sigue mostrando la tarjeta del frente.
       _index = 0;
-      _progress.value = 0;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) widget.onChanged?.call(_index);
       });
@@ -489,25 +512,33 @@ class _StackedCarouselState extends State<StackedCarousel>
 
   @override
   void dispose() {
-    _progress.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _timer?.cancel();
     super.dispose();
   }
 
-  /// Sigue el avance automático, salvo con el mouse encima o el foco.
-  void _resume() {
-    if (_count < 2 || _hovered || _focused) {
-      _progress.stop();
+  bool get _shouldRun =>
+      _count >= 2 && !_hovered && !_focused && _appActive && _tickerEnabled;
+
+  /// Sigue el avance automático, salvo con el mouse encima, el foco, la
+  /// ventana inactiva o minimizada, o la pantalla tapada.
+  void _resume({bool restart = false}) {
+    if (!_shouldRun) {
+      _timer?.cancel();
+      _timer = null;
       return;
     }
-    if (!_progress.isAnimating) _progress.forward();
+    if (_timer != null && !restart) return;
+    _timer?.cancel();
+    _timer = Timer.periodic(FeaturedCarousel.interval, (_) => _go(1));
   }
 
   void _show(int index) {
     if (_count == 0) return;
     setState(() => _index = index % _count);
     widget.onChanged?.call(_index);
-    _progress.value = 0;
-    _resume();
+    // Tras un cambio a mano, la tarjeta queda el intervalo completo.
+    _resume(restart: true);
   }
 
   void _go(int delta) {
@@ -572,7 +603,6 @@ class _StackedCarouselState extends State<StackedCarousel>
               _ProgressBar(
                 count: _count,
                 index: _index,
-                progress: _progress,
                 onSeek: _show,
                 indent: widget.geometry.behind * widget.geometry.peek,
               ),
@@ -732,14 +762,12 @@ class _Card extends StatelessWidget {
   }
 }
 
-/// Barra fina que se llena mientras la tarjeta está al frente (el total
-/// representa toda la lista) y el contador "3 / 12". Un clic salta a esa
-/// parte de la lista.
+/// Barra fina con la posición en la lista (estática entre un avance y
+/// otro) y el contador "3 / 12". Un clic salta a esa parte de la lista.
 class _ProgressBar extends StatelessWidget {
   const _ProgressBar({
     required this.count,
     required this.index,
-    required this.progress,
     required this.onSeek,
     required this.indent,
   });
@@ -748,7 +776,6 @@ class _ProgressBar extends StatelessWidget {
   final double indent;
   final int count;
   final int index;
-  final Animation<double> progress;
   final ValueChanged<int> onSeek;
 
   @override
@@ -779,13 +806,18 @@ class _ProgressBar extends StatelessWidget {
                       borderRadius: BorderRadius.circular(2),
                       child: SizedBox(
                         height: 3,
-                        child: AnimatedBuilder(
-                          animation: progress,
-                          builder: (context, _) => LinearProgressIndicator(
-                            value: (index + progress.value) / count,
-                            backgroundColor: AppColors.border,
-                            color: AppColors.accent,
-                          ),
+                        // Posición en la lista, estática: cambia solo al
+                        // pasar de tarjeta (sin redibujar en cada cuadro).
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween(end: (index + 1) / count),
+                          duration: const Duration(milliseconds: 420),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, _) =>
+                              LinearProgressIndicator(
+                                value: value,
+                                backgroundColor: AppColors.border,
+                                color: AppColors.accent,
+                              ),
                         ),
                       ),
                     ),

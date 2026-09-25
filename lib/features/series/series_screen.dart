@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
+import '../../domain/entities/catalog.dart';
 import '../../domain/entities/favorite.dart';
 import '../../domain/entities/vod.dart';
 import '../catalog/catalog_providers.dart';
@@ -25,6 +26,11 @@ class SeriesScreen extends StatelessWidget {
         posterUrl: s.posterUrl,
         rating: s.rating,
         year: s.year,
+        imageKey: (
+          kind: ContentKind.series,
+          categoryId: s.categoryId,
+          id: s.id,
+        ),
       ),
       onOpen: (context, series) =>
           context.push(AppRoutes.seriesDetail, extra: series),

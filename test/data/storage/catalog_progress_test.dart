@@ -110,6 +110,22 @@ void main() {
       expect(DriftCatalogCache.ftsQuery('   '), isNull);
     });
 
+    test('recién agregadas: solo las últimas 50, por fecha de alta', () async {
+      await cache.replace(a, ContentKind.movie, const [], [
+        for (var i = 0; i < 80; i++)
+          CatalogEntry(
+            kind: ContentKind.movie,
+            id: 'm$i',
+            name: 'Película $i',
+            added: DateTime.utc(2026).add(Duration(hours: i)),
+          ),
+      ]);
+      final r = await cache.recentlyAdded(a, ContentKind.movie);
+      expect(r, hasLength(50));
+      expect(r.first.id, 'm79');
+      expect(r.last.id, 'm30');
+    });
+
     // Informe Codex Fase 4, punto 7.
     test('NUL y otros caracteres de control no rompen la búsqueda', () async {
       expect(DriftCatalogCache.ftsQuery('\u0000'), isNull);

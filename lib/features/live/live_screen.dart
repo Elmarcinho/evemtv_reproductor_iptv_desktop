@@ -494,11 +494,19 @@ class _ChannelDetail extends ConsumerWidget {
                     ref.read(favoritesServiceProvider).toggleChannel(channel),
               ),
               const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: onExpand,
-                icon: const Icon(Icons.fullscreen_rounded),
-                label: const Text('Pantalla completa'),
-              ),
+              // En paneles angostos, solo el icono.
+              if (MediaQuery.sizeOf(context).width < 1200)
+                IconButton.filled(
+                  tooltip: 'Pantalla completa',
+                  onPressed: onExpand,
+                  icon: const Icon(Icons.fullscreen_rounded),
+                )
+              else
+                FilledButton.icon(
+                  onPressed: onExpand,
+                  icon: const Icon(Icons.fullscreen_rounded),
+                  label: const Text('Pantalla completa'),
+                ),
             ],
           ),
           const SizedBox(height: 24),

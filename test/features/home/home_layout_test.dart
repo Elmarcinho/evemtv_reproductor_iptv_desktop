@@ -156,6 +156,27 @@ void main() {
         expect(hero.left, closeTo(tile.left, 1), reason: section);
         expect(hero.right, closeTo(tile.right, 1), reason: section);
       }
+      // Con espacio de sobra, el conjunto baja (no queda pegado arriba):
+      // lo que sobra se reparte arriba y abajo.
+      final searchBottom = tester
+          .getRect(find.text('Buscar canales, películas y series'))
+          .bottom;
+      final tilesTop = tester
+          .getRect(
+            find.ancestor(
+              of: find.text('En vivo'),
+              matching: find.byType(Card),
+            ),
+          )
+          .top;
+      final heroBottom = tester.getRect(find.byType(FeaturedHero).first).bottom;
+      final creditTop = tester
+          .getRect(find.text('Desarrollado por Godebol'))
+          .top;
+      final above = tilesTop - searchBottom;
+      final below = creditTop - heroBottom;
+      expect(above, greaterThan(60));
+      expect((above - below).abs(), lessThan(60));
       // Título de la sección centrado en su columna.
       final column = tester.getRect(find.byType(FeaturedHero).first);
       expect(

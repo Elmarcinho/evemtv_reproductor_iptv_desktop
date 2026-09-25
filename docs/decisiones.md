@@ -620,3 +620,56 @@ conexión se corta en lugar de esperar la respuesta o el tiempo límite.
   servidor, así que se usa la categoría, que en la mayoría de los paneles
   ya agrupa por género.
 
+## 16. Tamaños de ventana y recursos
+
+### Tamaños de ventana
+
+- **Mínimo de la ventana: 800×450** (antes 960×600). Con el escalado de
+  Windows, una pantalla de 1366×768 al 150 % ofrece 911×512 lógicos; con
+  la barra de tareas y el título, la ventana maximizada queda cerca de
+  911×450. El mínimo anterior no entraba.
+- **Barrido fijo** (`test/responsive_sweep_test.dart`): 800×450, 911×512
+  (1366×768 al 150 %), 1093×614 (1366×768 al 125 %), 1280×720 (1920×1080 al
+  150 %), 1366×768, 1920×1080, 2560×1440 y 3840×2160. En cada tamaño
+  recorre selector de cuentas (vacío y con cuentas), login, inicio (con y
+  sin "Seguir viendo"), En vivo, Películas, Series, búsqueda y las fichas,
+  y falla si algo desborda.
+- Ajustes: la barra del inicio y los encabezados achican márgenes, filtro y
+  buscador (en muy poco ancho, solo la lupa); las tarjetas de sección pasan
+  a un formato compacto; las celdas de pósters le dan al póster lo que deja
+  el texto; en En vivo, "Pantalla completa" queda como icono en paneles
+  angostos; el selector de cuentas se desplaza en ventanas bajas.
+
+### Recursos
+
+- **Sin redibujado continuo en el inicio.** Los carruseles avanzan con un
+  temporizador (no con una animación): entre un avance y otro no se dibuja
+  nada, salvo la transición de 420 ms. La barra de avance es estática (la
+  posición en la lista). Se detienen con la ventana inactiva (sin foco) o
+  minimizada, con otra pantalla encima, y con el mouse o el foco encima.
+  Las barras de "Seguir viendo" son estáticas.
+- **"Recién agregadas"** consulta a la base local solo las últimas 50 (por
+  fecha de alta) en vez de descargar la lista completa; el póster de cada
+  celda se busca solo cuando la celda se ve.
+- **Listas de categorías en memoria: solo las últimas 10 usadas**
+  (canales, películas y series; `CategoryListCache`). Las demás se liberan
+  y, si se vuelven a abrir, se piden otra vez al servidor. Una lista que se
+  está mostrando no se pierde: se libera cuando deja de verse.
+- **Medición** (modo perfil, servidor ficticio local con 2.000 canales,
+  24.000 películas y 8.000 series; ver `integration_test/README.md`):
+
+  | Momento | CPU antes | CPU después | Memoria antes | Memoria después |
+  |---|---|---|---|---|
+  | Inicio en reposo | 75,8 % (60 cuadros/s) | 30,1 % (19 cuadros/s) | 305 MB | 305 MB |
+  | Inicio minimizado | 75,9 % (60 cuadros/s) | 0,0 % (0 cuadros/s) | 304 MB | 305 MB |
+  | Catálogo grande (todas, desplazamiento, 12 categorías, recién agregadas) | 61,3 % | 61,7 % | 347 MB | 347 MB |
+  | Sesión larga (60 categorías) | 65,1 % | 58,9 % | 402 MB | 382 MB |
+  | Reproducción 720p | 34,8 % | 29,7 % | 432 MB | 424 MB |
+
+  CPU en % de un núcleo (Ryzen 7 3700U, Linux, Wayland). Las diferencias de
+  ±5 puntos en reproducción son variación entre corridas. En reposo, el
+  30 % restante son las transiciones de los tres carruseles (una cada 3 s).
+  El "inicio tras navegar" medido por el conductor queda en 0 % porque la
+  ventana vuelve sin foco (GNOME no deja que un programa se la dé) y los
+  carruseles se pausan, como se pidió.
+

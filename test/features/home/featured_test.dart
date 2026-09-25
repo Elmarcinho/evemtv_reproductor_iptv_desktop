@@ -14,7 +14,6 @@ import 'package:evemtv/domain/entities/live.dart';
 import 'package:evemtv/domain/entities/profile.dart';
 import 'package:evemtv/domain/entities/vod.dart';
 import 'package:evemtv/features/auth/application/session.dart';
-import 'package:evemtv/features/catalog/catalog_providers.dart';
 import 'package:evemtv/features/home/featured.dart';
 import 'package:evemtv/features/home/featured_carousel.dart';
 import 'package:evemtv/features/search/catalog_sync.dart';
@@ -102,23 +101,6 @@ void main() {
       {'series_id': 5, 'name': 'S', 'last_modified': 1767225600},
     ]);
     expect(series.single.added, DateTime.utc(2026));
-  });
-
-  test('newestFirst: por fecha; sin fecha, al final y en orden inverso', () {
-    DateTime d(int day) => DateTime.utc(2026, 1, day);
-    final items = [
-      ('a', d(1)),
-      ('b', null),
-      ('c', d(9)),
-      ('d', null),
-      ('e', d(9)),
-    ];
-    expect(newestFirst(items, (i) => i.$2).map((i) => i.$1), [
-      // c y e empatan: va primero la que está más abajo en la lista.
-      'e', 'c', 'a', 'd', 'b',
-    ]);
-    // Sin ninguna fecha (listas M3U): orden inverso de la lista.
-    expect(newestFirst([1, 2, 3], (_) => null), [3, 2, 1]);
   });
 
   group('año en el nombre', () {
@@ -462,6 +444,25 @@ void main() {
       await settle(tester);
       expect(frontTitle(tester), 'Película 1');
       await mouse.removePointer();
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('sin redibujado continuo; en pausa con la ventana inactiva', (
+      tester,
+    ) async {
+      await pump(tester);
+      // Entre un avance y otro no queda ningún cuadro pendiente.
+      expect(tester.binding.hasScheduledFrame, isFalse);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump(FeaturedCarousel.interval * 3);
+      await settle(tester);
+      expect(frontTitle(tester), 'Película 0');
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump(FeaturedCarousel.interval);
+      await settle(tester);
+      expect(frontTitle(tester), 'Película 1');
       await tester.pumpWidget(const SizedBox());
     });
 

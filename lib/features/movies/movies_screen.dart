@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
+import '../../domain/entities/catalog.dart';
 import '../../domain/entities/favorite.dart';
 import '../../domain/entities/vod.dart';
 import '../catalog/catalog_providers.dart';
@@ -24,6 +25,7 @@ class MoviesScreen extends StatelessWidget {
         posterUrl: m.posterUrl,
         rating: m.rating,
         year: m.year,
+        imageKey: (kind: ContentKind.movie, categoryId: m.categoryId, id: m.id),
       ),
       onOpen: (context, movie) =>
           context.push(AppRoutes.movieDetail, extra: movie),

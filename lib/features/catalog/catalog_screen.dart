@@ -15,6 +15,7 @@ import '../favorites/favorite_button.dart';
 import '../favorites/favorites.dart';
 import '../images/poster.dart';
 import '../search/section_header.dart';
+import 'catalog_images.dart';
 import 'catalog_providers.dart';
 
 /// Cómo mostrar un elemento del catálogo en la grilla.
@@ -24,10 +25,15 @@ class CatalogItemView {
     this.posterUrl,
     this.rating,
     this.year,
+    this.imageKey,
   });
 
   final String name;
   final String? posterUrl;
+
+  /// Sin [posterUrl] (p. ej. "Recién agregadas", que sale de la base local
+  /// sin URLs): el póster se busca en memoria solo cuando la celda se ve.
+  final CatalogImageKey? imageKey;
   final double? rating;
   final int? year;
 }
@@ -289,32 +295,47 @@ class _PosterTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Poster(
-                  url: view.posterUrl,
-                  title: view.name,
-                  icon: icon,
+          // El póster toma lo que deja el texto: la celda nunca desborda,
+          // sea cual sea su ancho.
+          Expanded(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: view.posterUrl == null && view.imageKey != null
+                      ? Consumer(
+                          builder: (context, ref, _) => Poster(
+                            url: ref
+                                .watch(catalogImageProvider(view.imageKey!))
+                                .value,
+                            title: view.name,
+                            icon: icon,
+                          ),
+                        )
+                      : Poster(
+                          url: view.posterUrl,
+                          title: view.name,
+                          icon: icon,
+                        ),
                 ),
-              ),
-              if (isFavorite)
-                const Positioned(
-                  top: 6,
-                  right: 6,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Padding(
-                      padding: EdgeInsets.all(4),
-                      child: FavoriteBadge(),
+                if (isFavorite)
+                  const Positioned(
+                    top: 6,
+                    right: 6,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Padding(
+                        padding: EdgeInsets.all(4),
+                        child: FavoriteBadge(),
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
           const SizedBox(height: 8),
           Text(
@@ -326,6 +347,8 @@ class _PosterTile extends StatelessWidget {
           if (meta.isNotEmpty)
             Text(
               meta,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: text.bodySmall?.copyWith(color: AppColors.textSecondary),
             ),
         ],

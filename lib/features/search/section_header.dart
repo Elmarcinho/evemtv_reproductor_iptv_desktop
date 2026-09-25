@@ -29,6 +29,11 @@ class SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // El filtro se achica en ventanas chicas (entre 200 y 340 px).
+    final filterWidth = (MediaQuery.sizeOf(context).width * 0.3).clamp(
+      200.0,
+      340.0,
+    );
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 24, 12),
       child: Row(
@@ -39,13 +44,20 @@ class SectionHeader extends StatelessWidget {
             icon: const Icon(Icons.arrow_back_rounded),
           ),
           const SizedBox(width: 8),
-          Text(title, style: Theme.of(context).textTheme.headlineSmall),
+          Flexible(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+          ),
           const Spacer(),
           // Anuncio discreto, igual que en la barra del inicio.
           const PromoChip(),
           const SizedBox(width: 16),
           SizedBox(
-            width: 340,
+            width: filterWidth,
             child: ValueListenableBuilder<TextEditingValue>(
               valueListenable: controller,
               builder: (context, value, _) => TextField(

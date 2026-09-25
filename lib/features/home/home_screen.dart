@@ -69,6 +69,8 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(sessionContextProvider);
     final profile = session.profile;
+    final size = MediaQuery.sizeOf(context);
+    final compact = size.width < 1100 || size.height < 640;
     // Mantiene el catálogo local (búsqueda) al día en segundo plano.
     ref.listen(catalogSyncProvider, (_, _) {});
 
@@ -89,18 +91,21 @@ class HomeScreen extends ConsumerWidget {
           bottomNavigationBar: const DeveloperCredit(),
           body: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(40, 28, 40, 28),
+              // En ventanas chicas, márgenes y separaciones más cortos.
+              padding: compact
+                  ? const EdgeInsets.fromLTRB(20, 16, 20, 16)
+                  : const EdgeInsets.fromLTRB(40, 28, 40, 28),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      const AppLogo(height: 52),
-                      const SizedBox(width: 40),
+                      AppLogo(height: compact ? 40 : 52),
+                      SizedBox(width: compact ? 16 : 40),
                       const Expanded(child: Center(child: _GlobalSearchBox())),
-                      const SizedBox(width: 24),
+                      SizedBox(width: compact ? 12 : 24),
                       const PromoChip(),
-                      const SizedBox(width: 16),
+                      SizedBox(width: compact ? 8 : 16),
                       _AccountMenu(
                         name: session.credentials.displayName ?? profile.name,
                         type: profile.type,
@@ -110,7 +115,7 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 40),
+                  SizedBox(height: compact ? 20 : 40),
                   const Expanded(child: _HomeBody()),
                 ],
               ),
@@ -214,16 +219,23 @@ class _HomeBody extends ConsumerWidget {
           // Tres carruseles, uno por columna (alineados con las secciones):
           // películas nuevas, series nuevas y mejor valoradas. Las tarjetas
           // ocupan lo que queda debajo de las secciones, sin desplazar.
+          const carouselChrome =
+              44 + StackedCarousel.progressHeight + FeaturedHero.infoHeight;
           final cardHeight =
               (constraints.maxHeight -
                       tilesHeight -
                       sectionsGap -
-                      44 -
-                      StackedCarousel.progressHeight -
-                      FeaturedHero.infoHeight)
+                      carouselChrome)
                   .clamp(240.0, 400.0);
+          // En ventanas altas sobra espacio: el conjunto (secciones y
+          // carruseles) se centra en vertical en lugar de quedar pegado
+          // arriba.
+          final spare =
+              constraints.maxHeight -
+              (tilesHeight + sectionsGap + cardHeight + carouselChrome);
           body = ListView(
             children: [
+              if (spare > 0) SizedBox(height: spare / 2),
               const SizedBox(height: tilesHeight, child: _SectionTiles()),
               const SizedBox(height: sectionsGap),
               Row(
@@ -297,6 +309,25 @@ class _GlobalSearchBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Muy angosto: solo el botón de la lupa.
+        if (constraints.maxWidth < 240) {
+          return Align(
+            alignment: Alignment.centerRight,
+            child: IconButton.filledTonal(
+              tooltip: 'Buscar canales, películas y series (Ctrl+F)',
+              onPressed: () => context.push(AppRoutes.search),
+              icon: const Icon(Icons.search_rounded),
+            ),
+          );
+        }
+        return _field(context, text);
+      },
+    );
+  }
+
+  Widget _field(BuildContext context, TextTheme text) {
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 560),
       child: Semantics(
@@ -420,7 +451,11 @@ class _AccountMenu extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 220),
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.sizeOf(context).width < 1100
+                        ? 120
+                        : 220,
+                  ),
                   child: Text(
                     name,
                     style: text.titleSmall,
@@ -560,65 +595,82 @@ class _SectionTile extends ConsumerWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => context.go(route),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // Icono grande de fondo, apenas visible, para dar peso.
-            Positioned(
-              right: -18,
-              bottom: -26,
-              child: Icon(
-                icon,
-                size: 150,
-                color: AppColors.accent.withValues(alpha: 0.06),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: Row(
-                children: [
-                  Container(
-                    width: 76,
-                    height: 76,
-                    decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Icon(icon, size: 40, color: AppColors.accent),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // En tarjetas angostas (ventanas chicas): icono más chico y sin
+            // la flecha, para que el nombre y la cantidad siempre entren.
+            final narrow = constraints.maxWidth < 330;
+            final iconBox = narrow ? 48.0 : 76.0;
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                // Icono grande de fondo, apenas visible, para dar peso.
+                Positioned(
+                  right: -18,
+                  bottom: -26,
+                  child: Icon(
+                    icon,
+                    size: 150,
+                    color: AppColors.accent.withValues(alpha: 0.06),
                   ),
-                  const SizedBox(width: 22),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: text.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                ),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: narrow ? 16 : 28),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: iconBox,
+                        height: iconBox,
+                        decoration: BoxDecoration(
+                          color: AppColors.accent.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(narrow ? 12 : 18),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          count == null ? subtitle : _count(kind, count),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.titleSmall?.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
+                        child: Icon(
+                          icon,
+                          size: iconBox * 0.53,
+                          color: AppColors.accent,
                         ),
-                      ],
-                    ),
+                      ),
+                      SizedBox(width: narrow ? 12 : 22),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style:
+                                  (narrow
+                                          ? text.titleLarge
+                                          : text.headlineSmall)
+                                      ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              count == null ? subtitle : _count(kind, count),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: text.titleSmall?.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (!narrow)
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          size: 28,
+                          color: AppColors.textSecondary,
+                        ),
+                    ],
                   ),
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    size: 28,
-                    color: AppColors.textSecondary,
-                  ),
-                ],
-              ),
-            ),
-          ],
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

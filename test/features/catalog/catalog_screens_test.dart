@@ -1,8 +1,14 @@
 // Pantallas de películas y series con una fuente simulada y datos ficticios.
+import 'package:drift/drift.dart' show DatabaseConnection;
+import 'package:drift/native.dart';
 import 'package:evemtv/core/router/app_router.dart';
 import 'package:evemtv/core/theme/app_theme.dart';
 import 'package:evemtv/data/providers.dart';
+import 'package:evemtv/data/storage/app_database.dart';
+import 'package:evemtv/data/storage/drift_repositories.dart';
+import 'package:evemtv/domain/entities/catalog.dart';
 import 'package:evemtv/domain/entities/live.dart';
+import 'package:evemtv/domain/entities/profile.dart';
 import 'package:evemtv/domain/entities/vod.dart';
 import 'package:evemtv/features/auth/application/session.dart';
 import 'package:evemtv/features/catalog/related.dart';
@@ -112,6 +118,7 @@ void main() {
     WidgetTester tester,
     String initial, {
     Object? extra,
+    AppDatabase? db,
   }) async {
     tester.view.physicalSize = const Size(1400, 1000);
     tester.view.devicePixelRatio = 1;
@@ -155,6 +162,7 @@ void main() {
       ProviderScope(
         overrides: [
           contentSourceProvider.overrideWithValue(source),
+          if (db != null) appDatabaseProvider.overrideWithValue(db),
           sessionProvider.overrideWith(FixedSession.new),
           sessionContextProvider.overrideWithValue(testSessionContext()),
           favoritesRepositoryProvider.overrideWithValue(
@@ -183,22 +191,58 @@ void main() {
     expect(find.text('Película Uno'), findsNothing);
   });
 
-  testWidgets('películas: "Recién agregadas", lo último primero', (
+  testWidgets('películas: "Recién agregadas" sale de la base local', (
     tester,
   ) async {
-    await pump(tester, AppRoutes.movies);
+    // Catálogo local con fechas de alta ficticias.
+    late AppDatabase db;
+    await tester.runAsync(() async {
+      db = AppDatabase(
+        DatabaseConnection(
+          NativeDatabase.memory(),
+          closeStreamsSynchronously: true,
+        ),
+      );
+      await DriftProfileRepository(db)
+          .create(name: 'A', type: SourceType.xtream);
+      await DriftCatalogCache(db).replace(1, ContentKind.movie, const [], [
+        CatalogEntry(
+          kind: ContentKind.movie,
+          id: '1',
+          name: 'Película Uno',
+          categoryId: 'e',
+          added: DateTime.utc(2026, 1, 5),
+        ),
+        const CatalogEntry(
+          kind: ContentKind.movie,
+          id: '2',
+          name: 'Película Dos',
+          categoryId: 'e',
+        ),
+        CatalogEntry(
+          kind: ContentKind.movie,
+          id: '3',
+          name: 'Clásica Tres',
+          categoryId: 'c',
+          added: DateTime.utc(2026, 9, 1),
+        ),
+      ]);
+    });
+    addTearDown(() => tester.runAsync(db.close));
+    await pump(tester, AppRoutes.movies, db: db);
     await tester.tap(find.text('Recién agregadas'));
+    await settleIo(tester);
     await tester.pumpAndSettle();
-    expect(source.requested, contains(null));
-    final titles = [
-      for (final t in ['Clásica Tres', 'Película Uno', 'Película Dos'])
-        tester.getTopLeft(find.text(t).first),
-    ];
-    // Grilla: primero la más nueva, después la otra con fecha y al final
-    // la que no la tiene.
-    expect(titles[0].dx, lessThan(titles[1].dx));
-    expect(titles[1].dx, lessThan(titles[2].dx));
-    expect(find.byType(TextField), findsOneWidget);
+    // Sin pedir la lista completa al servidor.
+    expect(source.requested, isNot(contains(null)));
+    final grid = find.byType(GridView);
+    Offset at(String t) => tester.getTopLeft(
+      find.descendant(of: grid, matching: find.text(t)).last,
+    );
+    // Primero la más nueva, después la otra con fecha y al final la que no
+    // la tiene.
+    expect(at('Clásica Tres').dx, lessThan(at('Película Uno').dx));
+    expect(at('Película Uno').dx, lessThan(at('Película Dos').dx));
     expect(find.text('Buscar en Recién agregadas'), findsOneWidget);
   });
 

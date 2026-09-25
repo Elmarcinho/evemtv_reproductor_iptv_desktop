@@ -40,5 +40,10 @@ abstract final class AppConfig {
   static const String githubRepo = 'Elmarcinho/evemtv_reproductor_iptv_desktop';
 
   static const Size initialWindowSize = Size(1280, 800);
-  static const Size minWindowSize = Size(960, 600);
+
+  /// Mínimo de la ventana. Entra en el menor espacio lógico común: una
+  /// pantalla de 1366×768 al 150 % (911×512) menos barra de tareas y
+  /// título. El barrido de tamaños (test/responsive_sweep_test.dart)
+  /// comprueba que todas las pantallas entran desde aquí.
+  static const Size minWindowSize = Size(800, 450);
 }

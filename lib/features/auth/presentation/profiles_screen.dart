@@ -19,6 +19,8 @@ class ProfilesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profiles = ref.watch(profilesProvider);
+    // Ventanas bajas: logo y márgenes más chicos.
+    final short = MediaQuery.sizeOf(context).height < 640;
     return ScreenShortcuts(
       title: 'Cuentas',
       help: const [
@@ -29,17 +31,19 @@ class ProfilesScreen extends ConsumerWidget {
         bottomNavigationBar: const PromoFooter(),
         body: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(48, 40, 48, 24),
+            padding: short
+                ? const EdgeInsets.fromLTRB(24, 16, 24, 8)
+                : const EdgeInsets.fromLTRB(48, 40, 48, 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const AppLogo(height: 72),
-                const SizedBox(height: 32),
+                AppLogo(height: short ? 40 : 72),
+                SizedBox(height: short ? 12 : 32),
                 Text(
                   'Elige una cuenta',
                   style: Theme.of(context).textTheme.headlineMedium,
                 ),
-                const SizedBox(height: 24),
+                SizedBox(height: short ? 12 : 24),
                 Expanded(
                   child: profiles.when(
                     loading: () => const LoadingView(),
@@ -66,33 +70,36 @@ class _EmptyProfiles extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Desplazable: en ventanas bajas no desborda.
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.person_add_alt_1_rounded,
-            size: 56,
-            color: AppColors.textSecondary,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Todavía no hay cuentas guardadas',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Agrega tu cuenta Xtream Codes o una lista M3U para empezar.',
-            style: TextStyle(color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 24),
-          FilledButton.icon(
-            autofocus: true,
-            onPressed: () => context.go(AppRoutes.login),
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Agregar cuenta'),
-          ),
-        ],
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.person_add_alt_1_rounded,
+              size: 56,
+              color: AppColors.textSecondary,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Todavía no hay cuentas guardadas',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Agrega tu cuenta Xtream Codes o una lista M3U para empezar.',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              autofocus: true,
+              onPressed: () => context.go(AppRoutes.login),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Agregar cuenta'),
+            ),
+          ],
+        ),
       ),
     );
   }

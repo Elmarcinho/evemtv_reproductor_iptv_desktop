@@ -6,6 +6,7 @@ import '../../core/logging/app_logger.dart';
 import '../../core/utils/task_pool.dart';
 import '../../domain/entities/live.dart';
 import '../auth/application/session.dart';
+import '../catalog/category_cache.dart';
 
 // Todos viven en el contenedor de la sesión (dependen de
 // `contentSourceProvider`): se destruyen con ella, junto con sus peticiones.
@@ -18,15 +19,16 @@ final liveCategoriesProvider = FutureProvider<List<ContentCategory>>((
   return source.liveCategories();
 }, dependencies: [contentSourceProvider]);
 
-/// Canales de una categoría, o todos con `null`. Se mantienen en memoria
-/// durante la sesión para volver rápido a una categoría ya vista.
-final liveChannelsProvider = FutureProvider.family<List<LiveChannel>, String?>((
-  ref,
-  categoryId,
-) async {
-  final source = ref.watch(contentSourceProvider);
-  return source.liveChannels(categoryId: categoryId);
-}, dependencies: [contentSourceProvider]);
+/// Canales de una categoría, o todos con `null`. En memoria solo las
+/// últimas categorías usadas, para volver rápido a una ya vista sin que la
+/// memoria crezca sin límite (ver [CategoryListCache]).
+final liveChannelsProvider = FutureProvider.autoDispose
+    .family<List<LiveChannel>, String?>((ref, categoryId) async {
+      final source = ref.watch(contentSourceProvider);
+      final channels = await source.liveChannels(categoryId: categoryId);
+      if (ref.mounted) keepRecentCategory(ref, ('live', categoryId));
+      return channels;
+    }, dependencies: [contentSourceProvider, categoryListCacheProvider]);
 
 /// EPG corta de un canal. Es informativa: si falla, lista vacía (la fila
 /// simplemente no muestra programa). Lo obtenido se guarda 5 minutos tras

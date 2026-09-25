@@ -32,3 +32,31 @@ ffmpeg -f lavfi -i testsrc=size=64x64:rate=10 -f lavfi -i sine=frequency=440:sam
 openssl req -x509 -newkey rsa:2048 -nodes -days 36500 -subj "/CN=127.0.0.1" \
   -addext "subjectAltName=IP:127.0.0.1,DNS:localhost" -keyout key.pem -out cert.pem
 ```
+
+## Medición de rendimiento (`test_driver/perf_app*.dart`)
+
+Mide CPU y memoria de la app real en **modo perfil** contra un servidor
+Xtream **ficticio** local (`test_driver/fake_panel.dart`: 2.000 canales,
+24.000 películas, 8.000 series) en tres momentos: inicio en reposo,
+navegar un catálogo grande y reproducir un video 720p. No es parte de CI.
+
+La medición se toma desde afuera del proceso (`/proc/<pid>`), con la app
+dibujando como siempre: el arnés de `integration_test` dibuja cuadros sin
+parar y no sirve para medir el reposo. Los datos de la app (base, llavero,
+imágenes) van a una carpeta temporal, nunca a los del usuario.
+
+```bash
+# Material sintético (patrón de prueba de ffmpeg) en una carpeta cualquiera:
+ffmpeg -f lavfi -i testsrc2=size=1280x720:rate=30 -f lavfi -i sine=frequency=440 \
+  -t 120 -c:v libx264 -preset veryfast -crf 28 -c:a aac -movflags +faststart perf_video.mp4
+ffmpeg -f lavfi -i testsrc2=size=300x450 -frames:v 1 poster.jpg
+ffmpeg -f lavfi -i testsrc2=size=1280x720 -frames:v 1 backdrop.jpg
+
+PERF_ASSETS=/ruta/a/esa/carpeta PERF_LABEL=prueba \
+  flutter drive --profile -d linux \
+  --driver=test_driver/perf_app_test.dart --target=test_driver/perf_app.dart
+# Resultados: /ruta/a/esa/carpeta/perf_results.txt
+```
+
+Solo Linux. La ventana de la app se abre durante unos minutos: conviene
+dejarla visible y no usar el equipo mientras mide.
