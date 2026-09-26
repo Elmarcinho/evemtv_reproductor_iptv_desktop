@@ -154,12 +154,36 @@ jobs:
           flutter test integration_test/playback_tls_test.dart -d macos
           --dart-define=TLS_VALID_URL=${{ env.TLS_VALID_URL }}
 
-      # Solo el Player: en el runner de macOS la app se detiene al abrir un
-      # video con textura (se corta dentro de `open`; probablemente la VM sin
-      # GPU, no se pudo confirmar sin los registros). La textura se prueba a mano.
+      # Con textura, como en la app. Si falla, se guardan los informes de
+      # cierre de macOS y la salida completa (artefacto) y se resumen como
+      # anotaciones, para distinguir un cierre real de la app de un límite
+      # de la máquina virtual.
       - name: Memoria tras cerrar el reproductor
+        id: memoria_macos
         timeout-minutes: 12
-        run: >
-          flutter test integration_test/player_memory_test.dart -d macos
-          --dart-define=MEMORY_VIDEO_URL=${{ env.MEMORY_VIDEO_URL }}
-          --dart-define=MEMORY_TEXTURE=false
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter test integration_test/player_memory_test.dart -d macos \
+            --dart-define=MEMORY_VIDEO_URL=${{ env.MEMORY_VIDEO_URL }} \
+            2>&1 | tee memoria_macos.log
+
+      - name: Diagnóstico del fallo de memoria (macOS)
+        if: failure() && steps.memoria_macos.outcome == 'failure'
+        shell: bash
+        run: |
+          mkdir -p diagnostico
+          cp memoria_macos.log diagnostico/ || true
+          for dir in ~/Library/Logs/DiagnosticReports /Library/Logs/DiagnosticReports; do
+            find "$dir" -name '*.ips' -mmin -30 -exec cp {} diagnostico/ \; 2>/dev/null || true
+          done
+          ls -la diagnostico
+          python3 .github/scripts/resumir_cierres_macos.py diagnostico memoria_macos.log
+
+      - name: Subir diagnóstico (macOS)
+        if: failure() && steps.memoria_macos.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: diagnostico-memoria-macos
+          path: diagnostico/
+          retention-days: 14

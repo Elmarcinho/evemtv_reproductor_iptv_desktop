@@ -23,6 +23,12 @@ Pendientes acordados para la Fase 5. Cada release debe repasar la sección
 - [ ] Revisar que el diff del release no contenga credenciales, URLs de
       paneles ni datos reales (el repositorio es público).
 - [ ] Actualizar `version` en `pubspec.yaml` y `AppConfig.version`.
+- [ ] **Obligatorio: probar en un Mac real** abrir y cerrar varias
+      películas y varios canales seguidos (al menos 10 de cada uno, con
+      pantalla completa y volviendo al catálogo), sin cierres inesperados ni
+      pantallas negras, y con la memoria estable (Monitor de Actividad). No
+      se publica sin esta prueba: en el runner de macOS de CI no se puede
+      reproducir con textura.
 - [ ] **Probar los reproductores a mano con escalado de pantalla 125 % y
       150 %** (Windows: *Configuración → Pantalla → Escala*; macOS:
       *Pantallas → resolución "Más espacio/Texto más grande"*; GNOME:

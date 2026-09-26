@@ -89,7 +89,7 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "Godebol" "\0"
+            VALUE "CompanyName", "EvemTv" "\0"
             VALUE "FileDescription", "EvemTv" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "evemtv" "\0"

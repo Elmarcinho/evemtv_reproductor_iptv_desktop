@@ -727,3 +727,33 @@ conexión se corta en lugar de esperar la respuesta o el tiempo límite.
     probablemente por la VM sin GPU; sin acceso a los registros no se pudo
     confirmar), así que allí se mide solo el Player. La reproducción con
     textura en macOS queda en la prueba manual de la Fase 5.
+
+## 17. Carpeta de datos y ediciones (Fase 4.5)
+
+- **Windows:** la compañía del ejecutable (`CompanyName` en
+  `windows/runner/Runner.rc`) vuelve a ser **EvemTv**. En Windows la carpeta
+  de datos es `%APPDATA%\<compañía>\<producto>`: al poner "Godebol" había
+  pasado a `Godebol\EvemTv`, y cambiarla después de publicar haría perder
+  las cuentas guardadas al actualizar. La firma "Desarrollado por Godebol"
+  sigue en la app y en el copyright (que no cambia la carpeta).
+- **Ediciones (Fase 4.5): cada edición, su carpeta de datos y su llavero.**
+  Si en un mismo equipo están instaladas la edición libre y la de Godebol,
+  no deben compartir base de datos, caché de imágenes ni credenciales.
+  Ejemplo de nombres: `EvemTv\EvemTv` (libre) y `EvemTv\EvemTv-Godebol`.
+  Qué determina cada cosa hoy (comprobado en las fuentes de los paquetes):
+
+  | Plataforma | Carpeta de datos | Llavero |
+  |---|---|---|
+  | Windows | `%APPDATA%\CompanyName\ProductName` (Runner.rc) | archivo cifrado en esa carpeta + clave en el Administrador de credenciales con nombre `key_<BINARY_NAME>_…` (o `STORAGE_PREFIX` de CMake) |
+  | macOS | contenedor del bundle id (`PRODUCT_BUNDLE_IDENTIFIER`) | Keychain con servicio `flutter_secure_storage_service` por defecto: **igual en todas las apps** |
+  | Linux | `~/.local/share/<APPLICATION_ID>` | libsecret con etiqueta y cuenta derivadas de `APPLICATION_ID` |
+
+  Por lo tanto, cada edición necesita: `ProductName` propio en Windows y un
+  `BINARY_NAME` o `STORAGE_PREFIX` propio (si no, comparten la clave del
+  Administrador de credenciales); bundle id propio **y** `accountName`
+  propio en `MacOsOptions` en macOS; y `APPLICATION_ID` propio en Linux.
+  Las claves internas (`profile.<id>.credentials`, `…image_cache_key`)
+  pueden seguir igual porque quedan dentro del espacio de cada edición.
+  Hay que probarlo con las dos ediciones instaladas a la vez en cada
+  plataforma: una no debe ver ni borrar las cuentas de la otra.
+
