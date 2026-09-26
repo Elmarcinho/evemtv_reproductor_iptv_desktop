@@ -31,7 +31,8 @@ Pendientes acordados para la Fase 5. Cada release debe repasar la sección
 - [ ] Publicar en `godebol.com/api/evemtv/version` la nueva
       `ultima_version` y el enlace de `descarga` (de `github.com/Elmarcinho`
       o `godebol.com`; otro se ignora). Subir `minima` solo si la versión
-      anterior deja de funcionar.
+      anterior deja de funcionar: quien la tenga ve 3 días de aviso y
+      después la app se bloquea hasta actualizar.
 - [ ] **Obligatorio: probar en un Mac real** abrir y cerrar varias
       películas y varios canales seguidos (al menos 10 de cada uno, con
       pantalla completa y volviendo al catálogo), sin cierres inesperados ni
@@ -77,8 +78,10 @@ Pendientes acordados para la Fase 5. Cada release debe repasar la sección
       certificados fuera de Debian/Ubuntu).
 - [x] GitHub Actions: empaquetar las tres plataformas y publicar en
       GitHub Releases con `SHA256SUMS.txt` (`.github/workflows/release.yml`).
-- [x] Aviso de actualización dentro de la app (`godebol.com/api/evemtv/version`,
-      obligatorio si la versión es menor que `minima`).
+- [x] Aviso de actualización dentro de la app (`godebol.com/api/evemtv/version`).
+      Bajo `minima`: 3 días de plazo con aviso cerrable y después bloqueo
+      con descarga, instrucciones y guía; nunca bloquea sin respuesta del
+      servidor (decisiones §19).
 - [ ] Interruptor para desactivar el aviso normal en Ajustes (cuando exista
       la pantalla de Ajustes; el obligatorio no se desactiva).
 - [ ] Probar a mano el AppImage en una distribución que no sea Ubuntu

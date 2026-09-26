@@ -904,9 +904,25 @@ comprueba que coincidan y el workflow de release rechaza un tag que no sea
   los 3 s de abrir la app y luego cada 12 h. Si falla, se ignora.
 - **Versión nueva:** tarjeta abajo a la derecha con **Descargar** y ✕
   (cerrada hasta la próxima apertura, o hasta que aparezca otra versión).
-- **Instalada < `minima`:** pantalla que tapa la app, sin cerrar ni teclado
-  ni mouse para lo de abajo; si había un video en curso, se sale del
-  reproductor.
+- **Instalada < `minima`:** primero, **3 días de plazo** desde la primera
+  vez que se detectó: la tarjeta pasa a "Actualización obligatoria" con
+  *"Debes actualizar antes del dd/mm/aaaa"* y se puede cerrar (vuelve en la
+  próxima apertura). La fecha de primera detección se guarda en las
+  preferencias locales **por versión mínima**
+  (`update_minimum_seen = "2.0.0|<fecha UTC>"`): si `minima` cambia, el
+  plazo empieza de nuevo. Una fecha guardada "en el futuro" (reloj
+  cambiado) no alarga el plazo.
+- **Plazo vencido:** pantalla de bloqueo que tapa la app, sin cerrar ni
+  teclado ni mouse para lo de abajo, con **Descargar**, instrucciones de
+  instalación del sistema (SmartScreen, *Abrir igualmente*, permiso de
+  ejecución del AppImage) y un **enlace visible a la guía**
+  (`docs/instalacion.md` en GitHub). Si había un video en curso, se sale
+  del reproductor. Si el plazo vence con la app abierta, se bloquea en ese
+  momento.
+- **Nunca se bloquea por no poder consultar:** el bloqueo solo aparece tras
+  una respuesta válida del servidor en esa ejecución. Sin internet, con el
+  servidor caído (4xx/5xx) o con una respuesta rara, la app funciona
+  normal, aunque el plazo guardado ya haya vencido.
 - **Solo se abren enlaces** `https://` de `github.com/Elmarcinho/…` o
   `godebol.com` (sin usuario, contraseña ni puerto raro). Otro enlace se
   reemplaza por la página de releases del repositorio. Se vuelve a
@@ -917,4 +933,4 @@ comprueba que coincidan y el workflow de release rechaza un tag que no sea
   `1.2.3+4` y campos raros sin romper nada.
 - Los términos (versión 3) lo mencionan. Todavía no hay pantalla de Ajustes:
   el interruptor para desactivar el aviso normal queda pendiente para
-  cuando exista (el obligatorio no se podrá desactivar).
+  cuando exista (el de la versión mínima no se podrá desactivar).

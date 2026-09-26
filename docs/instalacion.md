@@ -51,6 +51,10 @@ credenciales de Windows.
 - **Actualizar:** cuando haya una versión nueva, la app muestra un aviso con
   el botón **Descargar**. Instala la nueva encima de la anterior: tus cuentas
   se conservan.
+- **Actualización obligatoria:** si tu versión deja de ser compatible, el
+  aviso dice *"Debes actualizar antes del…"* y tienes 3 días para hacerlo.
+  Pasado ese plazo, la app muestra solo el botón de descarga hasta que
+  instales la nueva versión.
 - **Desinstalar:** *Configuración → Aplicaciones → Aplicaciones instaladas →
   EvemTv → Desinstalar*. Para borrar también tus cuentas guardadas, antes de
   desinstalar cierra la sesión de cada cuenta dentro de la app.
