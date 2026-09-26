@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show HttpDate;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -199,16 +198,56 @@ UpdateInfo? parseUpdate(Object? json, AppVersion current) {
   );
 }
 
-/// Fecha del encabezado HTTP `Date` (RFC 7231), o `null`.
+/// Fecha del encabezado HTTP `Date`, o `null` si falta o no es válida.
+///
+/// Estricta: solo el formato estándar `Sat, 26 Sep 2026 12:00:00 GMT`
+/// (IMF-fixdate, el que envían los servidores), con día, mes, año, hora,
+/// minutos, segundos y día de la semana válidos. `HttpDate.parse` acepta
+/// fechas imposibles y las "corrige" (`99 Sep` pasa a diciembre): con una
+/// fecha así el plazo sería falso, así que se trata como ausente.
 @visibleForTesting
 DateTime? parseServerDate(String? header) {
-  if (header == null || header.trim().isEmpty) return null;
-  try {
-    return HttpDate.parse(header.trim()).toUtc();
-  } on Object {
+  if (header == null) return null;
+  final m = _imfFixdate.firstMatch(header.trim());
+  if (m == null) return null;
+  final weekday = _weekdays.indexOf(m.group(1)!) + 1;
+  final day = int.parse(m.group(2)!);
+  final month = _months.indexOf(m.group(3)!) + 1;
+  final year = int.parse(m.group(4)!);
+  final hour = int.parse(m.group(5)!);
+  final minute = int.parse(m.group(6)!);
+  final second = int.parse(m.group(7)!);
+  if (year < 2000 || hour > 23 || minute > 59 || second > 59) return null;
+  final date = DateTime.utc(year, month, day, hour, minute, second);
+  // DateTime también "corrige" (31 Feb → 3 Mar): si algún campo cambió, la
+  // fecha no existía.
+  if (date.year != year || date.month != month || date.day != day) {
     return null;
   }
+  if (date.weekday != weekday) return null;
+  return date;
 }
+
+const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const _months = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+final _imfFixdate = RegExp(
+  r'^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), (\d{2}) '
+  r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{4}) '
+  r'(\d{2}):(\d{2}):(\d{2}) GMT$',
+);
 
 /// Consulta la última versión. Nunca lanza.
 class UpdateChecker {

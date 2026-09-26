@@ -929,8 +929,11 @@ comprueba que coincidan y el workflow de release rechaza un tag que no sea
   *"Debes actualizar antes del dd/mm/aaaa"* y se puede cerrar (vuelve en la
   próxima apertura). La fecha de primera detección se guarda en las
   preferencias locales **por versión mínima**
-  (`update_minimum_seen = "2.0.0|<fecha UTC>"`): si `minima` cambia, el
-  plazo empieza de nuevo.
+  (`update_minimum_seen_server = "2.0.0|<fecha UTC del servidor>"`): si
+  `minima` cambia, el plazo empieza de nuevo. La clave anterior
+  (`update_minimum_seen`) guardaba fechas del reloj del equipo: se descarta
+  sin leerla, y el plazo de quien la tuviera se reinicia una sola vez con la
+  fecha del servidor.
 - **Solo con una respuesta coherente** cuentan la mínima, su plazo y el
   bloqueo: `ultima_version`, `minima` y `descarga` presentes y válidas,
   el enlace de confianza y `minima <= ultima_version`. Si no (mínima mayor
@@ -940,9 +943,14 @@ comprueba que coincidan y el workflow de release rechaza un tag que no sea
 - **El plazo se mide con la fecha del servidor**, el encabezado HTTP `Date`
   de la respuesta de `godebol.com/api/evemtv/version`, nunca con el reloj
   del equipo (que puede estar mal o cambiarse a mano): con esa fecha se
-  registra la primera detección y con ella se decide si venció. Si el
-  encabezado falta o no se puede interpretar, no hay plazo ni bloqueo (solo
-  el aviso informativo). Con la app abierta, el vencimiento se programa por
+  registra la primera detección y con ella se decide si venció. Se valida
+  **estrictamente**: solo el formato estándar `Sat, 26 Sep 2026 12:00:00 GMT`
+  (IMF-fixdate) con día, mes, año (desde 2000), hora, minutos, segundos y
+  día de la semana válidos. `HttpDate.parse` de Dart acepta fechas
+  imposibles y las "corrige" (`Sat, 99 Sep 2026` pasa a 08/12/2026), así que
+  no se usa. Si el encabezado falta, tiene otro formato o una fecha
+  imposible, se trata como ausente: no hay plazo ni bloqueo (solo el aviso
+  informativo). Con la app abierta, el vencimiento se programa por
   tiempo transcurrido desde esa fecha, y cada consulta (cada 12 h) la
   vuelve a tomar del servidor. Una primera detección guardada con una fecha
   posterior a la del servidor no alarga el plazo.
@@ -960,6 +968,14 @@ comprueba que coincidan y el workflow de release rechaza un tag que no sea
   normal, aunque el plazo guardado ya haya vencido. Lo mismo vale para
   todo lo que dependa del servidor de EvemTv (conteo de uso, §18): nunca
   impide usar la app.
+- **Interruptor de emergencia:** si una `minima` se publicó por error (o
+  bloquea a quien no debía), basta con **bajar `minima`** en el archivo de
+  versión del backend (a una versión igual o menor que la instalada, o
+  quitarla): cada app lo toma en la siguiente consulta (a los 3 s de
+  abrirla, o cada 12 h si está abierta) y se desbloquea sin actualizar ni
+  reiniciar. Un test lo comprueba. Si más adelante se vuelve a subir la
+  misma `minima`, el plazo sigue contando desde la primera detección
+  guardada; con una `minima` distinta empieza de nuevo.
 - **Solo se abren enlaces** `https://` de `github.com/Elmarcinho/…`,
   `godebol.com` o `evemtv.godebol.com` (la página de descarga), sin
   usuario, contraseña ni puerto raro; ningún otro subdominio. Otro enlace se

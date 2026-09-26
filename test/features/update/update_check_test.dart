@@ -1,4 +1,5 @@
 // Aviso de actualización. Respuestas simuladas; nunca sale a la red real.
+import 'dart:async';
 import 'dart:io' show HttpDate;
 
 import 'package:dio/dio.dart';
@@ -220,6 +221,35 @@ void main() {
         expect(parseServerDate(raw), isNull, reason: '$raw');
       }
     });
+
+    test('fechas imposibles: null (HttpDate.parse las "corrige")', () {
+      // Caso de la revisión: HttpDate.parse lo toma como 08/12/2026.
+      expect(HttpDate.parse('Sat, 99 Sep 2026 12:00:00 GMT').month, 12);
+      for (final raw in [
+        'Sat, 99 Sep 2026 12:00:00 GMT',
+        'Tue, 31 Feb 2026 12:00:00 GMT',
+        'Wed, 00 Sep 2026 12:00:00 GMT',
+        'Sat, 26 Sep 2026 24:00:00 GMT',
+        'Sat, 26 Sep 2026 12:60:00 GMT',
+        'Sat, 26 Sep 2026 12:00:60 GMT',
+        'Sat, 26 Sep 0026 12:00:00 GMT',
+        // Día de la semana que no corresponde (el 26/09/2026 es sábado).
+        'Fri, 26 Sep 2026 12:00:00 GMT',
+        // Otros formatos o zonas: solo el estándar IMF-fixdate en GMT.
+        'Saturday, 26-Sep-26 12:00:00 GMT',
+        'Sat Sep 26 12:00:00 2026',
+        'Sat, 26 Sep 2026 12:00:00 +0000',
+        'Sat, 26 Sep 2026 12:00:00 gmt',
+        'Sat, 26 Sep 2026 12:00 GMT',
+      ]) {
+        expect(parseServerDate(raw), isNull, reason: raw);
+      }
+      // Bisiesto válido.
+      expect(
+        parseServerDate('Tue, 29 Feb 2028 23:59:59 GMT'),
+        DateTime.utc(2028, 2, 29, 23, 59, 59),
+      );
+    });
   });
 
   group('consulta', () {
@@ -325,6 +355,8 @@ void main() {
             Headers.contentTypeHeader: ['application/json'],
             if (serverDate == 'ok') 'date': [HttpDate.format(now)],
             if (serverDate == 'rara') 'date': ['mañana a las 3'],
+            if (serverDate == 'imposible')
+              'date': ['Sat, 99 Sep 2026 12:00:00 GMT'],
           },
         );
 
@@ -532,6 +564,7 @@ void main() {
     for (final (caso, date) in [
       ('sin encabezado Date', 'sin'),
       ('con un Date ilegible', 'rara'),
+      ('con un Date imposible (99 de septiembre)', 'imposible'),
     ]) {
       testWidgets('menor que la mínima, $caso: sin plazo ni bloqueo', (
         tester,
@@ -617,6 +650,46 @@ void main() {
       expect(find.text('Actualización necesaria'), findsOneWidget);
       await expectAppBlocked(tester);
       await finish(tester, c3);
+    });
+
+    testWidgets('fecha guardada por la versión anterior (reloj del equipo, '
+        'otra clave): se descarta y el plazo empieza con la del servidor', (
+      tester,
+    ) async {
+      settings.values['update_minimum_seen'] =
+          '2.0.0|${now.subtract(const Duration(days: 30)).toUtc().toIso8601String()}';
+      final c = await pump(tester, obligatoria);
+      expect(find.text('Actualización necesaria'), findsNothing);
+      expect(
+        find.textContaining('Debes actualizar antes del 29/09/2026'),
+        findsOneWidget,
+      );
+      expect(
+        settings.values[SettingsKeys.updateMinimumSeen],
+        '2.0.0|${now.toUtc().toIso8601String()}',
+      );
+      await expectAppUsable(tester);
+      await finish(tester, c);
+    });
+
+    testWidgets('interruptor de emergencia: bajar minima en el servidor '
+        'desbloquea en la siguiente consulta', (tester) async {
+      settings.values[SettingsKeys.updateMinimumSeen] =
+          '2.0.0|${now.subtract(const Duration(days: 4)).toUtc().toIso8601String()}';
+      final c = await pump(tester, obligatoria);
+      expect(find.text('Actualización necesaria'), findsOneWidget);
+      await expectAppBlocked(tester);
+
+      http.handler = (_) => withDate(
+        '{"ultima_version":"2.0.0","descarga":"$_release","minima":"1.0.0"}',
+      );
+      // Siguiente consulta (sin esperar las 12 h).
+      unawaited(c.read(updateProvider.notifier).check());
+      await tester.pumpAndSettle();
+      expect(find.text('Actualización necesaria'), findsNothing);
+      expect(find.text('Nueva versión 2.0.0 disponible'), findsOneWidget);
+      await expectAppUsable(tester);
+      await finish(tester, c);
     });
 
     testWidgets('al día: no se muestra nada', (tester) async {

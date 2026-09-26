@@ -20,8 +20,13 @@ abstract final class SettingsKeys {
   /// mismo día se envía uno más, con ella.
   static const String usagePingHashDay = 'usage_ping_hash_day';
 
-  /// Versión mínima exigida y fecha (UTC) en que se detectó por primera vez
+  /// Versión mínima exigida y fecha en que se detectó por primera vez,
+  /// según el encabezado `Date` del servidor
   /// (`1.2.0|2026-09-26T12:00:00.000Z`): el plazo de 3 días para actualizar
   /// cuenta desde ahí y vuelve a empezar si la mínima cambia.
-  static const String updateMinimumSeen = 'update_minimum_seen';
+  ///
+  /// Clave nueva a propósito: la anterior (`update_minimum_seen`) guardaba
+  /// fechas del reloj del equipo y se descarta; el plazo se reinicia una
+  /// sola vez con la fecha del servidor.
+  static const String updateMinimumSeen = 'update_minimum_seen_server';
 }
