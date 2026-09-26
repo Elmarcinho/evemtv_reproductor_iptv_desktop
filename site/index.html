@@ -110,7 +110,9 @@ code {
   background: var(--superficie-alta);
   border-radius: 5px;
   padding: 1px 5px;
-  word-break: break-all;
+  /* Nombres de archivo y comandos: se cortan solo entre palabras (nunca
+     "evemt / v.exe"); una palabra se parte solo si no entra en una línea. */
+  overflow-wrap: break-word;
 }
 
 /* El sistema del visitante: primero y con el botón destacado. */
