@@ -162,6 +162,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          ...parentalTestOverrides(),
           contentSourceProvider.overrideWithValue(source),
           if (db != null) appDatabaseProvider.overrideWithValue(db),
           sessionProvider.overrideWith(FixedSession.new),

@@ -153,6 +153,6 @@ Trabajar por fases. Al terminar cada una: explicar qué se hizo, cómo probarlo 
 - **Fase 3**: películas y series con fichas y reproducción.
 - **Fase 4**: búsqueda, favoritos, seguir viendo, atajos de teclado.
 - **Fase 5**: empaquetado para las 3 plataformas + GitHub Actions + aviso de actualización.
-- **Fase 6**: EPG completa en grilla, catch-up, control parental.
+- **Fase 6**: EPG completa en grilla, catch-up, control parental. (El control parental se adelantó a la 1.0.0: oculto por defecto, PIN 0000 por perfil con hash, ver `docs/decisiones.md` §20.)
 
 Si algo de esta especificación es ambiguo o hay una mejor alternativa técnica, preguntar o proponerla antes de implementarla.

@@ -57,6 +57,9 @@ class CatalogCategories extends Table {
   TextColumn get name => text()();
   IntColumn get position => integer()();
 
+  /// Marcada como de adultos por el panel (`is_adult`).
+  BoolColumn get adult => boolean().withDefault(const Constant(false))();
+
   @override
   Set<Column<Object>> get primaryKey => {profileId, kind, categoryId};
 }
@@ -78,6 +81,9 @@ class CatalogItems extends Table {
   /// Cuándo se agregó al servidor (segundos Unix), si lo informa.
   IntColumn get added => integer().nullable()();
   IntColumn get position => integer()();
+
+  /// Marcado como de adultos por el panel (`is_adult`).
+  BoolColumn get adult => boolean().withDefault(const Constant(false))();
 
   @override
   Set<Column<Object>> get primaryKey => {profileId, kind, itemId};
@@ -121,6 +127,30 @@ class WatchProgressEntries extends Table {
   Set<Column<Object>> get primaryKey => {profileId, kind, itemId};
 }
 
+/// Control parental por perfil: PIN (hash con sal; sin fila o sin hash =
+/// PIN por defecto `0000`), categorías que el usuario bloqueó a mano y
+/// espera tras intentos fallidos. Se borra con el perfil.
+@DataClassName('ParentalRow')
+class ParentalSettings extends Table {
+  IntColumn get profileId =>
+      integer().references(Profiles, #id, onDelete: KeyAction.cascade)();
+
+  /// `pbkdf2-sha256$<iteraciones>$<sal base64>$<hash base64>`.
+  TextColumn get pinHash => text().nullable()();
+
+  /// Categorías bloqueadas a mano: JSON `["live:12", "movie:7"]`.
+  TextColumn get blockedCategories =>
+      text().withDefault(const Constant('[]'))();
+
+  IntColumn get failedAttempts => integer().withDefault(const Constant(0))();
+
+  /// Hasta cuándo no se acepta otro intento (milisegundos Unix).
+  IntColumn get lockedUntil => integer().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {profileId};
+}
+
 /// Base de datos local. Las tablas de catálogo y EPG (Fases 2+) llevan
 /// `profile_id` para poder borrar todo lo de un perfil al cerrar sesión.
 @DriftDatabase(
@@ -132,6 +162,7 @@ class WatchProgressEntries extends Table {
     CatalogItems,
     CatalogSync,
     WatchProgressEntries,
+    ParentalSettings,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -140,8 +171,10 @@ class AppDatabase extends _$AppDatabase {
   /// 1: perfiles y preferencias. 2: favoritos. 3: favoritos sin URL de
   /// imagen y con categoría (la imagen se resuelve desde el catálogo).
   /// 4: catálogo local con búsqueda FTS5 y "seguir viendo".
+  /// 5: fecha de alta en el catálogo. 6: control parental (marca de
+  /// adultos en el catálogo y tabla por perfil).
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   /// Índice de búsqueda FTS5: sin tildes ni mayúsculas ("futbol" encuentra
   /// "Fútbol"). Tabla independiente: se escribe junto con `catalog_items`
@@ -169,11 +202,21 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(catalogItems);
         await m.createTable(catalogSync);
         await m.createTable(watchProgressEntries);
-      } else if (from < 5) {
-        await m.addColumn(catalogItems, catalogItems.added);
-        // El catálogo guardado no tiene fechas: se borra la marca de
-        // actualización para que se vuelva a descargar al abrir la sesión.
+      } else {
+        if (from < 5) {
+          await m.addColumn(catalogItems, catalogItems.added);
+        }
+        if (from < 6) {
+          await m.addColumn(catalogItems, catalogItems.adult);
+          await m.addColumn(catalogCategories, catalogCategories.adult);
+        }
+        // El catálogo guardado no tiene los datos nuevos (fechas, marca de
+        // adultos): se borra la marca de actualización para que se vuelva a
+        // descargar al abrir la sesión.
         await customStatement('DELETE FROM catalog_sync');
+      }
+      if (from < 6) {
+        await m.createTable(parentalSettings);
       }
     },
     // Necesario para que funcione el borrado en cascada por perfil.

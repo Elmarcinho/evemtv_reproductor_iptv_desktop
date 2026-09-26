@@ -16,6 +16,7 @@ import '../../domain/entities/catalog.dart';
 import '../../domain/entities/profile.dart';
 import '../auth/application/auth_service.dart';
 import '../auth/application/session.dart';
+import '../parental/parental.dart';
 import '../player/watch_progress.dart';
 import '../search/catalog_sync.dart';
 import 'account_info_controller.dart';
@@ -163,9 +164,13 @@ class _HomeBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final progress = ref.watch(allWatchProgressProvider);
-    // Hasta saber si hay algo a medio ver, solo las secciones: así no se
-    // muestra un arreglo y enseguida el otro.
-    final hasContinue = progress.value?.isNotEmpty;
+    final hidden = ref.watch(hiddenContentProvider);
+    // Hasta saber si hay algo a medio ver (y qué oculta el control
+    // parental), solo las secciones: así no se muestra un arreglo y
+    // enseguida el otro. Si todo lo empezado está oculto, sin la fila.
+    final hasContinue = progress.hasValue && hidden.hasValue
+        ? ref.watch(continueWatchingProvider).isNotEmpty
+        : null;
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 1100;
@@ -459,6 +464,13 @@ class _AccountMenu extends ConsumerWidget {
               title: Text('Actualizar datos de la cuenta'),
             ),
           ),
+        PopupMenuItem(
+          value: () => context.push(AppRoutes.settings),
+          child: const ListTile(
+            leading: Icon(Icons.settings_outlined),
+            title: Text('Ajustes y control parental'),
+          ),
+        ),
         PopupMenuItem(
           value: onSwitch,
           child: const ListTile(

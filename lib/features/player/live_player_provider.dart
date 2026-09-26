@@ -91,6 +91,15 @@ class LivePlayerNotifier extends Notifier<LivePlayerState> {
     }
   }
 
+  /// Detiene y libera el reproductor (p. ej. al volver a bloquear el
+  /// contenido adulto con un canal de adultos sonando).
+  Future<void> stop() async {
+    final handle = state.handle;
+    _creating = null;
+    state = const LivePlayerState();
+    await handle?.dispose();
+  }
+
   Future<LivePlayerHandle> _create(
     List<LiveChannel> channels,
     int index,

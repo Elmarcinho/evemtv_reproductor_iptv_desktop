@@ -1,9 +1,17 @@
 /// Categoría de contenido (grupo de canales, películas o series).
 class ContentCategory {
-  const ContentCategory({required this.id, required this.name});
+  const ContentCategory({
+    required this.id,
+    required this.name,
+    this.adult = false,
+  });
 
   final String id;
   final String name;
+
+  /// Marcada como de adultos por el panel. (Por nombre se detecta aparte:
+  /// ver `AdultContent`.)
+  final bool adult;
 
   @override
   bool operator ==(Object other) =>
@@ -27,6 +35,7 @@ class LiveChannel {
     this.categoryId,
     this.epgChannelId,
     this.hasArchive = false,
+    this.adult = false,
   });
 
   final String id;
@@ -38,6 +47,9 @@ class LiveChannel {
 
   /// El panel guarda grabaciones (catch-up, Fase 6).
   final bool hasArchive;
+
+  /// Marcado como contenido para adultos por el panel (`is_adult`).
+  final bool adult;
 
   @override
   bool operator ==(Object other) => other is LiveChannel && other.id == id;

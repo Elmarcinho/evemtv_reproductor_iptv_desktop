@@ -1206,6 +1206,19 @@ class $CatalogCategoriesTable extends CatalogCategories
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _adultMeta = const VerificationMeta('adult');
+  @override
+  late final GeneratedColumn<bool> adult = GeneratedColumn<bool>(
+    'adult',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("adult" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     profileId,
@@ -1213,6 +1226,7 @@ class $CatalogCategoriesTable extends CatalogCategories
     categoryId,
     name,
     position,
+    adult,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1258,6 +1272,12 @@ class $CatalogCategoriesTable extends CatalogCategories
     } else if (isInserting) {
       context.missing(_positionMeta);
     }
+    if (data.containsKey('adult')) {
+      context.handle(
+        _adultMeta,
+        adult.isAcceptableOrUnknown(data['adult']!, _adultMeta),
+      );
+    }
     return context;
   }
 
@@ -1289,6 +1309,10 @@ class $CatalogCategoriesTable extends CatalogCategories
         DriftSqlType.int,
         data['${effectivePrefix}position'],
       )!,
+      adult: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}adult'],
+      )!,
     );
   }
 
@@ -1308,12 +1332,16 @@ class CatalogCategoryRow extends DataClass
   final String categoryId;
   final String name;
   final int position;
+
+  /// Marcada como de adultos por el panel (`is_adult`).
+  final bool adult;
   const CatalogCategoryRow({
     required this.profileId,
     required this.kind,
     required this.categoryId,
     required this.name,
     required this.position,
+    required this.adult,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1327,6 +1355,7 @@ class CatalogCategoryRow extends DataClass
     map['category_id'] = Variable<String>(categoryId);
     map['name'] = Variable<String>(name);
     map['position'] = Variable<int>(position);
+    map['adult'] = Variable<bool>(adult);
     return map;
   }
 
@@ -1337,6 +1366,7 @@ class CatalogCategoryRow extends DataClass
       categoryId: Value(categoryId),
       name: Value(name),
       position: Value(position),
+      adult: Value(adult),
     );
   }
 
@@ -1353,6 +1383,7 @@ class CatalogCategoryRow extends DataClass
       categoryId: serializer.fromJson<String>(json['categoryId']),
       name: serializer.fromJson<String>(json['name']),
       position: serializer.fromJson<int>(json['position']),
+      adult: serializer.fromJson<bool>(json['adult']),
     );
   }
   @override
@@ -1366,6 +1397,7 @@ class CatalogCategoryRow extends DataClass
       'categoryId': serializer.toJson<String>(categoryId),
       'name': serializer.toJson<String>(name),
       'position': serializer.toJson<int>(position),
+      'adult': serializer.toJson<bool>(adult),
     };
   }
 
@@ -1375,12 +1407,14 @@ class CatalogCategoryRow extends DataClass
     String? categoryId,
     String? name,
     int? position,
+    bool? adult,
   }) => CatalogCategoryRow(
     profileId: profileId ?? this.profileId,
     kind: kind ?? this.kind,
     categoryId: categoryId ?? this.categoryId,
     name: name ?? this.name,
     position: position ?? this.position,
+    adult: adult ?? this.adult,
   );
   CatalogCategoryRow copyWithCompanion(CatalogCategoriesCompanion data) {
     return CatalogCategoryRow(
@@ -1391,6 +1425,7 @@ class CatalogCategoryRow extends DataClass
           : this.categoryId,
       name: data.name.present ? data.name.value : this.name,
       position: data.position.present ? data.position.value : this.position,
+      adult: data.adult.present ? data.adult.value : this.adult,
     );
   }
 
@@ -1401,13 +1436,15 @@ class CatalogCategoryRow extends DataClass
           ..write('kind: $kind, ')
           ..write('categoryId: $categoryId, ')
           ..write('name: $name, ')
-          ..write('position: $position')
+          ..write('position: $position, ')
+          ..write('adult: $adult')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(profileId, kind, categoryId, name, position);
+  int get hashCode =>
+      Object.hash(profileId, kind, categoryId, name, position, adult);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1416,7 +1453,8 @@ class CatalogCategoryRow extends DataClass
           other.kind == this.kind &&
           other.categoryId == this.categoryId &&
           other.name == this.name &&
-          other.position == this.position);
+          other.position == this.position &&
+          other.adult == this.adult);
 }
 
 class CatalogCategoriesCompanion extends UpdateCompanion<CatalogCategoryRow> {
@@ -1425,6 +1463,7 @@ class CatalogCategoriesCompanion extends UpdateCompanion<CatalogCategoryRow> {
   final Value<String> categoryId;
   final Value<String> name;
   final Value<int> position;
+  final Value<bool> adult;
   final Value<int> rowid;
   const CatalogCategoriesCompanion({
     this.profileId = const Value.absent(),
@@ -1432,6 +1471,7 @@ class CatalogCategoriesCompanion extends UpdateCompanion<CatalogCategoryRow> {
     this.categoryId = const Value.absent(),
     this.name = const Value.absent(),
     this.position = const Value.absent(),
+    this.adult = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CatalogCategoriesCompanion.insert({
@@ -1440,6 +1480,7 @@ class CatalogCategoriesCompanion extends UpdateCompanion<CatalogCategoryRow> {
     required String categoryId,
     required String name,
     required int position,
+    this.adult = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : profileId = Value(profileId),
        kind = Value(kind),
@@ -1452,6 +1493,7 @@ class CatalogCategoriesCompanion extends UpdateCompanion<CatalogCategoryRow> {
     Expression<String>? categoryId,
     Expression<String>? name,
     Expression<int>? position,
+    Expression<bool>? adult,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1460,6 +1502,7 @@ class CatalogCategoriesCompanion extends UpdateCompanion<CatalogCategoryRow> {
       if (categoryId != null) 'category_id': categoryId,
       if (name != null) 'name': name,
       if (position != null) 'position': position,
+      if (adult != null) 'adult': adult,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1470,6 +1513,7 @@ class CatalogCategoriesCompanion extends UpdateCompanion<CatalogCategoryRow> {
     Value<String>? categoryId,
     Value<String>? name,
     Value<int>? position,
+    Value<bool>? adult,
     Value<int>? rowid,
   }) {
     return CatalogCategoriesCompanion(
@@ -1478,6 +1522,7 @@ class CatalogCategoriesCompanion extends UpdateCompanion<CatalogCategoryRow> {
       categoryId: categoryId ?? this.categoryId,
       name: name ?? this.name,
       position: position ?? this.position,
+      adult: adult ?? this.adult,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1502,6 +1547,9 @@ class CatalogCategoriesCompanion extends UpdateCompanion<CatalogCategoryRow> {
     if (position.present) {
       map['position'] = Variable<int>(position.value);
     }
+    if (adult.present) {
+      map['adult'] = Variable<bool>(adult.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1516,6 +1564,7 @@ class CatalogCategoriesCompanion extends UpdateCompanion<CatalogCategoryRow> {
           ..write('categoryId: $categoryId, ')
           ..write('name: $name, ')
           ..write('position: $position, ')
+          ..write('adult: $adult, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1638,6 +1687,19 @@ class $CatalogItemsTable extends CatalogItems
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _adultMeta = const VerificationMeta('adult');
+  @override
+  late final GeneratedColumn<bool> adult = GeneratedColumn<bool>(
+    'adult',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("adult" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     profileId,
@@ -1651,6 +1713,7 @@ class $CatalogItemsTable extends CatalogItems
     rating,
     added,
     position,
+    adult,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1735,6 +1798,12 @@ class $CatalogItemsTable extends CatalogItems
     } else if (isInserting) {
       context.missing(_positionMeta);
     }
+    if (data.containsKey('adult')) {
+      context.handle(
+        _adultMeta,
+        adult.isAcceptableOrUnknown(data['adult']!, _adultMeta),
+      );
+    }
     return context;
   }
 
@@ -1790,6 +1859,10 @@ class $CatalogItemsTable extends CatalogItems
         DriftSqlType.int,
         data['${effectivePrefix}position'],
       )!,
+      adult: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}adult'],
+      )!,
     );
   }
 
@@ -1816,6 +1889,9 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
   /// Cuándo se agregó al servidor (segundos Unix), si lo informa.
   final int? added;
   final int position;
+
+  /// Marcado como de adultos por el panel (`is_adult`).
+  final bool adult;
   const CatalogItemRow({
     required this.profileId,
     required this.kind,
@@ -1828,6 +1904,7 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
     this.rating,
     this.added,
     required this.position,
+    required this.adult,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1859,6 +1936,7 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
       map['added'] = Variable<int>(added);
     }
     map['position'] = Variable<int>(position);
+    map['adult'] = Variable<bool>(adult);
     return map;
   }
 
@@ -1885,6 +1963,7 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
           ? const Value.absent()
           : Value(added),
       position: Value(position),
+      adult: Value(adult),
     );
   }
 
@@ -1909,6 +1988,7 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
       rating: serializer.fromJson<double?>(json['rating']),
       added: serializer.fromJson<int?>(json['added']),
       position: serializer.fromJson<int>(json['position']),
+      adult: serializer.fromJson<bool>(json['adult']),
     );
   }
   @override
@@ -1928,6 +2008,7 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
       'rating': serializer.toJson<double?>(rating),
       'added': serializer.toJson<int?>(added),
       'position': serializer.toJson<int>(position),
+      'adult': serializer.toJson<bool>(adult),
     };
   }
 
@@ -1943,6 +2024,7 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
     Value<double?> rating = const Value.absent(),
     Value<int?> added = const Value.absent(),
     int? position,
+    bool? adult,
   }) => CatalogItemRow(
     profileId: profileId ?? this.profileId,
     kind: kind ?? this.kind,
@@ -1957,6 +2039,7 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
     rating: rating.present ? rating.value : this.rating,
     added: added.present ? added.value : this.added,
     position: position ?? this.position,
+    adult: adult ?? this.adult,
   );
   CatalogItemRow copyWithCompanion(CatalogItemsCompanion data) {
     return CatalogItemRow(
@@ -1975,6 +2058,7 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
       rating: data.rating.present ? data.rating.value : this.rating,
       added: data.added.present ? data.added.value : this.added,
       position: data.position.present ? data.position.value : this.position,
+      adult: data.adult.present ? data.adult.value : this.adult,
     );
   }
 
@@ -1991,7 +2075,8 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
           ..write('year: $year, ')
           ..write('rating: $rating, ')
           ..write('added: $added, ')
-          ..write('position: $position')
+          ..write('position: $position, ')
+          ..write('adult: $adult')
           ..write(')'))
         .toString();
   }
@@ -2009,6 +2094,7 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
     rating,
     added,
     position,
+    adult,
   );
   @override
   bool operator ==(Object other) =>
@@ -2024,7 +2110,8 @@ class CatalogItemRow extends DataClass implements Insertable<CatalogItemRow> {
           other.year == this.year &&
           other.rating == this.rating &&
           other.added == this.added &&
-          other.position == this.position);
+          other.position == this.position &&
+          other.adult == this.adult);
 }
 
 class CatalogItemsCompanion extends UpdateCompanion<CatalogItemRow> {
@@ -2039,6 +2126,7 @@ class CatalogItemsCompanion extends UpdateCompanion<CatalogItemRow> {
   final Value<double?> rating;
   final Value<int?> added;
   final Value<int> position;
+  final Value<bool> adult;
   final Value<int> rowid;
   const CatalogItemsCompanion({
     this.profileId = const Value.absent(),
@@ -2052,6 +2140,7 @@ class CatalogItemsCompanion extends UpdateCompanion<CatalogItemRow> {
     this.rating = const Value.absent(),
     this.added = const Value.absent(),
     this.position = const Value.absent(),
+    this.adult = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CatalogItemsCompanion.insert({
@@ -2066,6 +2155,7 @@ class CatalogItemsCompanion extends UpdateCompanion<CatalogItemRow> {
     this.rating = const Value.absent(),
     this.added = const Value.absent(),
     required int position,
+    this.adult = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : profileId = Value(profileId),
        kind = Value(kind),
@@ -2084,6 +2174,7 @@ class CatalogItemsCompanion extends UpdateCompanion<CatalogItemRow> {
     Expression<double>? rating,
     Expression<int>? added,
     Expression<int>? position,
+    Expression<bool>? adult,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -2098,6 +2189,7 @@ class CatalogItemsCompanion extends UpdateCompanion<CatalogItemRow> {
       if (rating != null) 'rating': rating,
       if (added != null) 'added': added,
       if (position != null) 'position': position,
+      if (adult != null) 'adult': adult,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -2114,6 +2206,7 @@ class CatalogItemsCompanion extends UpdateCompanion<CatalogItemRow> {
     Value<double?>? rating,
     Value<int?>? added,
     Value<int>? position,
+    Value<bool>? adult,
     Value<int>? rowid,
   }) {
     return CatalogItemsCompanion(
@@ -2128,6 +2221,7 @@ class CatalogItemsCompanion extends UpdateCompanion<CatalogItemRow> {
       rating: rating ?? this.rating,
       added: added ?? this.added,
       position: position ?? this.position,
+      adult: adult ?? this.adult,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -2170,6 +2264,9 @@ class CatalogItemsCompanion extends UpdateCompanion<CatalogItemRow> {
     if (position.present) {
       map['position'] = Variable<int>(position.value);
     }
+    if (adult.present) {
+      map['adult'] = Variable<bool>(adult.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -2190,6 +2287,7 @@ class CatalogItemsCompanion extends UpdateCompanion<CatalogItemRow> {
           ..write('rating: $rating, ')
           ..write('added: $added, ')
           ..write('position: $position, ')
+          ..write('adult: $adult, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -3305,6 +3403,389 @@ class WatchProgressEntriesCompanion extends UpdateCompanion<WatchProgressRow> {
   }
 }
 
+class $ParentalSettingsTable extends ParentalSettings
+    with TableInfo<$ParentalSettingsTable, ParentalRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ParentalSettingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _profileIdMeta = const VerificationMeta(
+    'profileId',
+  );
+  @override
+  late final GeneratedColumn<int> profileId = GeneratedColumn<int>(
+    'profile_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES profiles (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _pinHashMeta = const VerificationMeta(
+    'pinHash',
+  );
+  @override
+  late final GeneratedColumn<String> pinHash = GeneratedColumn<String>(
+    'pin_hash',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _blockedCategoriesMeta = const VerificationMeta(
+    'blockedCategories',
+  );
+  @override
+  late final GeneratedColumn<String> blockedCategories =
+      GeneratedColumn<String>(
+        'blocked_categories',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+        defaultValue: const Constant('[]'),
+      );
+  static const VerificationMeta _failedAttemptsMeta = const VerificationMeta(
+    'failedAttempts',
+  );
+  @override
+  late final GeneratedColumn<int> failedAttempts = GeneratedColumn<int>(
+    'failed_attempts',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _lockedUntilMeta = const VerificationMeta(
+    'lockedUntil',
+  );
+  @override
+  late final GeneratedColumn<int> lockedUntil = GeneratedColumn<int>(
+    'locked_until',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    profileId,
+    pinHash,
+    blockedCategories,
+    failedAttempts,
+    lockedUntil,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'parental_settings';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ParentalRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('profile_id')) {
+      context.handle(
+        _profileIdMeta,
+        profileId.isAcceptableOrUnknown(data['profile_id']!, _profileIdMeta),
+      );
+    }
+    if (data.containsKey('pin_hash')) {
+      context.handle(
+        _pinHashMeta,
+        pinHash.isAcceptableOrUnknown(data['pin_hash']!, _pinHashMeta),
+      );
+    }
+    if (data.containsKey('blocked_categories')) {
+      context.handle(
+        _blockedCategoriesMeta,
+        blockedCategories.isAcceptableOrUnknown(
+          data['blocked_categories']!,
+          _blockedCategoriesMeta,
+        ),
+      );
+    }
+    if (data.containsKey('failed_attempts')) {
+      context.handle(
+        _failedAttemptsMeta,
+        failedAttempts.isAcceptableOrUnknown(
+          data['failed_attempts']!,
+          _failedAttemptsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('locked_until')) {
+      context.handle(
+        _lockedUntilMeta,
+        lockedUntil.isAcceptableOrUnknown(
+          data['locked_until']!,
+          _lockedUntilMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {profileId};
+  @override
+  ParentalRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ParentalRow(
+      profileId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}profile_id'],
+      )!,
+      pinHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}pin_hash'],
+      ),
+      blockedCategories: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}blocked_categories'],
+      )!,
+      failedAttempts: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}failed_attempts'],
+      )!,
+      lockedUntil: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}locked_until'],
+      ),
+    );
+  }
+
+  @override
+  $ParentalSettingsTable createAlias(String alias) {
+    return $ParentalSettingsTable(attachedDatabase, alias);
+  }
+}
+
+class ParentalRow extends DataClass implements Insertable<ParentalRow> {
+  final int profileId;
+
+  /// `pbkdf2-sha256$<iteraciones>$<sal base64>$<hash base64>`.
+  final String? pinHash;
+
+  /// Categorías bloqueadas a mano: JSON `["live:12", "movie:7"]`.
+  final String blockedCategories;
+  final int failedAttempts;
+
+  /// Hasta cuándo no se acepta otro intento (milisegundos Unix).
+  final int? lockedUntil;
+  const ParentalRow({
+    required this.profileId,
+    this.pinHash,
+    required this.blockedCategories,
+    required this.failedAttempts,
+    this.lockedUntil,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['profile_id'] = Variable<int>(profileId);
+    if (!nullToAbsent || pinHash != null) {
+      map['pin_hash'] = Variable<String>(pinHash);
+    }
+    map['blocked_categories'] = Variable<String>(blockedCategories);
+    map['failed_attempts'] = Variable<int>(failedAttempts);
+    if (!nullToAbsent || lockedUntil != null) {
+      map['locked_until'] = Variable<int>(lockedUntil);
+    }
+    return map;
+  }
+
+  ParentalSettingsCompanion toCompanion(bool nullToAbsent) {
+    return ParentalSettingsCompanion(
+      profileId: Value(profileId),
+      pinHash: pinHash == null && nullToAbsent
+          ? const Value.absent()
+          : Value(pinHash),
+      blockedCategories: Value(blockedCategories),
+      failedAttempts: Value(failedAttempts),
+      lockedUntil: lockedUntil == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lockedUntil),
+    );
+  }
+
+  factory ParentalRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ParentalRow(
+      profileId: serializer.fromJson<int>(json['profileId']),
+      pinHash: serializer.fromJson<String?>(json['pinHash']),
+      blockedCategories: serializer.fromJson<String>(json['blockedCategories']),
+      failedAttempts: serializer.fromJson<int>(json['failedAttempts']),
+      lockedUntil: serializer.fromJson<int?>(json['lockedUntil']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'profileId': serializer.toJson<int>(profileId),
+      'pinHash': serializer.toJson<String?>(pinHash),
+      'blockedCategories': serializer.toJson<String>(blockedCategories),
+      'failedAttempts': serializer.toJson<int>(failedAttempts),
+      'lockedUntil': serializer.toJson<int?>(lockedUntil),
+    };
+  }
+
+  ParentalRow copyWith({
+    int? profileId,
+    Value<String?> pinHash = const Value.absent(),
+    String? blockedCategories,
+    int? failedAttempts,
+    Value<int?> lockedUntil = const Value.absent(),
+  }) => ParentalRow(
+    profileId: profileId ?? this.profileId,
+    pinHash: pinHash.present ? pinHash.value : this.pinHash,
+    blockedCategories: blockedCategories ?? this.blockedCategories,
+    failedAttempts: failedAttempts ?? this.failedAttempts,
+    lockedUntil: lockedUntil.present ? lockedUntil.value : this.lockedUntil,
+  );
+  ParentalRow copyWithCompanion(ParentalSettingsCompanion data) {
+    return ParentalRow(
+      profileId: data.profileId.present ? data.profileId.value : this.profileId,
+      pinHash: data.pinHash.present ? data.pinHash.value : this.pinHash,
+      blockedCategories: data.blockedCategories.present
+          ? data.blockedCategories.value
+          : this.blockedCategories,
+      failedAttempts: data.failedAttempts.present
+          ? data.failedAttempts.value
+          : this.failedAttempts,
+      lockedUntil: data.lockedUntil.present
+          ? data.lockedUntil.value
+          : this.lockedUntil,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ParentalRow(')
+          ..write('profileId: $profileId, ')
+          ..write('pinHash: $pinHash, ')
+          ..write('blockedCategories: $blockedCategories, ')
+          ..write('failedAttempts: $failedAttempts, ')
+          ..write('lockedUntil: $lockedUntil')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    profileId,
+    pinHash,
+    blockedCategories,
+    failedAttempts,
+    lockedUntil,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ParentalRow &&
+          other.profileId == this.profileId &&
+          other.pinHash == this.pinHash &&
+          other.blockedCategories == this.blockedCategories &&
+          other.failedAttempts == this.failedAttempts &&
+          other.lockedUntil == this.lockedUntil);
+}
+
+class ParentalSettingsCompanion extends UpdateCompanion<ParentalRow> {
+  final Value<int> profileId;
+  final Value<String?> pinHash;
+  final Value<String> blockedCategories;
+  final Value<int> failedAttempts;
+  final Value<int?> lockedUntil;
+  const ParentalSettingsCompanion({
+    this.profileId = const Value.absent(),
+    this.pinHash = const Value.absent(),
+    this.blockedCategories = const Value.absent(),
+    this.failedAttempts = const Value.absent(),
+    this.lockedUntil = const Value.absent(),
+  });
+  ParentalSettingsCompanion.insert({
+    this.profileId = const Value.absent(),
+    this.pinHash = const Value.absent(),
+    this.blockedCategories = const Value.absent(),
+    this.failedAttempts = const Value.absent(),
+    this.lockedUntil = const Value.absent(),
+  });
+  static Insertable<ParentalRow> custom({
+    Expression<int>? profileId,
+    Expression<String>? pinHash,
+    Expression<String>? blockedCategories,
+    Expression<int>? failedAttempts,
+    Expression<int>? lockedUntil,
+  }) {
+    return RawValuesInsertable({
+      if (profileId != null) 'profile_id': profileId,
+      if (pinHash != null) 'pin_hash': pinHash,
+      if (blockedCategories != null) 'blocked_categories': blockedCategories,
+      if (failedAttempts != null) 'failed_attempts': failedAttempts,
+      if (lockedUntil != null) 'locked_until': lockedUntil,
+    });
+  }
+
+  ParentalSettingsCompanion copyWith({
+    Value<int>? profileId,
+    Value<String?>? pinHash,
+    Value<String>? blockedCategories,
+    Value<int>? failedAttempts,
+    Value<int?>? lockedUntil,
+  }) {
+    return ParentalSettingsCompanion(
+      profileId: profileId ?? this.profileId,
+      pinHash: pinHash ?? this.pinHash,
+      blockedCategories: blockedCategories ?? this.blockedCategories,
+      failedAttempts: failedAttempts ?? this.failedAttempts,
+      lockedUntil: lockedUntil ?? this.lockedUntil,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (profileId.present) {
+      map['profile_id'] = Variable<int>(profileId.value);
+    }
+    if (pinHash.present) {
+      map['pin_hash'] = Variable<String>(pinHash.value);
+    }
+    if (blockedCategories.present) {
+      map['blocked_categories'] = Variable<String>(blockedCategories.value);
+    }
+    if (failedAttempts.present) {
+      map['failed_attempts'] = Variable<int>(failedAttempts.value);
+    }
+    if (lockedUntil.present) {
+      map['locked_until'] = Variable<int>(lockedUntil.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ParentalSettingsCompanion(')
+          ..write('profileId: $profileId, ')
+          ..write('pinHash: $pinHash, ')
+          ..write('blockedCategories: $blockedCategories, ')
+          ..write('failedAttempts: $failedAttempts, ')
+          ..write('lockedUntil: $lockedUntil')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3317,6 +3798,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $CatalogSyncTable catalogSync = $CatalogSyncTable(this);
   late final $WatchProgressEntriesTable watchProgressEntries =
       $WatchProgressEntriesTable(this);
+  late final $ParentalSettingsTable parentalSettings = $ParentalSettingsTable(
+    this,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3329,6 +3813,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     catalogItems,
     catalogSync,
     watchProgressEntries,
+    parentalSettings,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -3366,6 +3851,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('watch_progress', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'profiles',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('parental_settings', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -3480,6 +3972,26 @@ final class $$ProfilesTableReferences
 
     final cache = $_typedResult.readTableOrNull(
       _watchProgressEntriesRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$ParentalSettingsTable, List<ParentalRow>>
+  _parentalSettingsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.parentalSettings,
+    aliasName: 'profiles__id__parental_settings__profile_id',
+  );
+
+  $$ParentalSettingsTableProcessedTableManager get parentalSettingsRefs {
+    final manager = $$ParentalSettingsTableTableManager(
+      $_db,
+      $_db.parentalSettings,
+    ).filter((f) => f.profileId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _parentalSettingsRefsTable($_db),
     );
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
@@ -3638,6 +4150,31 @@ class $$ProfilesTableFilterComposer
           }) => $$WatchProgressEntriesTableFilterComposer(
             $db: $db,
             $table: $db.watchProgressEntries,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> parentalSettingsRefs(
+    Expression<bool> Function($$ParentalSettingsTableFilterComposer f) f,
+  ) {
+    final $$ParentalSettingsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.parentalSettings,
+      getReferencedColumn: (t) => t.profileId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ParentalSettingsTableFilterComposer(
+            $db: $db,
+            $table: $db.parentalSettings,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -3835,6 +4372,31 @@ class $$ProfilesTableAnnotationComposer
         );
     return f(composer);
   }
+
+  Expression<T> parentalSettingsRefs<T extends Object>(
+    Expression<T> Function($$ParentalSettingsTableAnnotationComposer a) f,
+  ) {
+    final $$ParentalSettingsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.parentalSettings,
+      getReferencedColumn: (t) => t.profileId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ParentalSettingsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.parentalSettings,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$ProfilesTableTableManager
@@ -3856,6 +4418,7 @@ class $$ProfilesTableTableManager
             bool catalogItemsRefs,
             bool catalogSyncRefs,
             bool watchProgressEntriesRefs,
+            bool parentalSettingsRefs,
           })
         > {
   $$ProfilesTableTableManager(_$AppDatabase db, $ProfilesTable table)
@@ -3912,6 +4475,7 @@ class $$ProfilesTableTableManager
                 catalogItemsRefs = false,
                 catalogSyncRefs = false,
                 watchProgressEntriesRefs = false,
+                parentalSettingsRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -3921,6 +4485,7 @@ class $$ProfilesTableTableManager
                     if (catalogItemsRefs) db.catalogItems,
                     if (catalogSyncRefs) db.catalogSync,
                     if (watchProgressEntriesRefs) db.watchProgressEntries,
+                    if (parentalSettingsRefs) db.parentalSettings,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -4030,6 +4595,27 @@ class $$ProfilesTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (parentalSettingsRefs)
+                        await $_getPrefetchedData<
+                          ProfileRow,
+                          $ProfilesTable,
+                          ParentalRow
+                        >(
+                          currentTable: table,
+                          referencedTable: $$ProfilesTableReferences
+                              ._parentalSettingsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$ProfilesTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).parentalSettingsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.profileId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -4056,6 +4642,7 @@ typedef $$ProfilesTableProcessedTableManager =
         bool catalogItemsRefs,
         bool catalogSyncRefs,
         bool watchProgressEntriesRefs,
+        bool parentalSettingsRefs,
       })
     >;
 typedef $$AppSettingsTableCreateCompanionBuilder =
@@ -4606,6 +5193,7 @@ typedef $$CatalogCategoriesTableCreateCompanionBuilder =
       required String categoryId,
       required String name,
       required int position,
+      Value<bool> adult,
       Value<int> rowid,
     });
 typedef $$CatalogCategoriesTableUpdateCompanionBuilder =
@@ -4615,6 +5203,7 @@ typedef $$CatalogCategoriesTableUpdateCompanionBuilder =
       Value<String> categoryId,
       Value<String> name,
       Value<int> position,
+      Value<bool> adult,
       Value<int> rowid,
     });
 
@@ -4679,6 +5268,11 @@ class $$CatalogCategoriesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<bool> get adult => $composableBuilder(
+    column: $table.adult,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$ProfilesTableFilterComposer get profileId {
     final $$ProfilesTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -4732,6 +5326,11 @@ class $$CatalogCategoriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get adult => $composableBuilder(
+    column: $table.adult,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ProfilesTableOrderingComposer get profileId {
     final $$ProfilesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -4778,6 +5377,9 @@ class $$CatalogCategoriesTableAnnotationComposer
 
   GeneratedColumn<int> get position =>
       $composableBuilder(column: $table.position, builder: (column) => column);
+
+  GeneratedColumn<bool> get adult =>
+      $composableBuilder(column: $table.adult, builder: (column) => column);
 
   $$ProfilesTableAnnotationComposer get profileId {
     final $$ProfilesTableAnnotationComposer composer = $composerBuilder(
@@ -4841,6 +5443,7 @@ class $$CatalogCategoriesTableTableManager
                 Value<String> categoryId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<int> position = const Value.absent(),
+                Value<bool> adult = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CatalogCategoriesCompanion(
                 profileId: profileId,
@@ -4848,6 +5451,7 @@ class $$CatalogCategoriesTableTableManager
                 categoryId: categoryId,
                 name: name,
                 position: position,
+                adult: adult,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -4857,6 +5461,7 @@ class $$CatalogCategoriesTableTableManager
                 required String categoryId,
                 required String name,
                 required int position,
+                Value<bool> adult = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CatalogCategoriesCompanion.insert(
                 profileId: profileId,
@@ -4864,6 +5469,7 @@ class $$CatalogCategoriesTableTableManager
                 categoryId: categoryId,
                 name: name,
                 position: position,
+                adult: adult,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -4946,6 +5552,7 @@ typedef $$CatalogItemsTableCreateCompanionBuilder =
       Value<double?> rating,
       Value<int?> added,
       required int position,
+      Value<bool> adult,
       Value<int> rowid,
     });
 typedef $$CatalogItemsTableUpdateCompanionBuilder =
@@ -4961,6 +5568,7 @@ typedef $$CatalogItemsTableUpdateCompanionBuilder =
       Value<double?> rating,
       Value<int?> added,
       Value<int> position,
+      Value<bool> adult,
       Value<int> rowid,
     });
 
@@ -5043,6 +5651,11 @@ class $$CatalogItemsTableFilterComposer
 
   ColumnFilters<int> get position => $composableBuilder(
     column: $table.position,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get adult => $composableBuilder(
+    column: $table.adult,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5129,6 +5742,11 @@ class $$CatalogItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get adult => $composableBuilder(
+    column: $table.adult,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ProfilesTableOrderingComposer get profileId {
     final $$ProfilesTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -5196,6 +5814,9 @@ class $$CatalogItemsTableAnnotationComposer
   GeneratedColumn<int> get position =>
       $composableBuilder(column: $table.position, builder: (column) => column);
 
+  GeneratedColumn<bool> get adult =>
+      $composableBuilder(column: $table.adult, builder: (column) => column);
+
   $$ProfilesTableAnnotationComposer get profileId {
     final $$ProfilesTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -5259,6 +5880,7 @@ class $$CatalogItemsTableTableManager
                 Value<double?> rating = const Value.absent(),
                 Value<int?> added = const Value.absent(),
                 Value<int> position = const Value.absent(),
+                Value<bool> adult = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CatalogItemsCompanion(
                 profileId: profileId,
@@ -5272,6 +5894,7 @@ class $$CatalogItemsTableTableManager
                 rating: rating,
                 added: added,
                 position: position,
+                adult: adult,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -5287,6 +5910,7 @@ class $$CatalogItemsTableTableManager
                 Value<double?> rating = const Value.absent(),
                 Value<int?> added = const Value.absent(),
                 required int position,
+                Value<bool> adult = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CatalogItemsCompanion.insert(
                 profileId: profileId,
@@ -5300,6 +5924,7 @@ class $$CatalogItemsTableTableManager
                 rating: rating,
                 added: added,
                 position: position,
+                adult: adult,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -6161,6 +6786,327 @@ typedef $$WatchProgressEntriesTableProcessedTableManager =
       WatchProgressRow,
       PrefetchHooks Function({bool profileId})
     >;
+typedef $$ParentalSettingsTableCreateCompanionBuilder =
+    ParentalSettingsCompanion Function({
+      Value<int> profileId,
+      Value<String?> pinHash,
+      Value<String> blockedCategories,
+      Value<int> failedAttempts,
+      Value<int?> lockedUntil,
+    });
+typedef $$ParentalSettingsTableUpdateCompanionBuilder =
+    ParentalSettingsCompanion Function({
+      Value<int> profileId,
+      Value<String?> pinHash,
+      Value<String> blockedCategories,
+      Value<int> failedAttempts,
+      Value<int?> lockedUntil,
+    });
+
+final class $$ParentalSettingsTableReferences
+    extends BaseReferences<_$AppDatabase, $ParentalSettingsTable, ParentalRow> {
+  $$ParentalSettingsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $ProfilesTable _profileIdTable(_$AppDatabase db) =>
+      db.profiles.createAlias('parental_settings__profile_id__profiles__id');
+
+  $$ProfilesTableProcessedTableManager get profileId {
+    final $_column = $_itemColumn<int>('profile_id')!;
+
+    final manager = $$ProfilesTableTableManager(
+      $_db,
+      $_db.profiles,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_profileIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ParentalSettingsTableFilterComposer
+    extends Composer<_$AppDatabase, $ParentalSettingsTable> {
+  $$ParentalSettingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get pinHash => $composableBuilder(
+    column: $table.pinHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get blockedCategories => $composableBuilder(
+    column: $table.blockedCategories,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get failedAttempts => $composableBuilder(
+    column: $table.failedAttempts,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lockedUntil => $composableBuilder(
+    column: $table.lockedUntil,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$ProfilesTableFilterComposer get profileId {
+    final $$ProfilesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.profileId,
+      referencedTable: $db.profiles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProfilesTableFilterComposer(
+            $db: $db,
+            $table: $db.profiles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ParentalSettingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ParentalSettingsTable> {
+  $$ParentalSettingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get pinHash => $composableBuilder(
+    column: $table.pinHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get blockedCategories => $composableBuilder(
+    column: $table.blockedCategories,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get failedAttempts => $composableBuilder(
+    column: $table.failedAttempts,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lockedUntil => $composableBuilder(
+    column: $table.lockedUntil,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$ProfilesTableOrderingComposer get profileId {
+    final $$ProfilesTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.profileId,
+      referencedTable: $db.profiles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProfilesTableOrderingComposer(
+            $db: $db,
+            $table: $db.profiles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ParentalSettingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ParentalSettingsTable> {
+  $$ParentalSettingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get pinHash =>
+      $composableBuilder(column: $table.pinHash, builder: (column) => column);
+
+  GeneratedColumn<String> get blockedCategories => $composableBuilder(
+    column: $table.blockedCategories,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get failedAttempts => $composableBuilder(
+    column: $table.failedAttempts,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get lockedUntil => $composableBuilder(
+    column: $table.lockedUntil,
+    builder: (column) => column,
+  );
+
+  $$ProfilesTableAnnotationComposer get profileId {
+    final $$ProfilesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.profileId,
+      referencedTable: $db.profiles,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProfilesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.profiles,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ParentalSettingsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ParentalSettingsTable,
+          ParentalRow,
+          $$ParentalSettingsTableFilterComposer,
+          $$ParentalSettingsTableOrderingComposer,
+          $$ParentalSettingsTableAnnotationComposer,
+          $$ParentalSettingsTableCreateCompanionBuilder,
+          $$ParentalSettingsTableUpdateCompanionBuilder,
+          (ParentalRow, $$ParentalSettingsTableReferences),
+          ParentalRow,
+          PrefetchHooks Function({bool profileId})
+        > {
+  $$ParentalSettingsTableTableManager(
+    _$AppDatabase db,
+    $ParentalSettingsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ParentalSettingsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ParentalSettingsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ParentalSettingsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> profileId = const Value.absent(),
+                Value<String?> pinHash = const Value.absent(),
+                Value<String> blockedCategories = const Value.absent(),
+                Value<int> failedAttempts = const Value.absent(),
+                Value<int?> lockedUntil = const Value.absent(),
+              }) => ParentalSettingsCompanion(
+                profileId: profileId,
+                pinHash: pinHash,
+                blockedCategories: blockedCategories,
+                failedAttempts: failedAttempts,
+                lockedUntil: lockedUntil,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> profileId = const Value.absent(),
+                Value<String?> pinHash = const Value.absent(),
+                Value<String> blockedCategories = const Value.absent(),
+                Value<int> failedAttempts = const Value.absent(),
+                Value<int?> lockedUntil = const Value.absent(),
+              }) => ParentalSettingsCompanion.insert(
+                profileId: profileId,
+                pinHash: pinHash,
+                blockedCategories: blockedCategories,
+                failedAttempts: failedAttempts,
+                lockedUntil: lockedUntil,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$ParentalSettingsTable, ParentalRow>(table),
+                  $$ParentalSettingsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({profileId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (profileId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.profileId,
+                        referencedTable: $$ParentalSettingsTableReferences
+                            ._profileIdTable(db),
+                        referencedColumn: $$ParentalSettingsTableReferences
+                            ._profileIdTable(db)
+                            .id,
+                      ) as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ParentalSettingsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ParentalSettingsTable,
+      ParentalRow,
+      $$ParentalSettingsTableFilterComposer,
+      $$ParentalSettingsTableOrderingComposer,
+      $$ParentalSettingsTableAnnotationComposer,
+      $$ParentalSettingsTableCreateCompanionBuilder,
+      $$ParentalSettingsTableUpdateCompanionBuilder,
+      (ParentalRow, $$ParentalSettingsTableReferences),
+      ParentalRow,
+      PrefetchHooks Function({bool profileId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -6179,4 +7125,6 @@ class $AppDatabaseManager {
       $$CatalogSyncTableTableManager(_db, _db.catalogSync);
   $$WatchProgressEntriesTableTableManager get watchProgressEntries =>
       $$WatchProgressEntriesTableTableManager(_db, _db.watchProgressEntries);
+  $$ParentalSettingsTableTableManager get parentalSettings =>
+      $$ParentalSettingsTableTableManager(_db, _db.parentalSettings);
 }

@@ -9,11 +9,13 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/category_list.dart';
 import '../../core/widgets/keyboard_help.dart';
 import '../../core/widgets/state_views.dart';
+import '../../domain/entities/catalog.dart';
 import '../../domain/entities/favorite.dart';
 import '../../domain/entities/live.dart';
 import '../favorites/favorite_button.dart';
 import '../favorites/favorites.dart';
 import '../images/poster.dart';
+import '../parental/parental_widgets.dart';
 import '../search/section_header.dart';
 import 'catalog_images.dart';
 import 'catalog_providers.dart';
@@ -185,6 +187,14 @@ class _CatalogScreenState<T> extends ConsumerState<CatalogScreen<T>> {
                               color: null,
                             ),
                           ],
+                          parental: parentalActionsFor(
+                            context,
+                            ref,
+                            widget.favoriteKind == FavoriteKind.series
+                                ? ContentKind.series
+                                : ContentKind.movie,
+                          ),
+                          footer: const ParentalButton(),
                         ),
                       ),
                       const VerticalDivider(width: 1),

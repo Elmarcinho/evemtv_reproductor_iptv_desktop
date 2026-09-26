@@ -2,10 +2,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/logging/app_logger.dart';
 import '../../data/providers.dart';
+import '../../domain/entities/catalog.dart';
 import '../../domain/entities/vod.dart';
 import '../../domain/entities/watch_progress.dart';
+import '../../domain/parental/adult_content.dart';
 import '../../domain/repositories/watch_progress_repository.dart';
 import '../auth/application/session.dart';
+import '../parental/parental.dart';
 
 /// Todo el progreso del perfil de la sesión (los más recientes primero).
 /// Las entradas terminadas se borran, así que la lista se mantiene chica.
@@ -21,10 +24,33 @@ final allWatchProgressProvider = StreamProvider<List<WatchProgress>>((ref) {
 
 /// Fila "Seguir viendo" del inicio: las películas a medias y, de cada
 /// serie, solo el último episodio visto (el más reciente), no todos.
+///
+/// Sin lo oculto por el control parental. Mientras no se sabe qué ocultar,
+/// vacía (ante la duda, no se muestra).
 final continueWatchingProvider = Provider<List<WatchProgress>>((ref) {
   final all = ref.watch(allWatchProgressProvider).value ?? const [];
-  return continueWatchingOf(all);
-}, dependencies: [allWatchProgressProvider]);
+  final hidden = ref.watch(hiddenContentProvider).value;
+  if (hidden == null) return const [];
+  return continueWatchingOf([
+    for (final p in all)
+      if (!hidesProgress(hidden, p)) p,
+  ]);
+}, dependencies: [allWatchProgressProvider, hiddenContentProvider]);
+
+/// `true` si el control parental oculta esta entrada de "Seguir viendo"
+/// (película o serie de adultos, o de una categoría oculta).
+bool hidesProgress(HiddenContent hidden, WatchProgress p) => switch (p.kind) {
+  ProgressKind.movie => hidden.hidesItem(
+    ContentKind.movie,
+    p.itemId,
+    categoryId: p.categoryId,
+  ),
+  ProgressKind.episode => hidden.hidesItem(
+    ContentKind.series,
+    p.seriesId ?? '',
+    categoryId: p.categoryId,
+  ),
+};
 
 /// Máximo de tarjetas en "Seguir viendo".
 const int continueWatchingLimit = 10;

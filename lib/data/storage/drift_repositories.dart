@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 
 import '../../domain/entities/catalog.dart';
@@ -5,8 +7,10 @@ import '../../domain/entities/favorite.dart';
 import '../../domain/entities/live.dart';
 import '../../domain/entities/profile.dart';
 import '../../domain/entities/watch_progress.dart';
+import '../../domain/parental/adult_content.dart';
 import '../../domain/repositories/catalog_cache.dart';
 import '../../domain/repositories/favorites_repository.dart';
+import '../../domain/repositories/parental_repository.dart';
 import '../../domain/repositories/profile_repository.dart';
 import '../../domain/repositories/settings_repository.dart';
 import '../../domain/repositories/watch_progress_repository.dart';
@@ -212,6 +216,7 @@ class DriftCatalogCache implements CatalogCache {
               categoryId: c.id,
               name: c.name,
               position: i,
+              adult: Value(c.adult),
             ),
         ], mode: InsertMode.insertOrReplace);
         final seen = <String>{};
@@ -236,6 +241,7 @@ class DriftCatalogCache implements CatalogCache {
                     : e.added!.millisecondsSinceEpoch ~/ 1000,
               ),
               position: i,
+              adult: Value(e.adult),
             ),
           );
           b.customStatement(
@@ -292,6 +298,7 @@ class DriftCatalogCache implements CatalogCache {
     int profileId,
     String query, {
     int limitPerKind = 30,
+    HiddenContent hidden = HiddenContent.none,
   }) async {
     final fts = ftsQuery(query);
     if (fts == null) return SearchResults.empty;
@@ -303,11 +310,13 @@ class DriftCatalogCache implements CatalogCache {
             'JOIN catalog_items i ON i.profile_id = s.profile_id '
             'AND i.kind = s.kind AND i.item_id = s.item_id '
             'WHERE catalog_search MATCH ? AND s.profile_id = ? AND s.kind = ? '
+            '${_hiddenSql('i')}'
             'ORDER BY s.rank LIMIT ?',
             variables: [
               Variable.withString(fts),
               Variable.withInt(profileId),
               Variable.withString(kind.name),
+              ..._hiddenVars(hidden, kind),
               Variable.withInt(limitPerKind),
             ],
             readsFrom: {_db.catalogItems},
@@ -335,7 +344,26 @@ class DriftCatalogCache implements CatalogCache {
           ),
           _ => null,
         },
+        adult: r['adult'] == 1 || r['adult'] == true,
       );
+
+  /// Condición SQL que excluye lo oculto por el control parental: los
+  /// elementos marcados como de adultos y los de categorías ocultas. Va con
+  /// [_hiddenVars] (dos variables, en este orden).
+  static String _hiddenSql(String alias) =>
+      'AND NOT (? AND $alias.adult) '
+      'AND ($alias.category_id IS NULL OR $alias.category_id NOT IN '
+      '(SELECT value FROM json_each(?))) ';
+
+  static List<Variable<Object>> _hiddenVars(
+    HiddenContent hidden,
+    ContentKind kind,
+  ) => [
+    Variable.withBool(hidden.active),
+    Variable.withString(
+      jsonEncode(hidden.active ? [...?hidden.categories[kind]] : const []),
+    ),
+  ];
 
   @override
   Future<List<CatalogEntry>> recent(
@@ -343,20 +371,23 @@ class DriftCatalogCache implements CatalogCache {
     ContentKind kind, {
     required int minYear,
     int limit = 20,
+    HiddenContent hidden = HiddenContent.none,
   }) async {
     // Lo último que subió el servidor primero (fecha de alta). Sin fecha,
     // el año y, dentro del año, más adelante en la lista del servidor suele
     // ser más reciente (los paneles las devuelven en orden de alta).
     final rows = await _db
         .customSelect(
-          'SELECT * FROM catalog_items '
+          'SELECT * FROM catalog_items i '
           'WHERE profile_id = ? AND kind = ? AND year >= ? '
+          '${_hiddenSql('i')}'
           'ORDER BY added IS NULL, added DESC, year DESC, position DESC '
           'LIMIT ?',
           variables: [
             Variable.withInt(profileId),
             Variable.withString(kind.name),
             Variable.withInt(minYear),
+            ..._hiddenVars(hidden, kind),
             Variable.withInt(limit),
           ],
           readsFrom: {_db.catalogItems},
@@ -370,14 +401,17 @@ class DriftCatalogCache implements CatalogCache {
     int profileId,
     ContentKind kind, {
     int limit = 50,
+    HiddenContent hidden = HiddenContent.none,
   }) async {
     final rows = await _db
         .customSelect(
-          'SELECT * FROM catalog_items WHERE profile_id = ? AND kind = ? '
+          'SELECT * FROM catalog_items i WHERE profile_id = ? AND kind = ? '
+          '${_hiddenSql('i')}'
           'ORDER BY added IS NULL, added DESC, position DESC LIMIT ?',
           variables: [
             Variable.withInt(profileId),
             Variable.withString(kind.name),
+            ..._hiddenVars(hidden, kind),
             Variable.withInt(limit),
           ],
           readsFrom: {_db.catalogItems},
@@ -392,18 +426,21 @@ class DriftCatalogCache implements CatalogCache {
     ContentKind kind, {
     int limit = 20,
     int? minYear,
+    HiddenContent hidden = HiddenContent.none,
   }) async {
     final rows = await _db
         .customSelect(
-          'SELECT * FROM catalog_items '
+          'SELECT * FROM catalog_items i '
           'WHERE profile_id = ? AND kind = ? AND rating > 0 '
           '${minYear == null ? '' : 'AND year >= ? '}'
+          '${_hiddenSql('i')}'
           'ORDER BY rating DESC, added IS NULL, added DESC, position DESC '
           'LIMIT ?',
           variables: [
             Variable.withInt(profileId),
             Variable.withString(kind.name),
             if (minYear != null) Variable.withInt(minYear),
+            ..._hiddenVars(hidden, kind),
             Variable.withInt(limit),
           ],
           readsFrom: {_db.catalogItems},
@@ -423,6 +460,38 @@ class DriftCatalogCache implements CatalogCache {
             ))
             .get();
     return {for (final r in rows) r.categoryId: r.name};
+  }
+
+  @override
+  Future<List<ContentCategory>> categories(
+    int profileId,
+    ContentKind kind,
+  ) async {
+    final rows =
+        await (_db.select(_db.catalogCategories)
+              ..where(
+                (t) => t.profileId.equals(profileId) & t.kind.equalsValue(kind),
+              )
+              ..orderBy([(t) => OrderingTerm.asc(t.position)]))
+            .get();
+    return [
+      for (final r in rows)
+        ContentCategory(id: r.categoryId, name: r.name, adult: r.adult),
+    ];
+  }
+
+  @override
+  Future<Set<String>> adultItemIds(int profileId, ContentKind kind) async {
+    final rows =
+        await (_db.selectOnly(_db.catalogItems)
+              ..addColumns([_db.catalogItems.itemId])
+              ..where(
+                _db.catalogItems.profileId.equals(profileId) &
+                    _db.catalogItems.kind.equalsValue(kind) &
+                    _db.catalogItems.adult.equals(true),
+              ))
+            .get();
+    return {for (final r in rows) r.read(_db.catalogItems.itemId)!};
   }
 }
 
@@ -504,5 +573,67 @@ class DriftWatchProgressRepository implements WatchProgressRepository {
               t.itemId.equals(itemId),
         ))
         .go();
+  }
+}
+
+class DriftParentalRepository implements ParentalRepository {
+  DriftParentalRepository(this._db);
+
+  final AppDatabase _db;
+
+  @override
+  Future<ParentalRecord> read(int profileId) async {
+    final row = await (_db.select(
+      _db.parentalSettings,
+    )..where((t) => t.profileId.equals(profileId))).getSingleOrNull();
+    if (row == null) return const ParentalRecord();
+    return ParentalRecord(
+      pinHash: row.pinHash,
+      blocked: _decodeBlocked(row.blockedCategories),
+      failedAttempts: row.failedAttempts,
+      lockedUntil: row.lockedUntil == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(row.lockedUntil!, isUtc: true),
+    );
+  }
+
+  @override
+  Future<void> write(int profileId, ParentalRecord record) async {
+    await _db
+        .into(_db.parentalSettings)
+        .insertOnConflictUpdate(
+          ParentalSettingsCompanion.insert(
+            profileId: Value(profileId),
+            pinHash: Value(record.pinHash),
+            blockedCategories: Value(
+              jsonEncode([
+                for (final b in record.blocked) '${b.kind.name}:${b.id}',
+              ]),
+            ),
+            failedAttempts: Value(record.failedAttempts),
+            lockedUntil: Value(record.lockedUntil?.millisecondsSinceEpoch),
+          ),
+        );
+  }
+
+  /// `["live:12", "movie:7"]` → categorías. Lo que no se entiende se omite.
+  static Set<BlockedCategory> _decodeBlocked(String raw) {
+    final out = <BlockedCategory>{};
+    try {
+      final list = jsonDecode(raw);
+      if (list is! List) return out;
+      for (final item in list) {
+        if (item is! String) continue;
+        final i = item.indexOf(':');
+        if (i <= 0 || i == item.length - 1) continue;
+        final kind = ContentKind.values
+            .where((k) => k.name == item.substring(0, i))
+            .firstOrNull;
+        if (kind != null) out.add((kind: kind, id: item.substring(i + 1)));
+      }
+    } on FormatException {
+      // Dato dañado: sin bloqueos manuales (los automáticos siguen).
+    }
+    return out;
   }
 }

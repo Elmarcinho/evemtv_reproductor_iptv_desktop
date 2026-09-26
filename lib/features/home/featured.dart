@@ -4,6 +4,7 @@ import '../../data/providers.dart';
 import '../../domain/entities/catalog.dart';
 import '../auth/application/session.dart';
 import '../catalog/catalog_images.dart';
+import '../parental/parental.dart';
 import '../search/catalog_sync.dart';
 
 /// Un elemento del carrusel de novedades, con su póster ya resuelto.
@@ -26,6 +27,8 @@ final featuredProvider = FutureProvider.family<List<FeaturedItem>, ContentKind>(
     final profileId = ref.watch(sessionContextProvider).profileId;
     ref.watch(catalogSyncProvider.select((s) => s.info[kind]));
     final cache = ref.watch(catalogCacheProvider);
+    // Sin contenido oculto por el control parental.
+    final hidden = await ref.watch(hiddenContentProvider.future);
     final year = FeaturedRules.clock().year;
 
     Future<List<CatalogEntry>> pick(int minYear) => cache.recent(
@@ -33,6 +36,7 @@ final featuredProvider = FutureProvider.family<List<FeaturedItem>, ContentKind>(
       kind,
       minYear: minYear,
       limit: FeaturedRules.candidates,
+      hidden: hidden,
     );
 
     var candidates = await pick(year);
@@ -45,6 +49,7 @@ final featuredProvider = FutureProvider.family<List<FeaturedItem>, ContentKind>(
         profileId,
         kind,
         limit: FeaturedRules.candidates,
+        hidden: hidden,
       );
       candidates = [
         ...candidates,
@@ -59,6 +64,7 @@ final featuredProvider = FutureProvider.family<List<FeaturedItem>, ContentKind>(
     sessionContextProvider,
     catalogSyncProvider,
     catalogImageProvider,
+    hiddenContentProvider,
   ],
 );
 
@@ -102,6 +108,7 @@ final topRatedProvider = FutureProvider<List<FeaturedItem>>(
       ),
     );
     final cache = ref.watch(catalogCacheProvider);
+    final hidden = await ref.watch(hiddenContentProvider.future);
     final minYear = FeaturedRules.clock().year - FeaturedRules.topRatedYears;
 
     Future<List<CatalogEntry>> pick(ContentKind kind, {int? since}) =>
@@ -110,6 +117,7 @@ final topRatedProvider = FutureProvider<List<FeaturedItem>>(
           kind,
           limit: FeaturedRules.candidates ~/ 2,
           minYear: since,
+          hidden: hidden,
         );
 
     var movies = await pick(ContentKind.movie, since: minYear);
@@ -124,6 +132,7 @@ final topRatedProvider = FutureProvider<List<FeaturedItem>>(
     sessionContextProvider,
     catalogSyncProvider,
     catalogImageProvider,
+    hiddenContentProvider,
   ],
 );
 

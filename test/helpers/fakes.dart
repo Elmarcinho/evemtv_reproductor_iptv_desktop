@@ -5,12 +5,16 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:evemtv/core/network/retry_interceptor.dart';
+import 'package:evemtv/data/providers.dart';
 import 'package:evemtv/domain/entities/favorite.dart';
 import 'package:evemtv/domain/entities/profile.dart';
 import 'package:evemtv/domain/entities/source_credentials.dart';
+import 'package:evemtv/domain/parental/adult_content.dart';
 import 'package:evemtv/domain/repositories/favorites_repository.dart';
+import 'package:evemtv/domain/repositories/parental_repository.dart';
 import 'package:evemtv/features/auth/application/session.dart';
 import 'package:evemtv/features/images/app_images.dart';
+import 'package:evemtv/features/parental/parental.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart';
@@ -267,3 +271,23 @@ Future<void> settleIo(WidgetTester tester) async {
     await tester.pump(const Duration(milliseconds: 100));
   }
 }
+
+/// Control parental en memoria.
+class InMemoryParentalRepository implements ParentalRepository {
+  final records = <int, ParentalRecord>{};
+
+  @override
+  Future<ParentalRecord> read(int profileId) async =>
+      records[profileId] ?? const ParentalRecord();
+
+  @override
+  Future<void> write(int profileId, ParentalRecord record) async =>
+      records[profileId] = record;
+}
+
+/// Control parental para tests que no lo prueban: en memoria, bloqueado y
+/// sin nada marcado como de adultos en el catálogo local (sin base).
+List<Override> parentalTestOverrides() => [
+  parentalRepositoryProvider.overrideWithValue(InMemoryParentalRepository()),
+  hiddenContentProvider.overrideWith((ref) async => const HiddenContent()),
+];

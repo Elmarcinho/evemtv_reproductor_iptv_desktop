@@ -18,6 +18,7 @@ import '../../features/player/vod_player_screen.dart';
 import '../../features/search/search_screen.dart';
 import '../../features/series/series_detail_screen.dart';
 import '../../features/series/series_screen.dart';
+import '../../features/settings/settings_screen.dart';
 
 abstract final class AppRoutes {
   static const String splash = '/splash';
@@ -33,6 +34,7 @@ abstract final class AppRoutes {
   static const String seriesDetail = '/series/detail';
   static const String vodPlayer = '/play';
   static const String search = '/search';
+  static const String settings = '/settings';
 
   /// Pantallas accesibles sin sesión.
   static const Set<String> _public = {profiles, login};
@@ -138,6 +140,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     SeriesDetailScreen(series: state.extra! as SeriesItem),
               ),
             ],
+          ),
+          GoRoute(
+            path: AppRoutes.settings,
+            builder: (context, state) => const SettingsScreen(),
           ),
           GoRoute(
             path: AppRoutes.search,

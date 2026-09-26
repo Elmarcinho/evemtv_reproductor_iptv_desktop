@@ -24,6 +24,7 @@ class CatalogEntry {
     this.year,
     this.rating,
     this.added,
+    this.adult = false,
   });
 
   final ContentKind kind;
@@ -38,12 +39,16 @@ class CatalogEntry {
   /// Cuándo se agregó al servidor, si lo informa.
   final DateTime? added;
 
+  /// Marcado como de adultos por el panel (`is_adult`).
+  final bool adult;
+
   factory CatalogEntry.fromChannel(LiveChannel c) => CatalogEntry(
     kind: ContentKind.live,
     id: c.id,
     name: c.name,
     categoryId: c.categoryId,
     number: c.number,
+    adult: c.adult,
   );
 
   factory CatalogEntry.fromMovie(VodItem m) => CatalogEntry(
@@ -55,6 +60,7 @@ class CatalogEntry {
     year: m.year,
     rating: m.rating,
     added: m.added,
+    adult: m.adult,
   );
 
   factory CatalogEntry.fromSeries(SeriesItem s) => CatalogEntry(
@@ -65,10 +71,16 @@ class CatalogEntry {
     year: s.year,
     rating: s.rating,
     added: s.added,
+    adult: s.adult,
   );
 
-  LiveChannel toChannel() =>
-      LiveChannel(id: id, name: name, number: number, categoryId: categoryId);
+  LiveChannel toChannel() => LiveChannel(
+    id: id,
+    name: name,
+    number: number,
+    categoryId: categoryId,
+    adult: adult,
+  );
 
   VodItem toMovie() => VodItem(
     id: id,
@@ -78,6 +90,7 @@ class CatalogEntry {
     year: year,
     rating: rating,
     added: added,
+    adult: adult,
   );
 
   SeriesItem toSeries() => SeriesItem(
@@ -87,6 +100,7 @@ class CatalogEntry {
     year: year,
     rating: rating,
     added: added,
+    adult: adult,
   );
 }
 

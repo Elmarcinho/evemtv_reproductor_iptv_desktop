@@ -1014,3 +1014,64 @@ comprueba que coincidan y el workflow de release rechaza un tag que no sea
   despliega (el siguiente "Compilar" exitoso la vuelve a publicar).
 - `evemtv.godebol.com` entra en la lista de enlaces que abre el aviso de
   actualización (ningún otro subdominio de `godebol.com`).
+
+## 20. Control parental (Fase 6, incluido en la 1.0.0)
+
+**Bloqueado por defecto desde la primera ejecución**, sin configurar nada.
+El contenido para adultos se **oculta** (no aparece con candado): no está
+en las listas de categorías, grillas, "Todos los canales", búsqueda global,
+novedades y "Mejor valoradas", "Recién agregadas", "Seguir viendo",
+favoritos ni al cambiar de canal con las flechas.
+
+- **Detección** (`lib/domain/parental/adult_content.dart`, la única lista):
+  - marca del panel `is_adult` en categorías, canales, películas y series
+    (tolerante: `1`, `"1"`, `true`…);
+  - nombre de la categoría, sin distinguir mayúsculas ni tildes y como
+    palabra completa: `xxx`, `adult(s)`, `adulto(s)`, `+18`, `18+`,
+    `porn(o)`, `erotic`, `erótico(s)`, `for adults`, `hot` ("Canales HOT"
+    sí, "Hotel" no);
+  - un elemento es de adultos si el panel lo marca o si su categoría lo es.
+- **Categorías bloqueadas a mano:** clic derecho sobre una categoría (o ⋮ en
+  la seleccionada) → "Ocultar esta categoría". Bloquear no pide PIN;
+  volver a mostrarla sí (desde el mismo menú con el contenido desbloqueado,
+  o en Ajustes). Las detectadas automáticamente no se pueden desbloquear de
+  forma permanente.
+- **Dónde se filtra:** en los proveedores de datos, no en cada pantalla:
+  categorías visibles (`*CategoriesProvider`, sobre las del proveedor
+  `*CategoriesAllProvider`), listas (`*ItemsProvider` /
+  `liveChannelsProvider`, sobre `*SourceProvider`), y en SQL las consultas
+  del catálogo local (búsqueda, recientes, mejor valoradas, recién
+  agregadas) con `HiddenContent`, para que los límites se cumplan igual.
+  "Seguir viendo" y favoritos se filtran con `hiddenContentProvider`
+  (categorías ocultas y elementos marcados, de la base local). Mientras no
+  se sabe qué ocultar, "Seguir viendo" queda vacía: ante la duda, oculto.
+- **Base local v6:** columna `adult` en `catalog_items` y
+  `catalog_categories`; al migrar se fuerza a descargar de nuevo el
+  catálogo (para tener la marca). Nueva tabla `parental_settings` por
+  perfil (se borra en cascada con el perfil al cerrar sesión).
+- **Desbloqueo:** botón "Contenido adulto" (con candado) al pie de las
+  categorías de En vivo, Películas y Series, y en Ajustes. Pide el PIN y
+  dura hasta cerrar la app, cambiar de cuenta (el estado vive en el
+  contenedor de la sesión y muere con ella) o "Bloquear de nuevo". Si al
+  bloquear de nuevo suena un canal oculto en el mini reproductor, se
+  detiene.
+- **PIN:** 4 números, por perfil, `0000` por defecto (sin PIN guardado).
+  La primera vez que se desbloquea con `0000` se sugiere cambiarlo
+  ("Cambiar PIN" / "Ahora no"; con "Ahora no" no se insiste en la sesión).
+  Se cambia en **Ajustes** (menú de la cuenta → "Ajustes y control
+  parental"; pantalla nueva, base para futuras opciones), pidiendo el
+  actual. Guardado como **PBKDF2-HMAC-SHA256** (20 000 rondas, sal
+  aleatoria de 16 bytes); nunca en texto plano ni en logs. (Con 4 números
+  el hash no impide adivinarlo con la base en la mano; lo que protege es la
+  espera tras los intentos fallidos.)
+- **Olvidé mi PIN:** escribiendo la contraseña de la cuenta IPTV del perfil
+  (comparada, en tiempo constante, con la del almacén seguro) el PIN vuelve
+  a `0000`. En listas M3U: el parámetro `password` de la URL o, si no
+  tiene, la URL completa.
+- **Intentos fallidos** (PIN o contraseña, se cuentan juntos y se guardan:
+  reabrir la app no los borra): tras 5 seguidos, 1 minuto de espera; cada
+  fallo siguiente, más: 2, 5, 15, 30 y 60 minutos. Un acierto reinicia la
+  cuenta. Una espera mayor que la máxima (reloj atrasado a mano) se limita
+  a 60 minutos.
+- Los contadores de la pantalla de inicio (p. ej. "18.473 películas")
+  siguen contando todo el catálogo; no muestran contenido.

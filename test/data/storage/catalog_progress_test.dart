@@ -298,7 +298,7 @@ void main() {
         hasLength(1),
       );
       final v = await old.customSelect('PRAGMA user_version').getSingle();
-      expect(v.data.values.single, 5);
+      expect(v.data.values.single, 6);
     },
   );
 
@@ -321,6 +321,9 @@ void main() {
         file,
         setup: (raw) {
           raw.execute('ALTER TABLE catalog_items DROP COLUMN added;');
+          raw.execute('ALTER TABLE catalog_items DROP COLUMN adult;');
+          raw.execute('ALTER TABLE catalog_categories DROP COLUMN adult;');
+          raw.execute('DROP TABLE parental_settings;');
           raw.execute('PRAGMA user_version = 4;');
         },
       ),
@@ -346,5 +349,46 @@ void main() {
     ]);
     final recent = await cache.recent(1, ContentKind.movie, minYear: 2026);
     expect(recent.single.added, DateTime.utc(2026, 9, 1));
+  });
+
+  test('migración v5 → v6: marca de adultos en el catálogo, tabla del '
+      'control parental y el catálogo se vuelve a descargar', () async {
+    final dir = Directory.systemTemp.createTempSync('evemtv_db_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/db.sqlite');
+
+    final v6 = AppDatabase(NativeDatabase(file));
+    await DriftProfileRepository(v6).create(name: 'A', type: SourceType.xtream);
+    await DriftCatalogCache(v6).replace(1, ContentKind.movie, const [], const [
+      CatalogEntry(kind: ContentKind.movie, id: '1', name: 'Película'),
+    ]);
+    await v6.close();
+    // Al reabrir, antes de migrar, se deja como una base v5.
+    final migrated = AppDatabase(
+      NativeDatabase(
+        file,
+        setup: (raw) {
+          raw.execute('ALTER TABLE catalog_items DROP COLUMN adult;');
+          raw.execute('ALTER TABLE catalog_categories DROP COLUMN adult;');
+          raw.execute('DROP TABLE parental_settings;');
+          raw.execute('PRAGMA user_version = 5;');
+        },
+      ),
+    );
+    addTearDown(migrated.close);
+    final cache = DriftCatalogCache(migrated);
+    expect(
+      (await cache.search(1, 'pelicula')).byKind[ContentKind.movie],
+      hasLength(1),
+    );
+    // Se descarga de nuevo para tener la marca de adultos.
+    expect(await cache.syncInfo(1, ContentKind.movie), isNull);
+    // La marca ya se guarda y la tabla del control parental existe.
+    await cache.replace(1, ContentKind.movie, const [], const [
+      CatalogEntry(kind: ContentKind.movie, id: '9', name: 'X', adult: true),
+    ]);
+    expect(await cache.adultItemIds(1, ContentKind.movie), {'9'});
+    final repo = DriftParentalRepository(migrated);
+    expect((await repo.read(1)).pinHash, isNull);
   });
 }

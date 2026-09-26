@@ -118,6 +118,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          ...parentalTestOverrides(),
           contentSourceProvider.overrideWithValue(source),
           livePlayerProvider.overrideWith(_FakePlayer.new),
           sessionProvider.overrideWith(FixedSession.new),

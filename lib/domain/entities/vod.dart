@@ -12,11 +12,15 @@ class VodItem {
     this.containerExtension,
     this.year,
     this.added,
+    this.adult = false,
   });
 
   final String id;
   final String name;
   final String? posterUrl;
+
+  /// Marcado como contenido para adultos por el panel (`is_adult`).
+  final bool adult;
 
   /// Cuándo se agregó al servidor, si lo informa (para "Recién agregadas").
   final DateTime? added;
@@ -71,12 +75,16 @@ class SeriesItem {
     this.categoryId,
     this.year,
     this.added,
+    this.adult = false,
   });
 
   final String id;
   final String name;
   final String? posterUrl;
   final double? rating;
+
+  /// Marcado como contenido para adultos por el panel (`is_adult`).
+  final bool adult;
   final String? categoryId;
   final int? year;
 

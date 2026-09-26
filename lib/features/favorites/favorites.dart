@@ -2,24 +2,46 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/logging/app_logger.dart';
 import '../../data/providers.dart';
+import '../../domain/entities/catalog.dart';
 import '../../domain/entities/favorite.dart';
 import '../../domain/entities/live.dart';
 import '../../domain/entities/vod.dart';
 import '../auth/application/session.dart';
 import '../catalog/catalog_providers.dart';
 import '../live/live_providers.dart';
+import '../parental/parental.dart';
 
 /// Id de la categoría virtual "Favoritos" en En vivo, Películas y Series.
 const String favoritesCategoryId = '__favoritos__';
 
-/// Favoritos de un tipo en el perfil de la sesión, en tiempo real.
+/// Favoritos de un tipo en el perfil de la sesión, en tiempo real, sin los
+/// ocultos por el control parental (de adultos o de categorías ocultas).
 final favoritesProvider = StreamProvider.family<List<Favorite>, FavoriteKind>((
   ref,
   kind,
-) {
+) async* {
   final profileId = ref.watch(sessionContextProvider).profileId;
-  return ref.watch(favoritesRepositoryProvider).watch(profileId, kind);
-}, dependencies: [sessionContextProvider]);
+  final hidden = await ref.watch(hiddenContentProvider.future);
+  final contentKind = switch (kind) {
+    FavoriteKind.live => ContentKind.live,
+    FavoriteKind.movie => ContentKind.movie,
+    FavoriteKind.series => ContentKind.series,
+  };
+  yield* ref
+      .watch(favoritesRepositoryProvider)
+      .watch(profileId, kind)
+      .map(
+        (list) => [
+          for (final f in list)
+            if (!hidden.hidesItem(
+              contentKind,
+              f.itemId,
+              categoryId: f.categoryId,
+            ))
+              f,
+        ],
+      );
+}, dependencies: [sessionContextProvider, hiddenContentProvider]);
 
 /// Ids favoritos de un tipo, para marcar filas y pósters.
 final favoriteIdsProvider = Provider.family<Set<String>, FavoriteKind>((

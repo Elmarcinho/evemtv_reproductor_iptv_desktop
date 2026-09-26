@@ -200,6 +200,7 @@ void main() {
       source = _CatalogSource();
       c = ProviderContainer.test(
         overrides: [
+          ...parentalTestOverrides(),
           sessionProvider.overrideWith(FixedSession.new),
           sessionContextProvider.overrideWithValue(testSessionContext()),
           favoritesRepositoryProvider.overrideWithValue(

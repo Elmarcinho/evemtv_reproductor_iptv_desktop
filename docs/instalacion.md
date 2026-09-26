@@ -153,6 +153,27 @@ Gear Lever o AppImageLauncher.
 
 ---
 
+## Control parental
+
+EvemTv trae el **control parental activado**: el contenido para adultos
+(canales, películas y series que tu proveedor marca como tales, y
+categorías como "XXX", "Adultos" o "+18") está **oculto** en todas las
+pantallas, también en la búsqueda.
+
+- Para verlo, pulsa **Contenido adulto** (abajo de la lista de categorías)
+  y escribe el PIN. El **PIN de fábrica es 0000**: la app te sugerirá
+  cambiarlo. Se vuelve a ocultar al cerrar la app, al cambiar de cuenta o
+  con **Bloquear de nuevo**.
+- Para ocultar otra categoría, haz clic derecho sobre ella → **Ocultar esta
+  categoría**.
+- **Cambiar el PIN** o **Olvidé mi PIN**: menú de la cuenta (arriba a la
+  derecha) → **Ajustes y control parental**. Si olvidaste el PIN, escribe
+  la contraseña de tu cuenta IPTV y volverá a ser 0000.
+- Tras 5 intentos fallidos hay que esperar 1 minuto (y más si se sigue
+  fallando).
+
+---
+
 ## Comprobar la descarga (opcional)
 
 Cada versión publica `SHA256SUMS.txt` con la huella SHA-256 de cada archivo.

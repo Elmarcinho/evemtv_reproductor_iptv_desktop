@@ -8,6 +8,7 @@ import '../../domain/entities/catalog.dart';
 import '../../domain/entities/live.dart';
 import '../../domain/repositories/content_source.dart';
 import '../auth/application/session.dart';
+import '../parental/parental.dart';
 
 /// Estado de la actualización del catálogo local.
 class CatalogSyncState {
@@ -212,13 +213,24 @@ final catalogSyncProvider =
 
 /// Resultados de la búsqueda global en el catálogo local de la sesión.
 final searchResultsProvider = FutureProvider.autoDispose
-    .family<SearchResults, String>((ref, query) async {
-      final profileId = ref.watch(sessionContextProvider).profileId;
-      if (query.trim().isEmpty) return SearchResults.empty;
-      // Se vuelve a buscar cuando termina una actualización del catálogo.
-      ref.watch(catalogSyncProvider.select((s) => s.info));
-      return ref.watch(catalogCacheProvider).search(profileId, query);
-    }, dependencies: [sessionContextProvider, catalogSyncProvider]);
+    .family<SearchResults, String>(
+      (ref, query) async {
+        final profileId = ref.watch(sessionContextProvider).profileId;
+        if (query.trim().isEmpty) return SearchResults.empty;
+        // Se vuelve a buscar cuando termina una actualización del catálogo.
+        ref.watch(catalogSyncProvider.select((s) => s.info));
+        // Lo oculto por el control parental no sale de la base.
+        final hidden = await ref.watch(hiddenContentProvider.future);
+        return ref
+            .watch(catalogCacheProvider)
+            .search(profileId, query, hidden: hidden);
+      },
+      dependencies: [
+        sessionContextProvider,
+        catalogSyncProvider,
+        hiddenContentProvider,
+      ],
+    );
 
 /// Nombres de categorías de un tipo, para mostrar en los resultados.
 final categoryNamesProvider = FutureProvider.autoDispose

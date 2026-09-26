@@ -18,6 +18,7 @@ abstract final class XtreamLiveParser {
     return ContentCategory(
       id: id,
       name: JsonRead.string(m['category_name']) ?? 'Sin nombre',
+      adult: JsonRead.boolean(m['is_adult']),
     );
   }
 
@@ -38,6 +39,7 @@ abstract final class XtreamLiveParser {
       categoryId: JsonRead.string(m['category_id']),
       epgChannelId: JsonRead.string(m['epg_channel_id']),
       hasArchive: JsonRead.boolean(m['tv_archive']),
+      adult: JsonRead.boolean(m['is_adult']),
     );
   }
 

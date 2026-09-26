@@ -24,6 +24,7 @@ void main() {
     final source = _CountingSource();
     final c = ProviderContainer.test(
       overrides: [
+        ...parentalTestOverrides(),
         sessionContextProvider.overrideWithValue(testSessionContext()),
         contentSourceProvider.overrideWithValue(source),
       ],

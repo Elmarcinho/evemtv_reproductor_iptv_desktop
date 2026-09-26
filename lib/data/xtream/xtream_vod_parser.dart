@@ -25,6 +25,7 @@ abstract final class XtreamVodParser {
       containerExtension: _extension(m['container_extension']),
       year: _year(m['year']) ?? _year(m['releasedate']) ?? yearInName(name),
       added: _timestamp(m['added']),
+      adult: JsonRead.boolean(m['is_adult']),
     );
   }
 
@@ -50,6 +51,8 @@ abstract final class XtreamVodParser {
       containerExtension:
           item.containerExtension ?? _extension(data['container_extension']),
       year: item.year ?? _year(releaseDate),
+      added: item.added,
+      adult: item.adult || JsonRead.boolean(info['is_adult']),
     );
     return VodDetail(
       item: enriched,
@@ -89,6 +92,7 @@ abstract final class XtreamVodParser {
           _year(m['year']) ??
           yearInName(name),
       added: _timestamp(m['last_modified']),
+      adult: JsonRead.boolean(m['is_adult']),
     );
   }
 
@@ -176,6 +180,7 @@ abstract final class XtreamVodParser {
               categoryId: series.categoryId,
               year: series.year,
               added: series.added,
+              adult: series.adult,
             ),
       seasons: seasons,
       plot: JsonRead.string(info['plot']),

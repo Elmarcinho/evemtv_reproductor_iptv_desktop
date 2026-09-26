@@ -11,10 +11,13 @@ import '../../core/utils/date_format.dart';
 import '../../core/widgets/category_list.dart';
 import '../../core/widgets/keyboard_help.dart';
 import '../../core/widgets/state_views.dart';
+import '../../domain/entities/catalog.dart';
 import '../../domain/entities/favorite.dart';
 import '../../domain/entities/live.dart';
 import '../favorites/favorite_button.dart';
 import '../favorites/favorites.dart';
+import '../parental/parental.dart';
+import '../parental/parental_widgets.dart';
 import '../player/live_player_provider.dart';
 import '../search/section_header.dart';
 import 'live_providers.dart';
@@ -121,6 +124,19 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     }
   }
 
+  Future<void> _stopIfHidden() async {
+    final channel = ref.read(playingLiveChannelProvider);
+    if (channel == null) return;
+    final hidden = hiddenCategoryIds(
+      ref.read(parentalProvider),
+      ContentKind.live,
+      ref.read(liveCategoriesAllProvider).value ?? const [],
+    );
+    if (channel.adult || hidden.contains(channel.categoryId)) {
+      await ref.read(livePlayerProvider.notifier).stop();
+    }
+  }
+
   /// Reproduce en el mini reproductor.
   void _preview(List<LiveChannel> channels, int index) {
     if (channels.isEmpty || !mounted) return;
@@ -172,6 +188,10 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
     // lista acompaña la selección.
     ref.listen(playingLiveChannelProvider, (_, playing) {
       if (playing != null) _followPlayer(playing);
+    });
+    // "Bloquear de nuevo" con un canal oculto sonando: se detiene.
+    ref.listen(parentalProvider.select((s) => s.unlocked), (was, now) {
+      if (was == true && !now) unawaited(_stopIfHidden());
     });
 
     final categories = ref.watch(liveCategoriesProvider);
@@ -237,6 +257,12 @@ class _LiveScreenState extends ConsumerState<LiveScreen> {
                                   color: null,
                                 ),
                               ],
+                              parental: parentalActionsFor(
+                                context,
+                                ref,
+                                ContentKind.live,
+                              ),
+                              footer: const ParentalButton(),
                             ),
                           ),
                           const VerticalDivider(width: 1),

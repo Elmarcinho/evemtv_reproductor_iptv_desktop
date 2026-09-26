@@ -107,6 +107,7 @@ void main() {
       ProviderScope(
         retry: (_, _) => null,
         overrides: [
+          ...parentalTestOverrides(),
           sessionContextProvider.overrideWithValue(testSessionContext()),
           contentSourceProvider.overrideWithValue(FakeSource()),
           catalogSyncProvider.overrideWith(_SyncedCatalog.new),
