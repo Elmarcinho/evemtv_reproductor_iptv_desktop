@@ -1,6 +1,6 @@
 # Compilación continua: análisis, tests, compilación y pruebas de
 # integración en las tres plataformas. El empaquetado y la publicación están
-# en release.yml.
+# en release.yml, que también llama a este workflow antes de publicar.
 #
 # Repositorio público: este workflow no usa secretos ni credenciales.
 name: Compilar
@@ -11,12 +11,17 @@ on:
     branches: [main, 'refactor/**']
   pull_request:
   workflow_dispatch:
+  # release.yml lo llama: no se publica un release si fallan los tests o
+  # las pruebas de integración (TLS, temporales, almacén seguro).
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: build-${{ github.ref }}
+  # Con el nombre del workflow que lo lanza: el llamado desde "Release" no
+  # cancela al de un push a la misma rama (ni al revés).
+  group: build-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:

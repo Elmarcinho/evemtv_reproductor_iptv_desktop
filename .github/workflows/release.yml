@@ -1,6 +1,7 @@
 # Release (Fase 5): con un tag de versión (v1.0.0) compila las tres
 # plataformas, arma los instaladores, los prueba y los publica en GitHub
-# Releases con sus sumas SHA-256.
+# Releases con sus sumas SHA-256. Solo publica si también pasa build.yml
+# (tests y pruebas de integración de Linux, Windows y macOS).
 #
 # Sin tag (cambios en packaging/ o en este archivo, o a mano desde Actions)
 # hace todo menos publicar: los instaladores quedan como artefactos del run
@@ -34,7 +35,7 @@ env:
 
 jobs:
   preparar:
-    name: Versión, certificados y tests
+    name: Versión y certificados
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
@@ -72,16 +73,12 @@ jobs:
             echo "::warning title=Certificados::Actualizar con tool/actualizar_certificados.sh antes de crear el tag."
           fi
 
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          cache: true
-
-      - run: flutter pub get
-      - run: flutter analyze
-      # Incluye test/core/app_version_test.dart (AppConfig.version = pubspec).
-      - run: flutter test
+  # Análisis, tests (incluido AppConfig.version = pubspec.yaml), compilación
+  # y pruebas de integración de las tres plataformas: el mismo workflow de
+  # cada push. Si falla, no se publica.
+  comprobar:
+    name: Compilar y probar
+    uses: ./.github/workflows/build.yml
 
   linux:
     name: AppImage (Linux)
@@ -297,7 +294,7 @@ jobs:
 
   publicar:
     name: Publicar en GitHub Releases
-    needs: [preparar, linux, windows, macos]
+    needs: [preparar, comprobar, linux, windows, macos]
     if: needs.preparar.outputs.publicar == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15

@@ -134,7 +134,7 @@ Reglas de robustez:
 - **Linux**: AppImage. Documentar la dependencia de libmpv si aplica.
 - GitHub Actions para compilar las tres plataformas y publicar en GitHub Releases.
 - Aviso de actualización dentro de la app: consultar la última versión publicada y mostrar un botón de descarga (sin autoinstalación por ahora).
-  Implementado con `GET https://godebol.com/api/evemtv/version` (sin datos de la cuenta; solo en release); solo abre descargas de `github.com/Elmarcinho`, `godebol.com` o `evemtv.godebol.com` (página de descarga en GitHub Pages, carpeta `site/`). Si la instalada es menor que `minima`: 3 días de plazo con aviso cerrable ("Debes actualizar antes del…", fecha guardada por versión mínima) y después bloqueo con descarga, instrucciones y enlace a la guía; nunca bloquea si no se pudo consultar. Ver `docs/decisiones.md` §19 y la guía para usuarios `docs/instalacion.md`.
+  Implementado con `GET https://godebol.com/api/evemtv/version` (sin datos de la cuenta; solo en release); solo abre descargas de `github.com/Elmarcinho`, `godebol.com` o `evemtv.godebol.com` (página de descarga en GitHub Pages, carpeta `site/`). Si la instalada es menor que `minima`: 3 días de plazo con aviso cerrable ("Debes actualizar antes del…", fecha guardada por versión mínima) y después bloqueo con descarga, instrucciones y enlace a la guía. Solo con respuesta coherente (`ultima_version`, `minima` y `descarga` válidas, `minima <= ultima_version`) y el plazo se mide con el encabezado `Date` del servidor, nunca con el reloj del equipo. **Principio: ante cualquier duda (respuesta rara, fecha incierta, servidor caído), la app funciona.** Ver `docs/decisiones.md` §19 y la guía para usuarios `docs/instalacion.md`.
 
 ## 10. Calidad
 

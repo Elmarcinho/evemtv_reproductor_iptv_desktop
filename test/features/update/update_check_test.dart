@@ -1,4 +1,6 @@
 // Aviso de actualización. Respuestas simuladas; nunca sale a la red real.
+import 'dart:io' show HttpDate;
+
 import 'package:dio/dio.dart';
 import 'package:evemtv/core/logging/app_logger.dart';
 import 'package:evemtv/data/providers.dart';
@@ -132,13 +134,91 @@ void main() {
       final info = parseUpdate({'ultima_version': 2}, _current)!;
       expect(info.latest, const AppVersion(2, 0, 0));
       expect(info.download, UpdateConfig.fallbackDownload);
-      // Mínima mayor que la "última": manda la mínima.
-      final odd = parseUpdate({
-        'ultima_version': '1.1.0',
-        'minima': '1.5.0',
-      }, _current)!;
-      expect(odd.latest, const AppVersion(1, 5, 0));
-      expect(odd.forced, isTrue);
+    });
+  });
+
+  group('la mínima solo cuenta con una respuesta coherente', () {
+    Map<String, Object?> body({
+      Object? ultima = '1.3.0',
+      Object? minima = '1.2.0',
+      Object? descarga = _release,
+    }) => {'ultima_version': ?ultima, 'minima': ?minima, 'descarga': ?descarga};
+
+    test('las tres válidas y minima <= ultima_version: obligatoria', () {
+      expect(parseUpdate(body(), _current)!.forced, isTrue);
+      expect(
+        parseUpdate(body(ultima: '1.2.0'), _current)!.forced,
+        isTrue,
+        reason: 'minima == ultima_version',
+      );
+    });
+
+    test('minima mayor que ultima_version: solo aviso informativo', () {
+      final info = parseUpdate(body(minima: '1.5.0'), _current)!;
+      expect(info.forced, isFalse);
+      expect(info.minimum, isNull);
+      expect(info.latest, const AppVersion(1, 3, 0));
+      // Tampoco "sube" la última a la mínima.
+      final odd = parseUpdate(
+        body(ultima: '1.1.0', minima: '9.0.0'),
+        _current,
+      )!;
+      expect(odd.latest, const AppVersion(1, 1, 0));
+      expect(odd.forced, isFalse);
+    });
+
+    test('sin enlace, con enlace inválido o ajeno: solo aviso informativo', () {
+      for (final descarga in <Object?>[
+        null,
+        '',
+        5,
+        'no es un enlace',
+        'http://github.com/Elmarcinho/x/releases',
+        'https://descargas.example.com/evemtv.exe',
+      ]) {
+        final info = parseUpdate(body(descarga: descarga), _current)!;
+        expect(info.forced, isFalse, reason: '$descarga');
+        expect(info.download, UpdateConfig.fallbackDownload);
+      }
+    });
+
+    test('sin ultima_version válida: nada, aunque la mínima exija', () {
+      for (final ultima in <Object?>[null, '', 'x.y', <int>[]]) {
+        expect(
+          parseUpdate(body(ultima: ultima, minima: '2.0.0'), _current),
+          isNull,
+          reason: '$ultima',
+        );
+      }
+    });
+
+    test('mínima rara: se ignora', () {
+      for (final minima in <Object?>['x', '', <int>[], true]) {
+        final info = parseUpdate(body(minima: minima), _current)!;
+        expect(info.forced, isFalse, reason: '$minima');
+      }
+    });
+  });
+
+  group('fecha del servidor (encabezado Date)', () {
+    test('formato HTTP estándar', () {
+      expect(
+        parseServerDate('Sat, 26 Sep 2026 12:00:00 GMT'),
+        DateTime.utc(2026, 9, 26, 12),
+      );
+    });
+
+    test('ausente o ilegible: null', () {
+      for (final raw in [
+        null,
+        '',
+        '   ',
+        'ayer',
+        '2026-09-26',
+        'Sat, 99 Foo',
+      ]) {
+        expect(parseServerDate(raw), isNull, reason: '$raw');
+      }
     });
   });
 
@@ -217,6 +297,7 @@ void main() {
     late int appTaps;
     // Hora local: la fecha límite se muestra en hora local.
     late DateTime now;
+    var serverDate = 'ok';
 
     const obligatoria =
         '{"ultima_version":"2.0.0","descarga":"$_release","minima":"2.0.0"}';
@@ -224,6 +305,7 @@ void main() {
     setUp(() {
       settings = _MemorySettings();
       now = DateTime(2026, 9, 26, 12);
+      serverDate = 'ok';
     });
 
     // Desmonta y cancela las consultas y el plazo antes de que el test
@@ -233,8 +315,21 @@ void main() {
       c.dispose();
     }
 
+    // Respuesta con el encabezado Date del servidor ([now]); sin fecha si
+    // [serverDate] es 'sin' y con una ilegible si es 'rara'.
+    ResponseBody withDate(String json, [int status = 200]) =>
+        ResponseBody.fromString(
+          json,
+          status,
+          headers: {
+            Headers.contentTypeHeader: ['application/json'],
+            if (serverDate == 'ok') 'date': [HttpDate.format(now)],
+            if (serverDate == 'rara') 'date': ['mañana a las 3'],
+          },
+        );
+
     Future<ProviderContainer> pump(WidgetTester tester, String json) async {
-      http = FakeHttpAdapter((_) => jsonBody(json));
+      http = FakeHttpAdapter((_) => withDate(json));
       opened = [];
       appTaps = 0;
       final container = ProviderContainer.test(
@@ -242,7 +337,6 @@ void main() {
           dioProvider.overrideWithValue(testDio(http)),
           settingsRepositoryProvider.overrideWithValue(settings),
           updateEndpointProvider.overrideWithValue(_endpoint),
-          updateClockProvider.overrideWithValue(() => now),
           externalLinkProvider.overrideWithValue((url) async {
             opened.add(url);
             return true;
@@ -395,7 +489,7 @@ void main() {
             '2.0.0|${now.subtract(const Duration(days: 30)).toUtc().toIso8601String()}';
         http = FakeHttpAdapter(
           (o) => failure == '500'
-              ? jsonBody(obligatoria, 500)
+              ? withDate(obligatoria, 500)
               : throw DioException.connectionError(
                   requestOptions: o,
                   reason: 'x',
@@ -406,7 +500,6 @@ void main() {
             dioProvider.overrideWithValue(testDio(http)),
             settingsRepositoryProvider.overrideWithValue(settings),
             updateEndpointProvider.overrideWithValue(_endpoint),
-            updateClockProvider.overrideWithValue(() => now),
           ],
         );
         appTaps = 0;
@@ -435,6 +528,96 @@ void main() {
         await finish(tester, c3);
       });
     }
+
+    for (final (caso, date) in [
+      ('sin encabezado Date', 'sin'),
+      ('con un Date ilegible', 'rara'),
+    ]) {
+      testWidgets('menor que la mínima, $caso: sin plazo ni bloqueo', (
+        tester,
+      ) async {
+        serverDate = date;
+        settings.values[SettingsKeys.updateMinimumSeen] =
+            '2.0.0|${now.subtract(const Duration(days: 30)).toUtc().toIso8601String()}';
+        final c = await pump(tester, obligatoria);
+        expect(find.text('Actualización necesaria'), findsNothing);
+        expect(find.textContaining('Debes actualizar'), findsNothing);
+        // Aviso informativo, cerrable.
+        expect(find.text('Nueva versión 2.0.0 disponible'), findsOneWidget);
+        await expectAppUsable(tester);
+        // No registra una primera detección sin fecha confiable.
+        expect(
+          settings.values[SettingsKeys.updateMinimumSeen],
+          startsWith('2.0.0|2026-08'),
+        );
+        await finish(tester, c);
+      });
+    }
+
+    testWidgets('respuesta incoherente (minima > ultima_version) con plazo '
+        'vencido: nunca bloquea', (tester) async {
+      settings.values[SettingsKeys.updateMinimumSeen] =
+          '3.0.0|${now.subtract(const Duration(days: 30)).toUtc().toIso8601String()}';
+      final c = await pump(
+        tester,
+        '{"ultima_version":"2.0.0","descarga":"$_release","minima":"3.0.0"}',
+      );
+      expect(find.text('Actualización necesaria'), findsNothing);
+      expect(find.textContaining('Debes actualizar'), findsNothing);
+      expect(find.text('Nueva versión 2.0.0 disponible'), findsOneWidget);
+      await expectAppUsable(tester);
+      await finish(tester, c);
+    });
+
+    testWidgets('respuesta sin enlace de descarga: nunca bloquea', (
+      tester,
+    ) async {
+      settings.values[SettingsKeys.updateMinimumSeen] =
+          '2.0.0|${now.subtract(const Duration(days: 30)).toUtc().toIso8601String()}';
+      final c = await pump(
+        tester,
+        '{"ultima_version":"2.0.0","minima":"2.0.0"}',
+      );
+      expect(find.text('Actualización necesaria'), findsNothing);
+      await expectAppUsable(tester);
+      await finish(tester, c);
+    });
+
+    testWidgets('corrección del reloj del equipo: el plazo sigue la fecha del '
+        'servidor', (tester) async {
+      // Primera detección el 26/09 según el servidor. (La app no lee el
+      // reloj del equipo: adelantarlo o atrasarlo no cambia nada.)
+      final c = await pump(tester, obligatoria);
+      expect(
+        find.textContaining('Debes actualizar antes del 29/09/2026'),
+        findsOneWidget,
+      );
+      expect(
+        settings.values[SettingsKeys.updateMinimumSeen],
+        '2.0.0|${now.toUtc().toIso8601String()}',
+      );
+      await finish(tester, c);
+
+      // Una versión anterior pudo guardar la primera detección con un
+      // reloj adelantado (10 días en el futuro): no alarga el plazo.
+      settings.values[SettingsKeys.updateMinimumSeen] =
+          '2.0.0|${now.add(const Duration(days: 10)).toUtc().toIso8601String()}';
+      final c2 = await pump(tester, obligatoria);
+      expect(
+        find.textContaining('Debes actualizar antes del 29/09/2026'),
+        findsOneWidget,
+      );
+      await finish(tester, c2);
+
+      // Reabierta cuando el SERVIDOR ya está 4 días después: bloqueo.
+      settings.values[SettingsKeys.updateMinimumSeen] =
+          '2.0.0|${now.toUtc().toIso8601String()}';
+      now = now.add(const Duration(days: 4));
+      final c3 = await pump(tester, obligatoria);
+      expect(find.text('Actualización necesaria'), findsOneWidget);
+      await expectAppBlocked(tester);
+      await finish(tester, c3);
+    });
 
     testWidgets('al día: no se muestra nada', (tester) async {
       final c = await pump(tester, '{"ultima_version":"1.0.0"}');

@@ -1,17 +1,20 @@
 # Página de descarga (evemtv.godebol.com) en GitHub Pages: site/ más el
-# ícono de la app. Se publica al cambiar la página y después de cada
-# release (lo lanza release.yml), para mostrar la versión publicada.
+# ícono de la app.
+#
+# Solo despliega un commit cuyas comprobaciones pasaron: se lanza cuando
+# "Compilar" (build.yml) termina bien en main, y desde el mismo commit.
+# release.yml la relanza a mano al publicar (para mostrar la versión); en
+# ese caso, y en cualquier lanzamiento manual, primero comprueba que
+# "Compilar" haya pasado en ese commit.
 #
 # Repositorio público: no usa secretos; solo el GITHUB_TOKEN del run.
 name: Página de descarga
 
 on:
-  push:
+  workflow_run:
+    workflows: [Compilar]
+    types: [completed]
     branches: [main]
-    paths:
-      - 'site/**'
-      - 'assets/branding/icon_256.png'
-      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -24,13 +27,36 @@ concurrency:
 jobs:
   armar:
     name: Armar la página
+    # Desde "Compilar": solo si terminó bien (y fue por un push, no por un PR).
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
       pages: read
+      actions: read
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.SHA }}
+
+      # Lanzamiento manual: "Compilar" debe haber pasado en este commit.
+      - name: Comprobaciones del commit
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ok=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml \
+            --commit "$SHA" --event push --status success --json databaseId -q 'length')
+          if [[ "${ok:-0}" -lt 1 ]]; then
+            echo "::error title=Página de descarga::\"Compilar\" no pasó en ${SHA:0:7}: no se despliega."
+            exit 1
+          fi
 
       - name: Armar
         env:

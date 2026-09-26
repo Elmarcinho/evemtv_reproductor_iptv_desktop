@@ -842,8 +842,11 @@ comprueba que coincidan y el workflow de release rechaza un tag que no sea
 
 - **Con tag `vX.Y.Z`:** comprueba la versión y que el paquete de
   certificados de Mozilla sea el vigente (primer paso; si no, no publica),
-  corre análisis y tests, arma y prueba los instaladores de las tres
-  plataformas, calcula `SHA256SUMS.txt` y crea el release. Solo el paso de
+  arma y prueba los instaladores de las tres plataformas, calcula
+  `SHA256SUMS.txt` y crea el release. **Solo publica si también pasa
+  `build.yml`** (llamado como workflow reutilizable, el mismo de cada push):
+  análisis, formato, tests y las pruebas de integración de Linux, Windows y
+  macOS (TLS de mpv, archivos temporales, almacén seguro, memoria). Solo el paso de
   publicación tiene permiso de escritura (`GITHUB_TOKEN`); no hay secretos.
 - **Sin tag** (cambios en `packaging/` o a mano desde Actions): igual pero
   sin publicar; los instaladores quedan como artefactos 7 días para
@@ -927,8 +930,22 @@ comprueba que coincidan y el workflow de release rechaza un tag que no sea
   próxima apertura). La fecha de primera detección se guarda en las
   preferencias locales **por versión mínima**
   (`update_minimum_seen = "2.0.0|<fecha UTC>"`): si `minima` cambia, el
-  plazo empieza de nuevo. Una fecha guardada "en el futuro" (reloj
-  cambiado) no alarga el plazo.
+  plazo empieza de nuevo.
+- **Solo con una respuesta coherente** cuentan la mínima, su plazo y el
+  bloqueo: `ultima_version`, `minima` y `descarga` presentes y válidas,
+  el enlace de confianza y `minima <= ultima_version`. Si no (mínima mayor
+  que la última, sin enlace o con uno ajeno, mínima rara), a lo sumo el
+  aviso informativo de versión nueva; no se registra ni avanza ningún
+  plazo. Sin `ultima_version` válida no se muestra nada.
+- **El plazo se mide con la fecha del servidor**, el encabezado HTTP `Date`
+  de la respuesta de `godebol.com/api/evemtv/version`, nunca con el reloj
+  del equipo (que puede estar mal o cambiarse a mano): con esa fecha se
+  registra la primera detección y con ella se decide si venció. Si el
+  encabezado falta o no se puede interpretar, no hay plazo ni bloqueo (solo
+  el aviso informativo). Con la app abierta, el vencimiento se programa por
+  tiempo transcurrido desde esa fecha, y cada consulta (cada 12 h) la
+  vuelve a tomar del servidor. Una primera detección guardada con una fecha
+  posterior a la del servidor no alarga el plazo.
 - **Plazo vencido:** pantalla de bloqueo que tapa la app, sin cerrar ni
   teclado ni mouse para lo de abajo, con **Descargar**, instrucciones de
   instalación del sistema (SmartScreen, *Abrir igualmente*, permiso de
@@ -936,10 +953,13 @@ comprueba que coincidan y el workflow de release rechaza un tag que no sea
   (`docs/instalacion.md` en GitHub). Si había un video en curso, se sale
   del reproductor. Si el plazo vence con la app abierta, se bloquea en ese
   momento.
-- **Nunca se bloquea por no poder consultar:** el bloqueo solo aparece tras
-  una respuesta válida del servidor en esa ejecución. Sin internet, con el
-  servidor caído (4xx/5xx) o con una respuesta rara, la app funciona
-  normal, aunque el plazo guardado ya haya vencido.
+- **Principio: ante cualquier duda, la app funciona.** El bloqueo solo
+  aparece tras una respuesta coherente del servidor, con fecha, en esa
+  ejecución. Sin internet, con el servidor caído (4xx/5xx), con una
+  respuesta rara o incoherente, o con una fecha incierta, la app funciona
+  normal, aunque el plazo guardado ya haya vencido. Lo mismo vale para
+  todo lo que dependa del servidor de EvemTv (conteo de uso, §18): nunca
+  impide usar la app.
 - **Solo se abren enlaces** `https://` de `github.com/Elmarcinho/…`,
   `godebol.com` o `evemtv.godebol.com` (la página de descarga), sin
   usuario, contraseña ni puerto raro; ningún otro subdominio. Otro enlace se
@@ -971,5 +991,10 @@ comprueba que coincidan y el workflow de release rechaza un tag que no sea
 - La página muestra la versión del último release: el workflow la toma al
   armarla, y `release.yml` lo relanza al publicar (un release creado con
   `GITHUB_TOKEN` no dispara otros workflows por sí solo).
+- **Solo se despliega un commit comprobado:** `pages.yml` se lanza cuando
+  "Compilar" termina bien en `main` (evento `workflow_run`) y arma la
+  página desde ese mismo commit. Lanzada a mano (o por `release.yml`),
+  primero verifica que "Compilar" haya pasado en el commit; si no, no
+  despliega (el siguiente "Compilar" exitoso la vuelve a publicar).
 - `evemtv.godebol.com` entra en la lista de enlaces que abre el aviso de
   actualización (ningún otro subdominio de `godebol.com`).

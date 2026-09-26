@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show HttpDate;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -135,6 +136,10 @@ class UpdateInfo {
 
   bool get forced => minimum != null && current < minimum!;
 
+  /// El mismo aviso, solo informativo (sin plazo ni bloqueo).
+  UpdateInfo withoutMinimum() =>
+      UpdateInfo(current: current, latest: latest, download: download);
+
   @override
   bool operator ==(Object other) =>
       other is UpdateInfo &&
@@ -151,25 +156,30 @@ class UpdateInfo {
 /// (Sin respuesta, la consulta devuelve `null` en lugar de esto.)
 @immutable
 class UpdateAnswer {
-  const UpdateAnswer(this.info);
+  const UpdateAnswer(this.info, {this.serverDate});
 
   final UpdateInfo? info;
+
+  /// Fecha del encabezado HTTP `Date` de la respuesta: la referencia del
+  /// plazo de la versión mínima (el reloj del equipo puede estar mal o
+  /// cambiarse a mano). `null` si falta o no se pudo interpretar: entonces
+  /// no hay plazo ni bloqueo.
+  final DateTime? serverDate;
 }
 
 /// Interpreta la respuesta del servidor. `null` si no hay nada que avisar
 /// o si la respuesta no sirve (nunca lanza por un campo raro).
+///
+/// La mínima (plazo y después bloqueo) solo cuenta con una respuesta
+/// **coherente**: `ultima_version`, `minima` y `descarga` presentes y
+/// válidas, el enlace de confianza y `minima <= ultima_version`. Si no, a lo
+/// sumo un aviso informativo: ante la duda, la app sigue funcionando.
 @visibleForTesting
 UpdateInfo? parseUpdate(Object? json, AppVersion current) {
   if (json is! Map) return null;
-  final latestRaw = AppVersion.tryParse(json['ultima_version']);
+  final latest = AppVersion.tryParse(json['ultima_version']);
   final minimum = AppVersion.tryParse(json['minima']);
-  // Si la mínima es mayor que la "última" publicada, manda la mínima.
-  final latest = switch ((latestRaw, minimum)) {
-    (final l?, final m?) => l > m ? l : m,
-    (final l?, null) => l,
-    (null, final m?) => m,
-    _ => null,
-  };
+  // Sin una "última versión" válida no hay nada que ofrecer.
   if (latest == null || !(latest > current)) return null;
   final raw = json['descarga'];
   final parsed = raw is String ? Uri.tryParse(raw.trim()) : null;
@@ -177,12 +187,27 @@ UpdateInfo? parseUpdate(Object? json, AppVersion current) {
   if (!trusted) {
     AppLogger.event('update.enlace', {'resultado': 'rechazado'});
   }
+  final coherent = minimum != null && trusted && !(minimum > latest);
+  if (minimum != null && !coherent) {
+    AppLogger.event('update.minima', {'resultado': 'ignorada'});
+  }
   return UpdateInfo(
     current: current,
     latest: latest,
     download: trusted ? parsed : UpdateConfig.fallbackDownload,
-    minimum: minimum,
+    minimum: coherent ? minimum : null,
   );
+}
+
+/// Fecha del encabezado HTTP `Date` (RFC 7231), o `null`.
+@visibleForTesting
+DateTime? parseServerDate(String? header) {
+  if (header == null || header.trim().isEmpty) return null;
+  try {
+    return HttpDate.parse(header.trim()).toUtc();
+  } on Object {
+    return null;
+  }
 }
 
 /// Consulta la última versión. Nunca lanza.
@@ -237,7 +262,10 @@ class UpdateChecker {
             : 'nueva',
         if (info != null) 'version': info.latest.toString(),
       });
-      return UpdateAnswer(info);
+      return UpdateAnswer(
+        info,
+        serverDate: parseServerDate(response.headers.value('date')),
+      );
     } on Object catch (e) {
       // Sin conexión, JSON inválido, certificado… Se ignora.
       AppLogger.event('update.check', {
@@ -254,11 +282,6 @@ final updateCheckerProvider = Provider<UpdateChecker>(
     dio: ref.watch(dioProvider),
     endpoint: ref.watch(updateEndpointProvider),
   ),
-);
-
-/// Reloj del aviso (los tests lo reemplazan).
-final updateClockProvider = Provider<DateTime Function()>(
-  (ref) => DateTime.now,
 );
 
 /// Estado del aviso.
@@ -298,8 +321,6 @@ class UpdateController extends Notifier<UpdateState> {
   Timer? _timer;
   Timer? _deadlineTimer;
 
-  DateTime _now() => ref.read(updateClockProvider)();
-
   @override
   UpdateState build() {
     ref.onDispose(() {
@@ -320,19 +341,31 @@ class UpdateController extends Notifier<UpdateState> {
 
   /// Consulta ahora. Sin respuesta del servidor nada cambia: la app nunca
   /// se bloquea por no poder consultar.
+  ///
+  /// El plazo de la versión mínima se mide con la fecha del servidor
+  /// (encabezado `Date`), nunca con el reloj del equipo; sin esa fecha, el
+  /// aviso es solo informativo.
   Future<void> check() async {
     final answer = await ref.read(updateCheckerProvider).check();
     if (!ref.mounted || answer == null) return;
-    final info = answer.info;
+    var info = answer.info;
     if (info == null) {
       _deadlineTimer?.cancel();
       state = const UpdateState();
       return;
     }
-    final deadline = info.forced ? await _deadlineFor(info.minimum!) : null;
-    if (!ref.mounted) return;
-    final now = _now();
-    final locked = deadline != null && !now.isBefore(deadline);
+    final serverNow = answer.serverDate;
+    DateTime? deadline;
+    if (info.forced) {
+      if (serverNow == null) {
+        AppLogger.event('update.minima', {'resultado': 'sin_fecha'});
+        info = info.withoutMinimum();
+      } else {
+        deadline = await _deadlineFor(info.minimum!, serverNow);
+        if (!ref.mounted) return;
+      }
+    }
+    final locked = deadline != null && !serverNow!.isBefore(deadline);
     // Otra versión u otro tipo de aviso lo vuelve a mostrar aunque se haya
     // cerrado.
     final same =
@@ -345,8 +378,10 @@ class UpdateController extends Notifier<UpdateState> {
     );
     _deadlineTimer?.cancel();
     if (deadline != null && !locked) {
-      // Si la app sigue abierta cuando vence el plazo, se bloquea.
-      _deadlineTimer = Timer(deadline.difference(now), () {
+      // Si la app sigue abierta cuando vence el plazo, se bloquea. El
+      // temporizador mide tiempo transcurrido (no la hora del equipo),
+      // desde la fecha que dio el servidor.
+      _deadlineTimer = Timer(deadline.difference(serverNow!), () {
         if (ref.mounted && state.info?.forced == true) {
           state = state.copyWith(locked: true);
         }
@@ -354,12 +389,12 @@ class UpdateController extends Notifier<UpdateState> {
     }
   }
 
-  /// Fecha límite: primera vez que se vio esta mínima + el plazo. Se guarda
-  /// por versión mínima; si la mínima cambia, el plazo empieza de nuevo.
-  Future<DateTime> _deadlineFor(AppVersion minimum) async {
+  /// Fecha límite: primera vez que se vio esta mínima (fecha del servidor)
+  /// + el plazo. Se guarda por versión mínima; si la mínima cambia, el
+  /// plazo empieza de nuevo.
+  Future<DateTime> _deadlineFor(AppVersion minimum, DateTime serverNow) async {
     final settings = ref.read(settingsRepositoryProvider);
-    final now = _now();
-    var first = now;
+    var first = serverNow;
     try {
       final saved = await settings.get(SettingsKeys.updateMinimumSeen);
       final parts = saved?.split('|');
@@ -367,12 +402,13 @@ class UpdateController extends Notifier<UpdateState> {
           ? DateTime.tryParse(parts[1])
           : null;
       if (parts != null && parts[0] == '$minimum' && savedDate != null) {
-        // Una fecha "en el futuro" (reloj cambiado) no alarga el plazo.
-        first = savedDate.isAfter(now) ? now : savedDate;
+        // Una fecha guardada posterior a la del servidor (p. ej. de una
+        // versión que usaba el reloj del equipo) no alarga el plazo.
+        first = savedDate.isAfter(serverNow) ? serverNow : savedDate;
       } else {
         await settings.set(
           SettingsKeys.updateMinimumSeen,
-          '$minimum|${now.toUtc().toIso8601String()}',
+          '$minimum|${serverNow.toUtc().toIso8601String()}',
         );
       }
     } on Object catch (e) {
