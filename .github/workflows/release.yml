@@ -303,6 +303,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write
+      actions: write
     env:
       VERSION: ${{ needs.preparar.outputs.version }}
       GH_TOKEN: ${{ github.token }}
@@ -311,6 +312,18 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+
+      # Copias con nombre fijo: los enlaces
+      # releases/latest/download/<nombre> (página de descarga) siempre
+      # apuntan a la última versión.
+      - name: Copias con nombre fijo
+        working-directory: dist
+        run: |
+          cp "EvemTv-$VERSION-windows-x64-instalador.exe" EvemTv-Windows.exe
+          cp "EvemTv-$VERSION-windows-x64-portable.zip" EvemTv-Windows-portable.zip
+          cp "EvemTv-$VERSION-macos.dmg" EvemTv-Mac.dmg
+          cp "EvemTv-$VERSION-linux-x86_64.AppImage" EvemTv-Linux.AppImage
+          ls -la
 
       - name: Sumas SHA-256
         working-directory: dist
@@ -330,6 +343,10 @@ jobs:
             echo "| macOS | \`EvemTv-$VERSION-macos.dmg\` |"
             echo "| Linux | \`EvemTv-$VERSION-linux-x86_64.AppImage\` |"
             echo
+            echo "Los mismos archivos con nombre fijo (siempre la última versión): \`EvemTv-Windows.exe\`, \`EvemTv-Windows-portable.zip\`, \`EvemTv-Mac.dmg\`, \`EvemTv-Linux.AppImage\`."
+            echo
+            echo "Página de descarga: https://evemtv.godebol.com"
+            echo
             echo "Cómo instalar (avisos de Windows SmartScreen y de macOS): https://github.com/${GITHUB_REPOSITORY}/blob/v$VERSION/docs/instalacion.md"
             echo
             echo "EvemTv es solo un reproductor: no incluye listas, canales ni contenido."
@@ -345,3 +362,8 @@ jobs:
             --title "EvemTv $VERSION" \
             --notes-file notas.md \
             --verify-tag
+
+      # La página de descarga muestra la versión publicada. Un release
+      # creado con GITHUB_TOKEN no dispara otros workflows: se lanza a mano.
+      - name: Actualizar la página de descarga
+        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main

@@ -101,14 +101,15 @@ class AppVersion implements Comparable<AppVersion> {
 }
 
 /// Solo se abren enlaces de descarga por HTTPS de los releases de
-/// `github.com/Elmarcinho/…` o de `godebol.com`. Cualquier otro (o uno con
+/// `github.com/Elmarcinho/…`, de `godebol.com` o de la página de descarga
+/// `evemtv.godebol.com`. Cualquier otro (o uno con
 /// usuario, contraseña o puerto raro) se reemplaza por la página de releases.
 bool isTrustedDownload(Uri url) {
   if (url.scheme != 'https') return false;
   if (url.userInfo.isNotEmpty) return false;
   if (url.hasPort && url.port != 443) return false;
   final host = url.host.toLowerCase();
-  if (host == 'godebol.com') return true;
+  if (host == 'godebol.com' || host == 'evemtv.godebol.com') return true;
   if (host == 'github.com') {
     final segments = url.pathSegments;
     return segments.isNotEmpty && segments.first.toLowerCase() == 'elmarcinho';

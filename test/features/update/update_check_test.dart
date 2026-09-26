@@ -46,11 +46,14 @@ void main() {
   });
 
   group('enlaces de descarga', () {
-    test('se aceptan solo github.com/Elmarcinho y godebol.com por HTTPS', () {
+    test('se aceptan solo github.com/Elmarcinho, godebol.com y '
+        'evemtv.godebol.com por HTTPS', () {
       for (final ok in [
         _release,
         'https://github.com/elmarcinho/otro/releases/latest',
         'https://godebol.com/evemtv/descargas',
+        'https://evemtv.godebol.com/',
+        'https://EvemTv.Godebol.com/#windows',
       ]) {
         expect(isTrustedDownload(Uri.parse(ok)), isTrue, reason: ok);
       }
@@ -61,6 +64,9 @@ void main() {
         'https://godebol.com.example.com/x',
         'https://evil.example.com/godebol.com',
         'https://sub.godebol.com/x',
+        'http://evemtv.godebol.com/',
+        'https://evemtv.godebol.com.example.com/',
+        'https://x.evemtv.godebol.com/',
         'https://usuario:clave@godebol.com/x',
         'https://godebol.com:8443/x',
         'https://github.com.example.com/Elmarcinho/x',

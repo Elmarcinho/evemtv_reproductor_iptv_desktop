@@ -940,8 +940,9 @@ comprueba que coincidan y el workflow de release rechaza un tag que no sea
   una respuesta válida del servidor en esa ejecución. Sin internet, con el
   servidor caído (4xx/5xx) o con una respuesta rara, la app funciona
   normal, aunque el plazo guardado ya haya vencido.
-- **Solo se abren enlaces** `https://` de `github.com/Elmarcinho/…` o
-  `godebol.com` (sin usuario, contraseña ni puerto raro). Otro enlace se
+- **Solo se abren enlaces** `https://` de `github.com/Elmarcinho/…`,
+  `godebol.com` o `evemtv.godebol.com` (la página de descarga), sin
+  usuario, contraseña ni puerto raro; ningún otro subdominio. Otro enlace se
   reemplaza por la página de releases del repositorio. Se vuelve a
   comprobar justo antes de abrirlo.
 - **Solo release** consulta godebol.com; en depuración está desactivado
@@ -951,3 +952,24 @@ comprueba que coincidan y el workflow de release rechaza un tag que no sea
 - Los términos (versión 3) lo mencionan. Todavía no hay pantalla de Ajustes:
   el interruptor para desactivar el aviso normal queda pendiente para
   cuando exista (el de la versión mínima no se podrá desactivar).
+
+### Nombres fijos y página de descarga
+
+- Cada release publica, además de los archivos con versión, **copias con
+  nombre fijo** (`EvemTv-Windows.exe`, `EvemTv-Windows-portable.zip`,
+  `EvemTv-Mac.dmg`, `EvemTv-Linux.AppImage`), incluidas en
+  `SHA256SUMS.txt`: `releases/latest/download/<nombre>` siempre baja la
+  última versión.
+- **Página de descarga** en GitHub Pages, dominio `evemtv.godebol.com`
+  (`site/`, workflow `pages.yml`, fuente "GitHub Actions"; no se publica
+  `docs/`). Un solo HTML sin recursos externos, sin cookies ni rastreo (CSP
+  `default-src 'none'`), pensado para celular porque el enlace se comparte
+  por WhatsApp. Detecta el sistema con lo que informa el navegador (nada se
+  envía) y pone primero su botón; en el celular avisa que la app es para
+  computadoras. Windows: instalador como botón principal y la portable
+  debajo. Pasos de SmartScreen y de "Abrir igualmente" junto a cada botón.
+- La página muestra la versión del último release: el workflow la toma al
+  armarla, y `release.yml` lo relanza al publicar (un release creado con
+  `GITHUB_TOKEN` no dispara otros workflows por sí solo).
+- `evemtv.godebol.com` entra en la lista de enlaces que abre el aviso de
+  actualización (ningún otro subdominio de `godebol.com`).

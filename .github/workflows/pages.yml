@@ -1,0 +1,67 @@
+# Página de descarga (evemtv.godebol.com) en GitHub Pages: site/ más el
+# ícono de la app. Se publica al cambiar la página y después de cada
+# release (lo lanza release.yml), para mostrar la versión publicada.
+#
+# Repositorio público: no usa secretos; solo el GITHUB_TOKEN del run.
+name: Página de descarga
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'assets/branding/icon_256.png'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  armar:
+    name: Armar la página
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Armar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p _site
+          cp -r site/. _site/
+          cp assets/branding/icon_256.png _site/icono.png
+          # Versión del último release (vacía si todavía no hay ninguno;
+          # la página entonces no la muestra).
+          VERSION=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName 2>/dev/null || true)
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then VERSION=""; fi
+          sed -i "s/@VERSION@/$VERSION/" _site/index.html
+          echo "::notice title=Página de descarga::versión publicada: ${VERSION:-ninguna todavía}"
+
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  publicar:
+    name: Publicar en GitHub Pages
+    needs: armar
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v5

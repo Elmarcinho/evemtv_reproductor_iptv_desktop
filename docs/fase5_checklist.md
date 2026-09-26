@@ -26,6 +26,10 @@ Pendientes acordados para la Fase 5. Cada release debe repasar la sección
 - [ ] Probar los instaladores del último run **sin tag** del workflow
       "Release" (artefactos `windows`, `macos`, `linux`), con reproducción
       real de un canal y una película en cada sistema.
+- [ ] Página de descarga: DNS `evemtv.godebol.com` (CNAME a
+      `elmarcinho.github.io`) y GitHub Pages con fuente "GitHub Actions" y
+      dominio personalizado, con HTTPS (una sola vez). Probarla en PC y en
+      el celular (enlace por WhatsApp).
 - [ ] Recién entonces, crear y subir el tag (`git tag v1.0.0 && git push
       origin v1.0.0`): el workflow publica el release.
 - [ ] Publicar en `godebol.com/api/evemtv/version` la nueva

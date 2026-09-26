@@ -4,14 +4,19 @@ EvemTv es un reproductor: **no trae listas, canales ni contenido**. Para usarlo
 necesitas tu propio servicio IPTV (usuario, contraseña y URL del servidor, o
 una lista M3U).
 
-Descarga el archivo de tu sistema desde la página de
+Descarga EvemTv desde **[evemtv.godebol.com](https://evemtv.godebol.com)**:
+la página reconoce tu sistema y te ofrece el archivo correcto. También están
+en la página de
 [versiones publicadas](https://github.com/Elmarcinho/evemtv_reproductor_iptv_desktop/releases/latest):
 
 | Sistema | Archivo |
 |---|---|
-| Windows 10 u 11 (64 bits) | `EvemTv-X.Y.Z-windows-x64-instalador.exe` (recomendado) o `EvemTv-X.Y.Z-windows-x64-portable.zip` |
-| macOS 12 o posterior (Apple Silicon e Intel) | `EvemTv-X.Y.Z-macos.dmg` |
-| Linux de 64 bits (Ubuntu 22.04, Debian 12, Fedora 36 o posteriores) | `EvemTv-X.Y.Z-linux-x86_64.AppImage` |
+| Windows 10 u 11 (64 bits) | `EvemTv-Windows.exe` (instalador, recomendado) o `EvemTv-Windows-portable.zip` |
+| macOS 12 o posterior (Apple Silicon e Intel) | `EvemTv-Mac.dmg` |
+| Linux de 64 bits (Ubuntu 22.04, Debian 12, Fedora 36 o posteriores) | `EvemTv-Linux.AppImage` |
+
+Cada versión trae además los mismos archivos con el número de versión en el
+nombre (por ejemplo `EvemTv-1.0.0-macos.dmg`).
 
 La app todavía no está firmada con un certificado de pago de Microsoft ni de
 Apple. Por eso Windows y macOS muestran un aviso la primera vez. Abajo se

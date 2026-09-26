@@ -7,7 +7,7 @@ Compatible con servidores que usan la API de Xtream Codes y con listas M3U/M3U8.
 > Cada usuario es responsable del servicio y del contenido al que accede.
 
 Estado: **Fase 5** (versión 1.0.0: instaladores para las tres plataformas).
-Para instalar la app ya compilada, ver [`docs/instalacion.md`](docs/instalacion.md). Ver [`CLAUDE.md`](CLAUDE.md) para la especificación completa.
+Descarga: **[evemtv.godebol.com](https://evemtv.godebol.com)** · instalación: [`docs/instalacion.md`](docs/instalacion.md). Ver [`CLAUDE.md`](CLAUDE.md) para la especificación completa.
 
 ## Requisitos
 
@@ -74,6 +74,11 @@ El workflow `.github/workflows/release.yml` hace todo esto en GitHub Actions:
   `SHA256SUMS.txt`.
 - **Sin tag** (cambios en `packaging/` o a mano desde Actions): lo mismo sin
   publicar; los instaladores quedan como artefactos del run por 7 días.
+
+Cada release incluye también copias con nombre fijo (`EvemTv-Windows.exe`,
+`EvemTv-Windows-portable.zip`, `EvemTv-Mac.dmg`, `EvemTv-Linux.AppImage`) para
+los enlaces `releases/latest/download/…` de la página de descarga (`site/`,
+publicada con `.github/workflows/pages.yml` en `evemtv.godebol.com`).
 
 Pasos de cada release: [`docs/fase5_checklist.md`](docs/fase5_checklist.md).
 
@@ -142,7 +147,7 @@ lib/
   (sistema operativo, id de la instalación y una huella de la cuenta; nunca
   usuario ni contraseña), informado en los términos. Ver `docs/decisiones.md` §18.
 - El aviso de actualización consulta `godebol.com/api/evemtv/version` sin
-  datos de la cuenta, y solo abre descargas de `github.com/Elmarcinho` o
-  `godebol.com` (`docs/decisiones.md` §19).
+  datos de la cuenta, y solo abre descargas de `github.com/Elmarcinho`,
+  `godebol.com` o `evemtv.godebol.com` (`docs/decisiones.md` §19).
 - **No subas credenciales, URLs de servidores ni listas reales al repositorio.**
   Los tests usan solo datos inventados y dominios reservados (`example.com`, `.invalid`).

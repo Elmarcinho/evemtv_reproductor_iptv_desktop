@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Descargar EvemTv</title>
+<meta name="description" content="EvemTv, reproductor IPTV gratuito para Windows, Mac y Linux. Usa tu propio servicio (Xtream Codes o lista M3U).">
+<!-- Sin recursos externos ni rastreo: todo está en este archivo. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#0D1117">
+<!-- Vista previa al compartir el enlace (WhatsApp, Telegram…). -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://evemtv.godebol.com/">
+<meta property="og:title" content="Descargar EvemTv">
+<meta property="og:description" content="Reproductor IPTV gratuito para Windows, Mac y Linux.">
+<meta property="og:image" content="https://evemtv.godebol.com/icono.png">
+<link rel="icon" href="icono.png" type="image/png">
+<style>
+:root {
+  --fondo: #0D1117;
+  --superficie: #151B23;
+  --superficie-alta: #1C2430;
+  --borde: #2A3441;
+  --acento: #3D8BFF;
+  --acento-texto: #FFFFFF;
+  --texto: #E6EDF3;
+  --texto-2: #A7B1BD;
+  --aviso: #FFC53D;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--texto);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", "Noto Sans", Ubuntu, sans-serif;
+}
+a { color: #7DB3FF; }
+a:hover { color: #A9CCFF; }
+main { max-width: 760px; margin: 0 auto; padding: 32px 16px 48px; }
+header { display: flex; align-items: center; gap: 14px; }
+header img { width: 56px; height: 56px; border-radius: 14px; }
+header h1 { margin: 0; font-size: 28px; line-height: 1.1; }
+header p { margin: 2px 0 0; color: var(--texto-2); font-size: 15px; }
+.intro { margin: 20px 0 28px; color: var(--texto-2); }
+.intro strong { color: var(--texto); font-weight: 600; }
+
+.aviso-movil {
+  display: none;
+  background: var(--superficie-alta);
+  border: 1px solid var(--aviso);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+}
+.aviso-movil strong { color: var(--aviso); }
+.aviso-movil button {
+  margin-top: 10px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--texto);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  padding: 8px 14px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.es-movil .aviso-movil { display: block; }
+
+.sistemas { display: flex; flex-direction: column; gap: 14px; }
+.sistema {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 14px;
+  padding: 18px;
+}
+.sistema h2 { margin: 0 0 4px; font-size: 18px; }
+.sistema .req { margin: 0 0 14px; color: var(--texto-2); font-size: 14px; }
+.boton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 12px 18px;
+  border-radius: 10px;
+  background: var(--superficie-alta);
+  border: 1px solid var(--borde);
+  color: var(--texto);
+  font-weight: 600;
+  font-size: 17px;
+  text-decoration: none;
+}
+.boton:hover { color: var(--texto); border-color: var(--acento); }
+.boton svg { flex-shrink: 0; }
+.portable { margin: 12px 0 0; font-size: 14px; color: var(--texto-2); }
+.portable a { font-weight: 600; }
+.pasos { margin: 14px 0 0; font-size: 14px; color: var(--texto-2); }
+.pasos summary { cursor: pointer; color: var(--texto); min-height: 32px; }
+.pasos ol { margin: 8px 0 0; padding-left: 22px; }
+.pasos li { margin: 4px 0; }
+.pasos b { color: var(--texto); font-weight: 600; }
+code {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 13px;
+  background: var(--superficie-alta);
+  border-radius: 5px;
+  padding: 1px 5px;
+  word-break: break-all;
+}
+
+/* El sistema del visitante: primero y con el botón destacado. */
+.principal { border-color: var(--acento); padding: 22px; }
+.principal h2 { font-size: 22px; }
+.principal .boton {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: var(--acento-texto);
+  font-size: 19px;
+  min-height: 58px;
+}
+.principal .boton:hover { background: #2F7AEE; color: var(--acento-texto); }
+.otros-titulo { display: none; margin: 6px 0 -4px; font-size: 15px; color: var(--texto-2); font-weight: 600; }
+.detectado .otros-titulo { display: block; }
+/* Los otros sistemas, más compactos: los pasos quedan plegados. */
+.detectado .sistema:not(.principal) { padding: 14px 16px; }
+.detectado .sistema:not(.principal) .boton { min-height: 46px; font-size: 16px; }
+
+footer { margin-top: 36px; font-size: 14px; color: var(--texto-2); }
+footer p { margin: 6px 0; }
+.version { color: var(--texto-2); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img src="icono.png" alt="" width="56" height="56">
+    <div>
+      <h1>EvemTv</h1>
+      <p>Reproductor IPTV para tu computadora <span class="version" id="version">@VERSION@</span></p>
+    </div>
+  </header>
+
+  <p class="intro">
+    Mira TV en vivo, películas y series de <strong>tu propio servicio IPTV</strong>
+    (Xtream Codes o lista M3U). Gratis.
+    EvemTv es solo un reproductor: no incluye canales, listas ni contenido.
+  </p>
+
+  <div class="aviso-movil" role="note">
+    <strong>EvemTv es para computadoras</strong> con Windows, Mac o Linux.
+    Abre esta página en tu computadora: <b>evemtv.godebol.com</b>
+    <br>
+    <button type="button" id="copiar">Copiar el enlace</button>
+  </div>
+
+  <div class="sistemas" id="sistemas">
+    <section class="sistema" id="windows" aria-labelledby="t-windows">
+      <h2 id="t-windows">Windows</h2>
+      <p class="req">Windows 10 u 11 (64 bits) · instalador</p>
+      <a class="boton" href="https://github.com/Elmarcinho/evemtv_reproductor_iptv_desktop/releases/latest/download/EvemTv-Windows.exe">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
+        <span>Descargar para Windows</span>
+      </a>
+      <p class="portable">
+        ¿No puedes instalar programas?
+        <a href="https://github.com/Elmarcinho/evemtv_reproductor_iptv_desktop/releases/latest/download/EvemTv-Windows-portable.zip">Descarga la versión portable</a>.
+        Descomprime la carpeta antes de abrir <code>evemtv.exe</code>.
+      </p>
+      <details class="pasos">
+        <summary>Si aparece «Windows protegió su PC»</summary>
+        <ol>
+          <li>Haz clic en <b>Más información</b>.</li>
+          <li>Luego en <b>Ejecutar de todas formas</b>.</li>
+        </ol>
+        Aparece porque la app todavía no tiene un certificado de pago de Microsoft.
+      </details>
+    </section>
+
+    <section class="sistema" id="mac" aria-labelledby="t-mac">
+      <h2 id="t-mac">Mac</h2>
+      <p class="req">macOS 12 o posterior · Apple Silicon e Intel</p>
+      <a class="boton" href="https://github.com/Elmarcinho/evemtv_reproductor_iptv_desktop/releases/latest/download/EvemTv-Mac.dmg">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
+        <span>Descargar para Mac</span>
+      </a>
+      <details class="pasos">
+        <summary>Cómo abrirla la primera vez («Abrir igualmente»)</summary>
+        <ol>
+          <li>Abre el <b>.dmg</b> y arrastra EvemTv a <b>Aplicaciones</b>.</li>
+          <li>Ábrela. Si macOS dice que no se pudo verificar, pulsa <b>OK</b>.</li>
+          <li>Ve a <b>Ajustes del Sistema → Privacidad y seguridad</b>.</li>
+          <li>Abajo, junto a «Se bloqueó el uso de EvemTv», pulsa <b>Abrir igualmente</b> y confirma.</li>
+        </ol>
+        Solo se hace una vez. Aparece porque la app todavía no tiene un certificado de pago de Apple.
+      </details>
+    </section>
+
+    <section class="sistema" id="linux" aria-labelledby="t-linux">
+      <h2 id="t-linux">Linux</h2>
+      <p class="req">64 bits · Ubuntu 22.04, Debian 12, Fedora 36 o posteriores · AppImage</p>
+      <a class="boton" href="https://github.com/Elmarcinho/evemtv_reproductor_iptv_desktop/releases/latest/download/EvemTv-Linux.AppImage">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
+        <span>Descargar para Linux</span>
+      </a>
+      <details class="pasos">
+        <summary>Cómo abrirla</summary>
+        <ol>
+          <li>Dale permiso de ejecución: clic derecho → <b>Propiedades → Permisos → Permitir ejecutar como programa</b>, o <code>chmod +x EvemTv-Linux.AppImage</code></li>
+          <li>Ábrela con doble clic.</li>
+        </ol>
+      </details>
+    </section>
+  </div>
+  <p class="otros-titulo" id="otros-titulo" hidden>Otros sistemas</p>
+
+  <footer>
+    <p><a href="https://github.com/Elmarcinho/evemtv_reproductor_iptv_desktop/blob/main/docs/instalacion.md">Guía de instalación completa</a></p>
+    <p><a href="https://github.com/Elmarcinho/evemtv_reproductor_iptv_desktop/releases/latest">Todas las versiones y sumas SHA-256</a></p>
+    <p>Descarga EvemTv solo desde esta página o desde GitHub. Desarrollado por Godebol.</p>
+  </footer>
+</main>
+<script>
+(function () {
+  // Versión publicada (la pone el workflow al armar la página).
+  var version = document.getElementById('version');
+  if (!/^v?\d+\.\d+\.\d+$/.test(version.textContent)) {
+    version.textContent = '';
+  } else {
+    version.textContent = '· versión ' + version.textContent.replace(/^v/, '');
+  }
+
+  // Sistema del visitante, solo con lo que informa el navegador (nada se
+  // envía a ningún lado).
+  var ua = navigator.userAgent || '';
+  var plataforma = (navigator.userAgentData && navigator.userAgentData.platform) ||
+      navigator.platform || '';
+  var sistema;
+  if (/Android|iPhone|iPad|iPod/i.test(ua) ||
+      (/Mac/i.test(plataforma) && navigator.maxTouchPoints > 1)) {
+    sistema = 'movil';
+  } else if (/Win/i.test(plataforma) || /Windows/i.test(ua)) {
+    sistema = 'windows';
+  } else if (/Mac/i.test(plataforma) || /Mac OS X/i.test(ua)) {
+    sistema = 'mac';
+  } else if (/Linux|X11|CrOS/i.test(plataforma + ' ' + ua)) {
+    sistema = 'linux';
+  }
+
+  if (sistema === 'movil') {
+    document.body.classList.add('es-movil');
+    var copiar = document.getElementById('copiar');
+    copiar.addEventListener('click', function () {
+      var enlace = 'https://evemtv.godebol.com';
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(enlace).then(function () {
+          copiar.textContent = 'Enlace copiado';
+        }, function () {
+          copiar.textContent = enlace;
+        });
+      } else {
+        copiar.textContent = enlace;
+      }
+    });
+    return;
+  }
+  if (!sistema) return;
+
+  // El del visitante va primero, destacado y con los pasos abiertos; los
+  // otros, debajo de "Otros sistemas".
+  var lista = document.getElementById('sistemas');
+  var propio = document.getElementById(sistema);
+  var titulo = document.getElementById('otros-titulo');
+  propio.classList.add('principal');
+  var pasos = propio.querySelector('details');
+  if (pasos) pasos.open = true;
+  lista.insertBefore(propio, lista.firstChild);
+  lista.insertBefore(titulo, propio.nextSibling);
+  titulo.hidden = false;
+  document.body.classList.add('detectado');
+})();
+</script>
+</body>
+</html>
