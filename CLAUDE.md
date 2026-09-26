@@ -85,7 +85,7 @@ Reglas de robustez:
 1. **Nunca** escribir credenciales, URLs de servidores reales ni datos de cuentas en el código, en archivos `.env`, en `--dart-define`, en tests ni en commits. Las credenciales de prueba se ingresan a mano en la pantalla de login al probar.
 2. Credenciales guardadas **solo** en `flutter_secure_storage`. Nunca en SharedPreferences, base de datos, archivos planos ni caché.
 3. **Logger con redacción**: toda URL que contenga usuario/contraseña debe registrarse enmascarada (ej. `/live/***/***/123.m3u8`). Ningún log, mensaje de error ni reporte muestra credenciales. En builds de release, logs mínimos.
-4. No enviar telemetría, analytics ni reportes de errores a servicios de terceros.
+4. No enviar telemetría, analytics ni reportes de errores a servicios de terceros. **Única excepción (aprobada por el dueño del proyecto, Fase 4.5):** un conteo de uso mínimo, una vez al día, solo en compilaciones release y solo tras aceptar los términos, a `https://godebol.com/api/evemtv/ping` con `install_id`, `os` y `account_hash` (SHA-256 de "usuario_en_minúsculas|host"); nunca usuario, contraseña ni URL, y nunca el hash en los logs. Ver `docs/decisiones.md` §18.
 5. No desactivar la validación de certificados TLS de forma global. HTTP se permite solo porque lo exige el servidor que el usuario ingresó.
 6. Validar la URL de entrada: esquema `http`/`https`, formato correcto, sin espacios. Normalizarla antes de guardar.
 7. Cerrar sesión borra credenciales, caché del catálogo y EPG de ese perfil.

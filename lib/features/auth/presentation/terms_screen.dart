@@ -17,8 +17,12 @@ class TermsScreen extends ConsumerWidget {
         'con listas M3U, contratado con un proveedor de tu elección.',
     'Eres el único responsable del servicio que configures y del contenido al '
         'que accedas, y de contar con los derechos para verlo.',
-    'Tus credenciales se guardan solo en el almacén seguro de este equipo. '
-        'La app no envía datos de uso ni estadísticas a terceros.',
+    'Tus credenciales se guardan solo en el almacén seguro de este equipo y '
+        'nunca se envían a nadie.',
+    'Para estadísticas de uso, una vez al día la app envía el sistema '
+        'operativo, un identificador de esta instalación y una huella de la '
+        'cuenta (un código calculado a partir de tu usuario y del servidor), '
+        'nunca tu usuario ni tu contraseña.',
   ];
 
   @override
@@ -27,17 +31,17 @@ class TermsScreen extends ConsumerWidget {
     return Scaffold(
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32),
+          padding: const EdgeInsets.all(24),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 600),
             child: Card(
               child: Padding(
-                padding: const EdgeInsets.all(32),
+                padding: const EdgeInsets.fromLTRB(32, 24, 32, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const AppLogo(height: 72),
-                    const SizedBox(height: 24),
+                    const AppLogo(height: 56),
+                    const SizedBox(height: 16),
                     Text('Antes de empezar', style: text.headlineSmall),
                     const SizedBox(height: 16),
                     for (final point in _points)

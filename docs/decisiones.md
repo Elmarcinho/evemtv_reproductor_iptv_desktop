@@ -87,7 +87,8 @@ de lectura tolerantes, reforzadas por `strict-casts` en
 - **Los logs son locales.** Salen por la consola de desarrollo (debug) o por
   `dart:developer` (release). No se escriben a archivos compartidos ni se
   envían a ningún servicio: no hay telemetría, analytics ni reportes de
-  errores remotos.
+  errores remotos. (La única salida de datos de uso es el conteo diario de
+  §18, que nunca lleva logs.)
 - **Qué se protege:** que las credenciales (usuario, contraseña, URL del
   servidor, URL M3U) terminen en un texto que el usuario copie al pedir ayuda
   (issue en GitHub, foro, captura de pantalla) o que quede en la salida de la
@@ -738,8 +739,16 @@ conexión se corta en lugar de esperar la respuesta o el tiempo límite.
     vez de cerrar la app; mientras tanto, la prueba obligatoria en un Mac
     real queda en el checklist de la Fase 5. (No quedó informe `.ips`: el
     motivo sale del registro del sistema.)
+  - **Riesgo conocido (aceptado por ahora):** en un Mac sin OpenGL
+    acelerado por hardware, abrir un video cierra la app. Texto del issue
+    para media_kit en `docs/issue_media_kit_opengl.md` (lo publica el dueño
+    del proyecto).
 
-## 17. Carpeta de datos y ediciones (Fase 4.5)
+## 17. Carpeta de datos y ediciones — DESCARTADA
+
+> **Descartada (09/2026):** EvemTv es una sola app libre, sin ediciones ni
+> restricciones. Se conserva el análisis como referencia por si se retoma.
+> Sigue vigente solo la primera viñeta (compañía "EvemTv" en Windows).
 
 - **Windows:** la compañía del ejecutable (`CompanyName` en
   `windows/runner/Runner.rc`) vuelve a ser **EvemTv**. En Windows la carpeta
@@ -747,7 +756,7 @@ conexión se corta en lugar de esperar la respuesta o el tiempo límite.
   pasado a `Godebol\EvemTv`, y cambiarla después de publicar haría perder
   las cuentas guardadas al actualizar. La firma "Desarrollado por Godebol"
   sigue en la app y en el copyright (que no cambia la carpeta).
-- **Ediciones (Fase 4.5): cada edición, su carpeta de datos y su llavero.**
+- **(Descartado) Ediciones: cada edición, su carpeta de datos y su llavero.**
   Si en un mismo equipo están instaladas la edición libre y la de Godebol,
   no deben compartir base de datos, caché de imágenes ni credenciales.
   Ejemplo de nombres: `EvemTv\EvemTv` (libre) y `EvemTv\EvemTv-Godebol`.
@@ -767,4 +776,41 @@ conexión se corta en lugar de esperar la respuesta o el tiempo límite.
   pueden seguir igual porque quedan dentro del espacio de cada edición.
   Hay que probarlo con las dos ediciones instaladas a la vez en cada
   plataforma: una no debe ver ni borrar las cuentas de la otra.
+
+## 18. Conteo de uso anónimo (Fase 4.5)
+
+Reemplaza la regla "sin telemetría" **solo** para este conteo mínimo
+(CLAUDE.md §5.4). La app sigue funcionando con cualquier servicio: no hay
+restricciones ni el conteo condiciona nada.
+
+- **Qué se envía:** `POST https://godebol.com/api/evemtv/ping` con JSON de
+  a lo sumo tres campos (el servidor rechaza con 400 cualquier otro):
+  - `install_id`: UUID v4 creado en la primera ejecución, guardado en las
+    preferencias locales (por instalación, no por perfil; no es secreto).
+  - `os`: `windows`, `macos` o `linux`.
+  - `account_hash`: SHA-256 (hex en minúsculas) de
+    `"usuario_en_minúsculas|host"` de la cuenta abierta, con el host en
+    minúsculas y sin esquema ni puerto (p. ej. `demo|panel.example.com`).
+    Sin cuenta abierta, o si la cuenta no tiene usuario (una lista M3U sin
+    `username`), el campo se omite.
+  - Nunca el usuario, la contraseña ni la URL. Un test comprueba el cuerpo.
+- **Cuándo:** como máximo una vez por día (UTC), y solo después de aceptar
+  los términos, que lo informan (versión 2 de los términos: quien ya los
+  aceptó los vuelve a ver). Al abrir una cuenta se envía con su huella; si
+  en 60 s desde que se abre la app no se abre ninguna, se envía sin huella.
+- **Si falla** (sin internet, 4xx, 5xx, 429): se ignora, sin reintentos en
+  esa ejecución; se vuelve a intentar en la próxima apertura o al día
+  siguiente. Nunca afecta el uso de la app.
+- **Solo release** envía a godebol.com. En depuración, perfil y tests está
+  desactivado, salvo que se pase
+  `--dart-define=USAGE_PING_URL=http://127.0.0.1:18080/…`.
+- **Logs:** solo el evento (`usage.ping` enviado/fallido y el código HTTP o
+  el tipo de error), nunca el hash ni el id.
+- **Alcance de la privacidad (dicho con precisión):** el hash no permite
+  leer el usuario, pero **no es anónimo en sentido estricto**: es el mismo
+  para la misma cuenta en cualquier equipo y, como los nombres de usuario y
+  los hosts se pueden adivinar, quien conozca una cuenta y su servidor
+  puede comprobar si esa cuenta usa la app. Por eso los términos lo
+  describen como "una huella de la cuenta calculada a partir de tu usuario
+  y del servidor", sin llamarlo anónimo.
 

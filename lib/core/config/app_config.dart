@@ -33,7 +33,7 @@ abstract final class AppConfig {
   static const String userAgent = 'EvemTv/$version';
 
   /// Versión de los términos de uso; si cambia, se vuelven a pedir.
-  static const String termsVersion = '1';
+  static const String termsVersion = '2';
 
   /// Repositorio público donde se publican las versiones (aviso de
   /// actualización, Fase 5).

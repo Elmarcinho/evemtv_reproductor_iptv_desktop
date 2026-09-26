@@ -67,6 +67,7 @@ void main() {
 
       // Términos al primer inicio.
       expect(find.text('Antes de empezar'), findsOneWidget);
+      await tester.ensureVisible(find.text('Acepto y continúo'));
       await tester.tap(find.text('Acepto y continúo'));
       await tester.pumpAndSettle();
 
@@ -187,6 +188,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Acepto y continúo'));
     await tester.tap(find.text('Acepto y continúo'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Agregar cuenta'));
@@ -259,6 +261,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Acepto y continúo'));
     await tester.tap(find.text('Acepto y continúo'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Agregar cuenta'));

@@ -113,6 +113,8 @@ lib/
   (Keychain, Credential Manager, libsecret).
 - Todos los logs pasan por un redactor que enmascara usuarios, contraseñas y
   tokens (`/live/***/***/123.m3u8`).
-- Sin telemetría ni analytics.
+- Sin telemetría ni analytics, salvo un conteo de uso mínimo una vez al día
+  (sistema operativo, id de la instalación y una huella de la cuenta; nunca
+  usuario ni contraseña), informado en los términos. Ver `docs/decisiones.md` §18.
 - **No subas credenciales, URLs de servidores ni listas reales al repositorio.**
   Los tests usan solo datos inventados y dominios reservados (`example.com`, `.invalid`).
