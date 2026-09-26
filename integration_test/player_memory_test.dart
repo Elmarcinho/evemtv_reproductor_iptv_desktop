@@ -66,7 +66,9 @@ void main() {
       );
       if (i == 0) stage('reproductor y textura creados');
       await engine.open(Uri.parse(videoUrl));
+      if (i == 0) stage('video abierto');
       await waitReal(tester, const Duration(seconds: 4));
+      if (i == 0) stage('4 s de reproducción');
       hwdec.add(await engine.hwdecCurrent());
       if (i == 0) stage('reproduciendo: hwdec=${hwdec.first}');
       await tester.pumpWidget(const SizedBox());
