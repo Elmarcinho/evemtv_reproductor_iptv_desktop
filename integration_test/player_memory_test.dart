@@ -46,8 +46,13 @@ void main() {
   testWidgets('la memoria no crece con cada reproductor que se cierra', (
     tester,
   ) async {
-    MediaEngine().ensureReady();
     final os = Platform.operatingSystem;
+    // Etapas como anotaciones: si el proceso se cae (p. ej. en macOS sin
+    // GPU), se sabe hasta dónde llegó sin tener que leer los registros.
+    void stage(String text) =>
+        print('::notice title=Memoria del reproductor $os (etapa)::$text');
+    MediaEngine().ensureReady();
+    stage('motor listo');
     final after = <double>[];
     final hwdec = <String>{};
     for (var i = 0; i < cycles; i++) {
@@ -59,14 +64,17 @@ void main() {
           child: Video(controller: controller),
         ),
       );
+      if (i == 0) stage('reproductor y textura creados');
       await engine.open(Uri.parse(videoUrl));
       await waitReal(tester, const Duration(seconds: 4));
       hwdec.add(await engine.hwdecCurrent());
+      if (i == 0) stage('reproduciendo: hwdec=${hwdec.first}');
       await tester.pumpWidget(const SizedBox());
       await engine.dispose();
       // media_kit destruye el contexto de mpv 5 s después de dispose.
       await waitReal(tester, const Duration(seconds: 6));
       after.add(rssMb());
+      if (i == 0) stage('primer cierre: ${after.first.toStringAsFixed(0)} MB');
     }
 
     final lastTen = after.sublist(cycles - 10);
