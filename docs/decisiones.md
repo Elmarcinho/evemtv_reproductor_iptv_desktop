@@ -835,6 +835,10 @@ comprueba que coincidan y el workflow de release rechaza un tag que no sea
 - **Sin tag** (cambios en `packaging/` o a mano desde Actions): igual pero
   sin publicar; los instaladores quedan como artefactos 7 días para
   probarlos antes del tag.
+- **Runners fijos** (nunca `*-latest`, para que la imagen no cambie sin
+  aviso): `ubuntu-24.04`, `windows-2025` y `macos-26` en los dos
+  workflows, y `ubuntu-22.04` para el AppImage. Cambiarlos es una decisión
+  explícita: se prueba en una rama y se anota aquí.
 - **Pruebas de humo:** Windows instala en silencio, abre la app 20 s y
   desinstala; macOS monta el `.dmg`, verifica la firma y abre la app 20 s;
   Linux abre el AppImage 20 s. En ninguna se reproduce video (en la VM de

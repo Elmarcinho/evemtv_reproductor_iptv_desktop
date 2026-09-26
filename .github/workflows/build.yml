@@ -31,7 +31,7 @@ env:
 jobs:
   analyze-test:
     name: Análisis y tests (Linux)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -84,7 +84,7 @@ jobs:
 
   build-windows:
     name: Compilar Windows
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
@@ -120,7 +120,7 @@ jobs:
 
   build-macos:
     name: Compilar macOS
-    runs-on: macos-latest
+    runs-on: macos-26
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7

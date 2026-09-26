@@ -35,7 +35,7 @@ env:
 jobs:
   preparar:
     name: Versión, certificados y tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -147,7 +147,7 @@ jobs:
   windows:
     name: Instalador y portable (Windows)
     needs: preparar
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 45
     env:
       VERSION: ${{ needs.preparar.outputs.version }}
@@ -221,7 +221,7 @@ jobs:
   macos:
     name: DMG (macOS)
     needs: preparar
-    runs-on: macos-latest
+    runs-on: macos-26
     timeout-minutes: 45
     env:
       VERSION: ${{ needs.preparar.outputs.version }}
@@ -299,7 +299,7 @@ jobs:
     name: Publicar en GitHub Releases
     needs: [preparar, linux, windows, macos]
     if: needs.preparar.outputs.publicar == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
