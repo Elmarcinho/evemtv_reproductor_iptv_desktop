@@ -6,7 +6,8 @@ Compatible con servidores que usan la API de Xtream Codes y con listas M3U/M3U8.
 > EvemTv es solo un reproductor: **no incluye listas, canales ni contenido**.
 > Cada usuario es responsable del servicio y del contenido al que accede.
 
-Estado: **Fase 3** (TV en vivo, películas y series). Ver [`CLAUDE.md`](CLAUDE.md) para la especificación completa.
+Estado: **Fase 5** (versión 1.0.0: instaladores para las tres plataformas).
+Para instalar la app ya compilada, ver [`docs/instalacion.md`](docs/instalacion.md). Ver [`CLAUDE.md`](CLAUDE.md) para la especificación completa.
 
 ## Requisitos
 
@@ -21,7 +22,8 @@ sudo apt install clang cmake ninja-build pkg-config libgtk-3-dev \
   libmpv-dev mpv libsecret-1-dev gnome-keyring
 ```
 
-- `libmpv` es el motor de video (media_kit). En Linux se usa la del sistema.
+- `libmpv` es el motor de video (media_kit). Al compilar desde el código se usa
+  la del sistema; el AppImage publicado trae la suya.
 - `libsecret` y un llavero activo (GNOME Keyring o KWallet) son necesarios para
   guardar las credenciales. Sin llavero, la app muestra un error y no guarda
   nada en texto plano.
@@ -51,6 +53,29 @@ flutter build windows --release   # build/windows/x64/runner/Release/
 ```
 
 Cada plataforma se compila en su propio sistema operativo (o en GitHub Actions).
+
+## Empaquetar y publicar
+
+Los instaladores se arman con los scripts de `packaging/`, después de la
+compilación release de cada sistema:
+
+```bash
+packaging/linux/crear_appimage.sh 1.0.0     # dist/EvemTv-1.0.0-linux-x86_64.AppImage (libmpv incluido)
+packaging/macos/crear_dmg.sh 1.0.0          # dist/EvemTv-1.0.0-macos.dmg (firma ad hoc)
+# Windows (Inno Setup 6):
+iscc /DAppVersion=1.0.0 /DSourceDir=%CD%\build\windows\x64\runner\Release /Odist packaging\windows\evemtv.iss
+```
+
+El workflow `.github/workflows/release.yml` hace todo esto en GitHub Actions:
+
+- **Con un tag `vX.Y.Z`** (debe coincidir con `version` de `pubspec.yaml`):
+  verifica los certificados, corre análisis y tests, arma y prueba los
+  instaladores de las tres plataformas y los publica en GitHub Releases con
+  `SHA256SUMS.txt`.
+- **Sin tag** (cambios en `packaging/` o a mano desde Actions): lo mismo sin
+  publicar; los instaladores quedan como artefactos del run por 7 días.
+
+Pasos de cada release: [`docs/fase5_checklist.md`](docs/fase5_checklist.md).
 
 ## Calidad
 
@@ -86,15 +111,15 @@ generan con:
 python3 tool/generate_icons.py   # requiere Pillow
 ```
 
-## Certificados raíz (Windows y macOS)
+## Certificados raíz (Windows, macOS y AppImage)
 
-mpv usa `assets/certs/cacert.pem` para verificar HTTPS en Windows y macOS
-(ver `docs/decisiones.md`, sección 12). Para actualizarlo:
+mpv usa `assets/certs/cacert.pem` para verificar HTTPS en Windows, macOS y
+el AppImage de Linux (ver `docs/decisiones.md`, sección 12). Se actualiza
+antes de cada release (el workflow de release no publica si no está al día):
 
 ```bash
-curl -o assets/certs/cacert.pem https://curl.se/ca/cacert.pem
-curl -s https://curl.se/ca/cacert.pem.sha256    # comparar con:
-sha256sum assets/certs/cacert.pem
+tool/actualizar_certificados.sh              # descarga, verifica el SHA-256 y reemplaza
+tool/actualizar_certificados.sh --verificar  # solo comprueba que sea el vigente
 ```
 
 ## Estructura
@@ -116,5 +141,8 @@ lib/
 - Sin telemetría ni analytics, salvo un conteo de uso mínimo una vez al día
   (sistema operativo, id de la instalación y una huella de la cuenta; nunca
   usuario ni contraseña), informado en los términos. Ver `docs/decisiones.md` §18.
+- El aviso de actualización consulta `godebol.com/api/evemtv/version` sin
+  datos de la cuenta, y solo abre descargas de `github.com/Elmarcinho` o
+  `godebol.com` (`docs/decisiones.md` §19).
 - **No subas credenciales, URLs de servidores ni listas reales al repositorio.**
   Los tests usan solo datos inventados y dominios reservados (`example.com`, `.invalid`).

@@ -1,0 +1,58 @@
+# Bibliotecas que el AppImage NO incluye: se usan las del sistema.
+# (linuxdeploy ya excluye glibc, libGL, libX11, fontconfig, freetype,
+# harfbuzz, ALSA, JACK… según la "excludelist" de AppImage.)
+#
+# GTK y GLib: la app usa el GTK del escritorio (temas, portales, módulos de
+# entrada). Incluirlo sin sus módulos rompe más de lo que arregla.
+libgtk-3.so*
+libgdk-3.so*
+libgdk_pixbuf-2.0.so*
+libglib-2.0.so*
+libgio-2.0.so*
+libgobject-2.0.so*
+libgmodule-2.0.so*
+libgthread-2.0.so*
+libpango*
+libcairo*
+libatk*
+libatspi*
+libepoxy*
+libpixman*
+libthai*
+libdatrie*
+libgraphite2*
+librsvg*
+libffi*
+libpcre2*
+libmount*
+libblkid*
+libselinux*
+# Integración con el sistema.
+libsystemd*
+libudev*
+libdbus-1*
+libcap.so*
+libapparmor*
+# Pantalla y GPU: deben coincidir con el servidor gráfico y los
+# controladores instalados. (Las extensiones de X como libXv o libXss sí se
+# incluyen: son estables y no siempre están instaladas.)
+libX11.so*
+libX11-xcb.so*
+libxcb.so*
+libxkbcommon*
+libwayland-*
+libdrm*
+libgbm*
+libEGL*
+libGL*
+libvulkan*
+# Decodificación por hardware: libva carga los controladores del sistema y
+# una versión vieja incluida no reconocería los nuevos (se perdería la
+# decodificación por hardware). VDPAU y OpenCL sí se incluyen: su interfaz
+# con los controladores no cambió en años y pueden faltar en el sistema.
+libva.so*
+libva-*.so*
+# PipeWire carga módulos del sistema que deben coincidir con su versión.
+# (libpulse y libjack sí se incluyen: hablan con el servidor de sonido por
+# un protocolo estable y pueden no estar instaladas.)
+libpipewire*

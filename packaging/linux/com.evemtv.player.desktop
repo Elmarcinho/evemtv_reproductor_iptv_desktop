@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=EvemTv
+GenericName=Reproductor IPTV
+Comment=Reproductor de TV en vivo, películas y series de tu propio servicio IPTV
+Exec=evemtv
+Icon=com.evemtv.player
+Terminal=false
+Categories=AudioVideo;Video;Player;TV;
+Keywords=iptv;tv;xtream;m3u;
+StartupWMClass=com.evemtv.player

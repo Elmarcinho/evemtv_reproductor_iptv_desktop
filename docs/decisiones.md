@@ -338,7 +338,7 @@ Solo compila y prueba; el empaquetado y la publicación son de la Fase 5.
   `tls-verify=yes` rechazaba todo HTTPS, incluso válido (confirmado en CI).
   La app incluye el paquete de certificados raíz de Mozilla publicado por
   curl.se (`assets/certs/cacert.pem`, 121 certificados, datos de Mozilla al
-  13/08/2026) y se lo pasa a mpv con `tls-ca-file`. En Linux se usan los
+  25/09/2026; se actualiza con `tool/actualizar_certificados.sh`) y se lo pasa a mpv con `tls-ca-file`. En Linux se usan los
   certificados del sistema (el libmpv de la distribución los encuentra).
   Consecuencia: en Windows y macOS no se confía en certificados raíz
   agregados a mano al sistema (p. ej. proxies corporativos). El paquete
@@ -794,10 +794,14 @@ restricciones ni el conteo condiciona nada.
     Sin cuenta abierta, o si la cuenta no tiene usuario (una lista M3U sin
     `username`), el campo se omite.
   - Nunca el usuario, la contraseña ni la URL. Un test comprueba el cuerpo.
-- **Cuándo:** como máximo una vez por día (UTC), y solo después de aceptar
-  los términos, que lo informan (versión 2 de los términos: quien ya los
+- **Cuándo:** una vez por día (UTC), y solo después de aceptar los
+  términos, que lo informan (versión 2 de los términos: quien ya los
   aceptó los vuelve a ver). Al abrir una cuenta se envía con su huella; si
   en 60 s desde que se abre la app no se abre ninguna, se envía sin huella.
+  Si el del día salió sin huella y después se abre una cuenta, se envía
+  **uno más** ese día, con ella (como máximo dos por día; ninguna otra
+  cuenta ni reapertura lo repite). Los envíos van en fila, así el de la
+  cuenta no se pierde si el de "app abierta" todavía está en curso.
 - **Si falla** (sin internet, 4xx, 5xx, 429): se ignora, sin reintentos en
   esa ejecución; se vuelve a intentar en la próxima apertura o al día
   siguiente. Nunca afecta el uso de la app.
@@ -814,3 +818,103 @@ restricciones ni el conteo condiciona nada.
   describen como "una huella de la cuenta calculada a partir de tu usuario
   y del servidor", sin llamarlo anónimo.
 
+
+## 19. Instaladores, release y aviso de actualización (Fase 5)
+
+**Versión:** 1.0.0. Vive en `pubspec.yaml` y en `AppConfig.version`; un test
+comprueba que coincidan y el workflow de release rechaza un tag que no sea
+`v` + la versión de `pubspec.yaml`.
+
+### Workflow de release (`.github/workflows/release.yml`)
+
+- **Con tag `vX.Y.Z`:** comprueba la versión y que el paquete de
+  certificados de Mozilla sea el vigente (primer paso; si no, no publica),
+  corre análisis y tests, arma y prueba los instaladores de las tres
+  plataformas, calcula `SHA256SUMS.txt` y crea el release. Solo el paso de
+  publicación tiene permiso de escritura (`GITHUB_TOKEN`); no hay secretos.
+- **Sin tag** (cambios en `packaging/` o a mano desde Actions): igual pero
+  sin publicar; los instaladores quedan como artefactos 7 días para
+  probarlos antes del tag.
+- **Pruebas de humo:** Windows instala en silencio, abre la app 20 s y
+  desinstala; macOS monta el `.dmg`, verifica la firma y abre la app 20 s;
+  Linux abre el AppImage 20 s. En ninguna se reproduce video (en la VM de
+  macOS no se puede, §16): la reproducción con los instaladores se prueba a
+  mano (docs/fase5_checklist.md).
+
+### Windows
+
+- **Inno Setup** (§3), **por usuario** (`PrivilegesRequired=lowest`, sin
+  UAC; se puede elegir "para todos"). `AppId` fijo: las versiones nuevas se
+  instalan encima. Al desinstalar se conservan cuentas y ajustes.
+- **Runtime de Visual C++** (`msvcp140`, `vcruntime140`, `vcruntime140_1`)
+  copiado junto al `.exe` (despliegue local de la app): abre aunque el
+  equipo no tenga el redistribuible.
+- **Portable `.zip`:** la misma carpeta. Los datos siguen en
+  `%APPDATA%\EvemTv\EvemTv` y las contraseñas en el Administrador de
+  credenciales: "portable" es el programa, no los datos.
+
+### macOS
+
+- `.dmg` con firma **ad hoc** (sin cuenta de Apple) y acceso directo a
+  Aplicaciones. El usuario la habilita una vez con *Abrir igualmente*
+  (docs/instalacion.md).
+- **Keychain con el `.app` de release firmado:** el workflow compila en
+  release, con los mismos entitlements y firma ad hoc que la app publicada,
+  un punto de entrada de prueba (`test_driver/keychain_release_check.dart`)
+  que escribe, lee y borra un valor ficticio con el mismo
+  `secureStorageProvider`. La prueba de integración de depuración sigue en
+  el workflow de compilación.
+- Con firma ad hoc, la "identidad" de la app cambia en cada versión: macOS
+  puede volver a pedir permiso para el llavero tras actualizar (documentado
+  para el usuario). Se resuelve con un certificado de Developer ID.
+
+### Linux: AppImage con libmpv incluido
+
+- Se compila en **Ubuntu 22.04** (glibc 2.35): funciona en Ubuntu 22.04,
+  Debian 12, Fedora 36 o posteriores. El libmpv de 22.04 es más viejo
+  (0.34) que el del workflow de compilación: el job de release corre con él
+  la prueba de reproducción y TLS antes de empaquetar.
+- `packaging/linux/crear_appimage.sh` copia la compilación release y usa
+  **linuxdeploy** (`--deploy-deps-only`) para incluir libmpv, ffmpeg y sus
+  dependencias. Herramientas (linuxdeploy, appimagetool y el runtime de
+  AppImage) en versiones fijas, verificadas por SHA-256.
+- **Se toman del sistema** (`packaging/linux/excluir.txt`): GTK/GLib (la app
+  usa el GTK del escritorio), X11/Wayland/GL/Vulkan (deben coincidir con los
+  controladores), **libva** (un libva viejo no reconoce controladores nuevos:
+  se perdería la decodificación por hardware) y PipeWire. **Se incluyen**
+  VDPAU, OpenCL, libpulse, las extensiones de X y **libjack** (que la lista
+  por defecto de AppImage excluye, pero sin ella libmpv no carga y muchos
+  escritorios no la traen). El script falla si a libmpv le falta algo que no
+  esté incluido ni tomado del sistema a propósito.
+- `AppRun` fija `LIBMPV_LIBRARY_PATH` a la copia incluida: media_kit abre
+  libmpv por nombre desde Dart y, si no, podría cargar otra del sistema.
+- **Certificados:** el GnuTLS incluido busca los certificados en la ruta de
+  Debian (en Fedora u openSUSE no los encontraría); dentro del AppImage
+  (variable `APPIMAGE`) mpv usa `cacert.pem`, como en Windows y macOS.
+- El script falla si el ejecutable no enlaza **mimalloc** (§16).
+- `libdartjni.so` (de `path_provider_android`) pide `libjvm`, pero en Linux
+  nunca se carga: no se incluye Java.
+- Medido en Ubuntu 24.04: ~96 MB.
+
+### Aviso de actualización
+
+- `GET https://godebol.com/api/evemtv/version` →
+  `{ "ultima_version", "descarga", "minima" }`. Sin datos de la cuenta ni
+  de la instalación (solo el User-Agent `EvemTv/x.y.z`). Primera consulta a
+  los 3 s de abrir la app y luego cada 12 h. Si falla, se ignora.
+- **Versión nueva:** tarjeta abajo a la derecha con **Descargar** y ✕
+  (cerrada hasta la próxima apertura, o hasta que aparezca otra versión).
+- **Instalada < `minima`:** pantalla que tapa la app, sin cerrar ni teclado
+  ni mouse para lo de abajo; si había un video en curso, se sale del
+  reproductor.
+- **Solo se abren enlaces** `https://` de `github.com/Elmarcinho/…` o
+  `godebol.com` (sin usuario, contraseña ni puerto raro). Otro enlace se
+  reemplaza por la página de releases del repositorio. Se vuelve a
+  comprobar justo antes de abrirlo.
+- **Solo release** consulta godebol.com; en depuración está desactivado
+  salvo `--dart-define=UPDATE_CHECK_URL=http://127.0.0.1:18080/…`.
+- Versiones comparadas por número (`1.10.0 > 1.9.0`); tolera `v1.2`,
+  `1.2.3+4` y campos raros sin romper nada.
+- Los términos (versión 3) lo mencionan. Todavía no hay pantalla de Ajustes:
+  el interruptor para desactivar el aviso normal queda pendiente para
+  cuando exista (el obligatorio no se podrá desactivar).

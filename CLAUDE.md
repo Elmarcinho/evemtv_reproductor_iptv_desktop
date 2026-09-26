@@ -134,6 +134,7 @@ Reglas de robustez:
 - **Linux**: AppImage. Documentar la dependencia de libmpv si aplica.
 - GitHub Actions para compilar las tres plataformas y publicar en GitHub Releases.
 - Aviso de actualización dentro de la app: consultar la última versión publicada y mostrar un botón de descarga (sin autoinstalación por ahora).
+  Implementado con `GET https://godebol.com/api/evemtv/version` (sin datos de la cuenta; solo en release); solo abre descargas de `github.com/Elmarcinho` o `godebol.com`. Ver `docs/decisiones.md` §19 y la guía para usuarios `docs/instalacion.md`.
 
 ## 10. Calidad
 

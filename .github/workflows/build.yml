@@ -1,5 +1,6 @@
-# Compilación continua (Fase 1): análisis, tests y compilación de Windows y
-# macOS. Solo compila; el empaquetado y la publicación llegan en la Fase 5.
+# Compilación continua: análisis, tests, compilación y pruebas de
+# integración en las tres plataformas. El empaquetado y la publicación están
+# en release.yml.
 #
 # Repositorio público: este workflow no usa secretos ni credenciales.
 name: Compilar

@@ -71,3 +71,4 @@ accounts.json
 *.sqlite3-wal
 *.sqlite3-shm
 .vscode/launch.json
+/dist/

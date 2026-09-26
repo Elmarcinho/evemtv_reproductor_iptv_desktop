@@ -18,8 +18,9 @@ import '../auth/application/terms_controller.dart';
 
 /// Conteo de uso mínimo (Fase 4.5; ver docs/decisiones.md §18).
 ///
-/// Una vez al día como máximo se envía `install_id`, `os` y, si hay una
-/// sesión abierta, `account_hash` (SHA-256 de "usuario|host"). Nunca el
+/// Una vez al día se envía `install_id`, `os` y, si hay una sesión
+/// abierta, `account_hash` (SHA-256 de "usuario|host"); si ese envío salió
+/// sin huella, se permite uno más ese día al abrir una cuenta. Nunca el
 /// usuario, la contraseña ni la URL. Si falla, se ignora: se vuelve a
 /// intentar en la próxima apertura de la app o al día siguiente.
 abstract final class UsagePingConfig {
@@ -86,7 +87,6 @@ class UsagePingService {
   /// Ya se intentó en esta ejecución y falló: no se insiste hasta la
   /// próxima apertura.
   bool _failedThisRun = false;
-  Future<bool>? _inFlight;
 
   /// Día (UTC) en formato `aaaa-mm-dd`.
   String _today() => _clock().toUtc().toIso8601String().substring(0, 10);
@@ -109,20 +109,36 @@ class UsagePingService {
   };
 
   /// Envía el conteo si hoy no se envió y no falló ya en esta ejecución.
-  /// Devuelve `true` si se envió ahora. Nunca lanza.
-  Future<bool> pingIfDue(SourceCredentials? credentials) =>
-      _inFlight ??= _ping(credentials).whenComplete(() => _inFlight = null);
+  /// Si el de hoy salió sin huella y ahora hay una cuenta, envía uno más
+  /// con ella (como máximo dos por día). Devuelve `true` si se envió ahora.
+  /// Nunca lanza.
+  ///
+  /// Los envíos van en fila: si al abrir una cuenta todavía está en curso
+  /// el de "app abierta", el de la cuenta espera y decide después.
+  Future<bool> pingIfDue(SourceCredentials? credentials) {
+    final previous = _queue;
+    final next = previous.then((_) => _ping(credentials));
+    _queue = next.then((_) {});
+    return next;
+  }
+
+  Future<void> _queue = Future.value();
 
   Future<bool> _ping(SourceCredentials? credentials) async {
     final url = endpoint;
     if (url == null || _failedThisRun) return false;
     try {
-      if (await settings.get(SettingsKeys.usagePingDay) == _today()) {
-        return false;
-      }
+      final today = _today();
+      final data = await body(credentials);
+      final hashed = data.containsKey('account_hash');
+      final sentToday = await settings.get(SettingsKeys.usagePingDay) == today;
+      final hashedToday =
+          await settings.get(SettingsKeys.usagePingHashDay) == today;
+      // Ya salió hoy uno con huella, o uno sin ella y ahora tampoco hay.
+      if (hashedToday || (sentToday && !hashed)) return false;
       final response = await dio.postUri<void>(
         url,
-        data: await body(credentials),
+        data: data,
         options: Options(
           contentType: Headers.jsonContentType,
           responseType: ResponseType.plain,
@@ -135,7 +151,8 @@ class UsagePingService {
       );
       final status = response.statusCode ?? 0;
       if (status >= 200 && status < 300) {
-        await settings.set(SettingsKeys.usagePingDay, _today());
+        await settings.set(SettingsKeys.usagePingDay, today);
+        if (hashed) await settings.set(SettingsKeys.usagePingHashDay, today);
         AppLogger.event('usage.ping', {'resultado': 'enviado', 'http': status});
         return true;
       }

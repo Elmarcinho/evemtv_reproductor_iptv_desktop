@@ -14,4 +14,9 @@ abstract final class SettingsKeys {
 
   /// Día (UTC, aaaa-mm-dd) del último conteo de uso enviado.
   static const String usagePingDay = 'usage_ping_day';
+
+  /// Día (UTC) del último conteo enviado con `account_hash`. Si el del día
+  /// salió sin huella (app abierta sin cuenta), al abrir una cuenta ese
+  /// mismo día se envía uno más, con ella.
+  static const String usagePingHashDay = 'usage_ping_hash_day';
 }

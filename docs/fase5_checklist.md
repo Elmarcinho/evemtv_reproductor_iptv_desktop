@@ -5,24 +5,33 @@ Pendientes acordados para la Fase 5. Cada release debe repasar la sección
 
 ## Antes de cada release
 
-- [ ] **Actualizar el paquete de certificados raíz de Mozilla**
+- [ ] **Primer paso: actualizar el paquete de certificados raíz de Mozilla**
       (`assets/certs/cacert.pem`), que usa mpv para verificar HTTPS en
-      Windows y macOS. Un paquete viejo puede rechazar servidores válidos o
-      seguir confiando en autoridades retiradas:
+      Windows, macOS y el AppImage. Un paquete viejo puede rechazar
+      servidores válidos o seguir confiando en autoridades retiradas:
 
       ```bash
-      curl -o assets/certs/cacert.pem https://curl.se/ca/cacert.pem
-      curl -s https://curl.se/ca/cacert.pem.sha256   # debe coincidir con:
-      sha256sum assets/certs/cacert.pem
+      tool/actualizar_certificados.sh   # descarga, verifica el SHA-256 y reemplaza
       ```
 
-      Anotar la fecha de los datos de Mozilla (encabezado del archivo) en
-      `docs/decisiones.md`, sección 12.
+      Anotar la fecha de los datos de Mozilla que imprime en
+      `docs/decisiones.md`, sección 12, y hacer commit. El workflow de
+      release lo vuelve a comprobar y **no publica** si no está al día.
 - [ ] Workflow en verde en Linux, Windows y macOS, incluidas las pruebas de
       integración (almacén seguro real, TLS de mpv, temporales).
 - [ ] Revisar que el diff del release no contenga credenciales, URLs de
       paneles ni datos reales (el repositorio es público).
-- [ ] Actualizar `version` en `pubspec.yaml` y `AppConfig.version`.
+- [ ] Actualizar `version` en `pubspec.yaml` y `AppConfig.version` (un test
+      comprueba que coincidan; el tag debe ser `v` + esa versión).
+- [ ] Probar los instaladores del último run **sin tag** del workflow
+      "Release" (artefactos `windows`, `macos`, `linux`), con reproducción
+      real de un canal y una película en cada sistema.
+- [ ] Recién entonces, crear y subir el tag (`git tag v1.0.0 && git push
+      origin v1.0.0`): el workflow publica el release.
+- [ ] Publicar en `godebol.com/api/evemtv/version` la nueva
+      `ultima_version` y el enlace de `descarga` (de `github.com/Elmarcinho`
+      o `godebol.com`; otro se ignora). Subir `minima` solo si la versión
+      anterior deja de funcionar.
 - [ ] **Obligatorio: probar en un Mac real** abrir y cerrar varias
       películas y varios canales seguidos (al menos 10 de cada uno, con
       pantalla completa y volviendo al catálogo), sin cierres inesperados ni
@@ -56,22 +65,21 @@ Pendientes acordados para la Fase 5. Cada release debe repasar la sección
 
 ## Pendientes de la Fase 5
 
-- [ ] Windows: instalador con Inno Setup y versión portable `.zip`.
-- [ ] macOS: `.dmg` con firma ad-hoc y guía en `docs/` para habilitar la app
-      en *Ajustes del Sistema → Privacidad y seguridad → Abrir igualmente*.
-- [ ] Probar el Keychain con el `.app` **release** firmado (hoy la prueba de
-      CI usa la compilación de depuración; observación de la revisión de la
-      Fase 1).
-- [ ] Linux: el AppImage debe salir de la compilación que enlaza
-      **mimalloc** (`linux/CMakeLists.txt`); sin él, la memoria crece con
-      cada película abierta (docs/decisiones.md §16). Revisar el paso
-      "Memoria tras cerrar el reproductor" del workflow en las tres
-      plataformas.
-- [ ] Linux: AppImage. Decidir si incluye libmpv (y, en ese caso, si ese
-      libmpv encuentra los certificados del sistema o necesita
-      `cacert.pem`, como Windows y macOS). Incluir el archivo `.desktop` y
-      el ícono (en Wayland el panel lo toma de ahí).
-- [ ] GitHub Actions: empaquetar las tres plataformas y publicar en
-      GitHub Releases.
-- [ ] Aviso de actualización dentro de la app (consulta de la última
-      versión publicada, desactivable en Ajustes).
+- [x] Windows: instalador con Inno Setup y versión portable `.zip`
+      (`packaging/windows/evemtv.iss`; runtime de Visual C++ incluido).
+- [x] macOS: `.dmg` con firma ad-hoc (`packaging/macos/crear_dmg.sh`) y guía
+      en `docs/instalacion.md` (*Abrir igualmente*).
+- [x] Probar el Keychain con el `.app` **release** firmado: paso
+      "Keychain con el .app de release firmado" del workflow de release.
+- [x] Linux: AppImage con libmpv incluido, `.desktop` e ícono
+      (`packaging/linux/crear_appimage.sh`, decisiones §19). El script
+      falla si falta mimalloc. Usa `cacert.pem` (su GnuTLS no encuentra los
+      certificados fuera de Debian/Ubuntu).
+- [x] GitHub Actions: empaquetar las tres plataformas y publicar en
+      GitHub Releases con `SHA256SUMS.txt` (`.github/workflows/release.yml`).
+- [x] Aviso de actualización dentro de la app (`godebol.com/api/evemtv/version`,
+      obligatorio si la versión es menor que `minima`).
+- [ ] Interruptor para desactivar el aviso normal en Ajustes (cuando exista
+      la pantalla de Ajustes; el obligatorio no se desactiva).
+- [ ] Probar a mano el AppImage en una distribución que no sea Ubuntu
+      (Fedora o similar): reproducir un canal HTTPS.

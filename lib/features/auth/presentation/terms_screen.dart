@@ -23,6 +23,8 @@ class TermsScreen extends ConsumerWidget {
         'operativo, un identificador de esta instalación y una huella de la '
         'cuenta (un código calculado a partir de tu usuario y del servidor), '
         'nunca tu usuario ni tu contraseña.',
+    'Al abrirse, la app consulta si hay una versión nueva, sin enviar datos '
+        'de tu cuenta.',
   ];
 
   @override

@@ -156,6 +156,46 @@ void main() {
     expect(logs.join('\n'), isNot(contains(accountHash(_xtream)!)));
   });
 
+  test('si el del día salió sin huella, al abrir una cuenta sale otro con '
+      'ella (y solo uno)', () async {
+    final s = service();
+    expect(await s.pingIfDue(null), isTrue);
+    expect(await s.pingIfDue(null), isFalse, reason: 'sin cuenta: ya salió');
+    expect(await s.pingIfDue(_xtream), isTrue, reason: 'ahora con huella');
+    expect(
+      (http.requests.last.data as Map<String, String>)['account_hash'],
+      accountHash(_xtream),
+    );
+    // Ni otra cuenta ni una reapertura lo repiten ese día.
+    final other = XtreamCredentials(
+      server: Uri.parse('https://otro.example.com'),
+      username: 'luis',
+      password: 'x',
+    );
+    expect(await s.pingIfDue(other), isFalse);
+    expect(await service().pingIfDue(_xtream), isFalse);
+    expect(await service().pingIfDue(null), isFalse);
+    expect(http.requests, hasLength(2));
+    // Al día siguiente, el primero con huella basta para todo el día.
+    now = now.add(const Duration(days: 1));
+    expect(await s.pingIfDue(_xtream), isTrue);
+    expect(await s.pingIfDue(null), isFalse);
+    expect(await s.pingIfDue(_xtream), isFalse);
+    expect(http.requests, hasLength(3));
+  });
+
+  test('envíos simultáneos van en fila: el de la cuenta decide después del '
+      'de "app abierta"', () async {
+    final s = service();
+    final results = await Future.wait([
+      s.pingIfDue(null),
+      s.pingIfDue(_xtream),
+      s.pingIfDue(_xtream),
+    ]);
+    expect(results, [true, true, false]);
+    expect(http.requests, hasLength(2));
+  });
+
   for (final code in [400, 429, 500, 503]) {
     test('$code: se ignora, no insiste en esta ejecución y reintenta en la '
         'próxima apertura', () async {
@@ -247,6 +287,22 @@ void main() {
         // El envío de "app abierta" ya no sale ese día.
         async.elapse(UsagePingConfig.appOpenDelay * 2);
         expect(http.requests, hasLength(1));
+      });
+    });
+
+    test('cuenta abierta después del envío sin huella: sale otro con ella', () {
+      fakeAsync((async) {
+        final c = container(termsAccepted: true);
+        c.read(usagePingTriggerProvider);
+        async.elapse(UsagePingConfig.appOpenDelay + const Duration(seconds: 1));
+        expect(http.requests, hasLength(1));
+        c.read(sessionProvider.notifier).start(sessionOf(_xtream));
+        async.elapse(const Duration(seconds: 1));
+        expect(http.requests, hasLength(2));
+        expect(
+          (http.requests.last.data as Map<String, String>)['account_hash'],
+          accountHash(_xtream),
+        );
       });
     });
 

@@ -1,0 +1,347 @@
+# Release (Fase 5): con un tag de versión (v1.0.0) compila las tres
+# plataformas, arma los instaladores, los prueba y los publica en GitHub
+# Releases con sus sumas SHA-256.
+#
+# Sin tag (cambios en packaging/ o en este archivo, o a mano desde Actions)
+# hace todo menos publicar: los instaladores quedan como artefactos del run
+# durante 7 días, para probarlos antes de crear el tag.
+#
+# Repositorio público: no usa secretos; solo el GITHUB_TOKEN del run, y con
+# permiso de escritura únicamente en el paso de publicación.
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+    branches: [main]
+    paths:
+      - 'packaging/**'
+      - 'tool/actualizar_certificados.sh'
+      - 'test_driver/keychain_release_check.dart'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: '3.47.5'
+  TLS_VALID_URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/integration_test/assets/tls_probe.mkv
+
+jobs:
+  preparar:
+    name: Versión, certificados y tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publicar: ${{ steps.version.outputs.publicar }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Versión
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(sed -n 's/^version: *\([0-9]*\.[0-9]*\.[0-9]*\)+[0-9]*$/\1/p' pubspec.yaml)
+          [[ -n "$VERSION" ]] || { echo "::error::No se encontró 'version: x.y.z+n' en pubspec.yaml"; exit 1; }
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            if [[ "$GITHUB_REF_NAME" != "v$VERSION" ]]; then
+              echo "::error title=Versión::El tag $GITHUB_REF_NAME no coincide con pubspec.yaml ($VERSION)."
+              exit 1
+            fi
+            echo "publicar=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publicar=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Versión::$VERSION (publicar: $([[ "$GITHUB_REF_TYPE" == tag ]] && echo sí || echo no))"
+
+      # Primer paso de cada release: el paquete de certificados de Mozilla
+      # del repositorio debe ser el vigente. Con tag, si no lo es, no se
+      # publica; sin tag, solo avisa.
+      - name: Certificados raíz de Mozilla al día
+        shell: bash
+        run: |
+          if ! tool/actualizar_certificados.sh --verificar; then
+            [[ "$GITHUB_REF_TYPE" == "tag" ]] && exit 1
+            echo "::warning title=Certificados::Actualizar con tool/actualizar_certificados.sh antes de crear el tag."
+          fi
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter analyze
+      # Incluye test/core/app_version_test.dart (AppConfig.version = pubspec).
+      - run: flutter test
+
+  linux:
+    name: AppImage (Linux)
+    needs: preparar
+    # La versión más vieja de Ubuntu con soporte: el AppImage funciona en
+    # sistemas con glibc igual o más nueva (Ubuntu 22.04, Debian 12,
+    # Fedora 36 o posteriores).
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    env:
+      VERSION: ${{ needs.preparar.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Dependencias del sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config \
+            libgtk-3-dev libmpv-dev libsecret-1-dev xvfb
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - run: flutter pub get
+
+      # El libmpv de Ubuntu 22.04 (el que va dentro del AppImage) es más
+      # viejo que el del workflow de compilación: se prueba que reproduce y
+      # que verifica TLS igual.
+      - name: libmpv incluido reproduce y verifica TLS
+        timeout-minutes: 12
+        run: >
+          xvfb-run -a flutter test integration_test/playback_tls_test.dart
+          -d linux --dart-define=TLS_VALID_URL=${{ env.TLS_VALID_URL }}
+
+      - run: flutter build linux --release
+
+      - name: Armar AppImage
+        run: packaging/linux/crear_appimage.sh "$VERSION" dist
+
+      # Arranca el AppImage y comprueba que sigue abierto a los 20 s (sin
+      # FUSE en el runner: se extrae al vuelo).
+      - name: Prueba de arranque
+        run: |
+          set +e
+          timeout 20 xvfb-run -a "dist/EvemTv-$VERSION-linux-x86_64.AppImage" --appimage-extract-and-run
+          code=$?
+          if [[ $code -ne 124 ]]; then
+            echo "::error title=AppImage::La app se cerró sola (código $code)."
+            exit 1
+          fi
+          echo "::notice title=AppImage::$(du -h dist/*.AppImage | cut -f1) — arranca bien"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux
+          path: dist/*
+          retention-days: 7
+          if-no-files-found: error
+
+  windows:
+    name: Instalador y portable (Windows)
+    needs: preparar
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      VERSION: ${{ needs.preparar.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter build windows --release
+
+      # Los plugins se compilan con Visual C++: se incluye su runtime junto
+      # al .exe, así la app abre aunque el equipo no lo tenga instalado.
+      - name: Runtime de Visual C++
+        shell: pwsh
+        run: |
+          $rel = 'build\windows\x64\runner\Release'
+          foreach ($dll in 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
+            Copy-Item "$env:WINDIR\System32\$dll" $rel
+          }
+          $v = (Get-Item "$rel\evemtv.exe").VersionInfo.ProductVersion
+          if (-not $v.StartsWith($env:VERSION)) { throw "evemtv.exe es la versión $v, no $env:VERSION" }
+
+      - name: Versión portable (.zip)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist, portable | Out-Null
+          Copy-Item -Recurse build\windows\x64\runner\Release portable\EvemTv
+          Compress-Archive -Path portable\EvemTv -DestinationPath "dist\EvemTv-$env:VERSION-windows-x64-portable.zip"
+
+      - name: Instalador (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --no-progress -y
+          }
+          & $iscc "/DAppVersion=$env:VERSION" "/DSourceDir=$PWD\build\windows\x64\runner\Release" "/O$PWD\dist" packaging\windows\evemtv.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC falló ($LASTEXITCODE)" }
+
+      # Instala en silencio (por usuario), abre la app 20 s y desinstala.
+      - name: Prueba del instalador
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist\*-instalador.exe | Select-Object -First 1
+          $p = Start-Process $setup.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/CURRENTUSER', '/NORESTART' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "El instalador terminó con $($p.ExitCode)" }
+          $dir = "$env:LOCALAPPDATA\Programs\EvemTv"
+          if (-not (Test-Path "$dir\evemtv.exe")) { throw "No quedó instalada en $dir" }
+          $app = Start-Process "$dir\evemtv.exe" -PassThru
+          Start-Sleep -Seconds 20
+          if ($app.HasExited) { throw "La app se cerró sola (código $($app.ExitCode))" }
+          Stop-Process -Id $app.Id -Force
+          Start-Sleep -Seconds 2
+          $u = Start-Process "$dir\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
+          if ($u.ExitCode -ne 0) { throw "El desinstalador terminó con $($u.ExitCode)" }
+          $size = (Get-ChildItem dist | ForEach-Object { "$($_.Name) $([math]::Round($_.Length / 1MB)) MB" }) -join ', '
+          Write-Output "::notice title=Windows::$size — instala, abre y desinstala bien"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows
+          path: dist/*
+          retention-days: 7
+          if-no-files-found: error
+
+  macos:
+    name: DMG (macOS)
+    needs: preparar
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      VERSION: ${{ needs.preparar.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - run: flutter pub get
+
+      # El Keychain con el .app de RELEASE firmado ad hoc (mismos
+      # entitlements y firma que el que se publica), no el de depuración.
+      - name: Keychain con el .app de release firmado
+        timeout-minutes: 15
+        run: |
+          flutter build macos --release -t test_driver/keychain_release_check.dart
+          APP=build/macos/Build/Products/Release/EvemTv.app
+          codesign --force --deep --sign - "$APP"
+          codesign --display --entitlements - "$APP"
+          # macOS no trae `timeout`: espera hasta 120 s a que termine.
+          "$APP/Contents/MacOS/EvemTv" > keychain.log 2>&1 &
+          pid=$!
+          for _ in $(seq 120); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+          if kill -0 "$pid" 2>/dev/null; then kill "$pid"; echo "No terminó en 120 s"; fi
+          set +e
+          wait "$pid"
+          code=$?
+          set -e
+          cat keychain.log
+          if [[ $code -ne 0 ]] || ! grep -q KEYCHAIN_RELEASE_OK keychain.log; then
+            echo "::error title=Keychain::Falló con el .app de release firmado (código $code)."
+            exit 1
+          fi
+          echo "::notice title=Keychain::Escribe, lee y borra con el .app de release firmado ad hoc"
+          rm -rf "$APP"
+
+      - run: flutter build macos --release
+
+      - name: Firma ad hoc y .dmg
+        run: packaging/macos/crear_dmg.sh "$VERSION" dist
+
+      # Monta el .dmg, verifica la firma del .app que trae y lo abre 20 s.
+      # (Sin video: en la VM de GitHub la textura de video no funciona,
+      # docs/decisiones.md §16.)
+      - name: Prueba del .dmg
+        run: |
+          MNT=$(mktemp -d)
+          hdiutil attach -nobrowse -readonly -mountpoint "$MNT" "dist/EvemTv-$VERSION-macos.dmg"
+          codesign --verify --deep --strict "$MNT/EvemTv.app"
+          "$MNT/EvemTv.app/Contents/MacOS/EvemTv" &
+          pid=$!
+          sleep 20
+          if ! kill -0 "$pid" 2>/dev/null; then
+            wait "$pid"; code=$?
+            echo "::error title=macOS::La app se cerró sola (código $code)."
+            hdiutil detach "$MNT" || true
+            exit 1
+          fi
+          kill "$pid"; sleep 2
+          hdiutil detach "$MNT"
+          echo "::notice title=macOS::$(du -h dist/*.dmg | cut -f1) — $(lipo -archs build/macos/Build/Products/Release/EvemTv.app/Contents/MacOS/EvemTv); abre bien"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos
+          path: dist/*
+          retention-days: 7
+          if-no-files-found: error
+
+  publicar:
+    name: Publicar en GitHub Releases
+    needs: [preparar, linux, windows, macos]
+    if: needs.preparar.outputs.publicar == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.preparar.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Sumas SHA-256
+        working-directory: dist
+        run: |
+          sha256sum -- * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Crear el release
+        run: |
+          {
+            echo "EvemTv $VERSION"
+            echo
+            echo "| Sistema | Archivo |"
+            echo "|---|---|"
+            echo "| Windows (instalador) | \`EvemTv-$VERSION-windows-x64-instalador.exe\` |"
+            echo "| Windows (portable) | \`EvemTv-$VERSION-windows-x64-portable.zip\` |"
+            echo "| macOS | \`EvemTv-$VERSION-macos.dmg\` |"
+            echo "| Linux | \`EvemTv-$VERSION-linux-x86_64.AppImage\` |"
+            echo
+            echo "Cómo instalar (avisos de Windows SmartScreen y de macOS): https://github.com/${GITHUB_REPOSITORY}/blob/v$VERSION/docs/instalacion.md"
+            echo
+            echo "EvemTv es solo un reproductor: no incluye listas, canales ni contenido."
+            echo
+            echo "### SHA-256"
+            echo
+            echo '```'
+            cat dist/SHA256SUMS.txt
+            echo '```'
+          } > notas.md
+          gh release create "v$VERSION" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "EvemTv $VERSION" \
+            --notes-file notas.md \
+            --verify-tag

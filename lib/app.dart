@@ -6,6 +6,7 @@ import 'core/config/app_config.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/global_messenger.dart';
+import 'features/update/update_notice.dart';
 import 'features/usage/usage_ping.dart';
 
 class EvemTvApp extends ConsumerWidget {
@@ -27,6 +28,9 @@ class EvemTvApp extends ConsumerWidget {
       supportedLocales: const [Locale('es')],
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       routerConfig: ref.watch(appRouterProvider),
+      // Aviso de actualización encima de cualquier pantalla (Fase 5).
+      builder: (context, child) =>
+          UpdateGate(child: child ?? const SizedBox.shrink()),
     );
   }
 }

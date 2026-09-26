@@ -1,0 +1,8 @@
+#!/bin/sh
+# Punto de entrada del AppImage de EvemTv.
+HERE="$(dirname "$(readlink -f "$0")")"
+# media_kit abre libmpv por nombre desde Dart. Con la ruta exacta usa la
+# copia incluida (la misma que ya cargó el plugin de video) y no una del
+# sistema, si la hubiera.
+export LIBMPV_LIBRARY_PATH="$HERE/usr/lib/@LIBMPV@"
+exec "$HERE/usr/bin/evemtv" "$@"

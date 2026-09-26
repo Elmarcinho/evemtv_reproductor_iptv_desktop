@@ -16,13 +16,29 @@ import '../../core/logging/app_logger.dart';
 /// por curl.se) y se lo pasa a mpv con `tls-ca-file`. mpv necesita una ruta
 /// de archivo, así que se copia una vez a la carpeta de soporte de la app.
 ///
-/// En Linux se usa el libmpv de la distribución, que sí usa los
-/// certificados del sistema.
+/// En Linux, compilada desde el código, se usa el libmpv de la
+/// distribución, que sí usa los certificados del sistema. El **AppImage**
+/// incluye su propio libmpv (con el GnuTLS de Ubuntu, que busca los
+/// certificados en la ruta de Debian: en Fedora u openSUSE no los
+/// encontraría), así que también usa el paquete propio.
 abstract final class TlsCaBundle {
   static const String asset = 'assets/certs/cacert.pem';
 
   /// `true` en las plataformas que necesitan el paquete propio.
-  static bool get needed => Platform.isWindows || Platform.isMacOS;
+  static bool get needed => neededFor(
+    os: Platform.operatingSystem,
+    environment: Platform.environment,
+  );
+
+  /// Dentro de un AppImage, su entorno de ejecución define `APPIMAGE`.
+  @visibleForTesting
+  static bool neededFor({
+    required String os,
+    required Map<String, String> environment,
+  }) =>
+      os == 'windows' ||
+      os == 'macos' ||
+      (os == 'linux' && (environment['APPIMAGE'] ?? '').isNotEmpty);
 
   /// Ruta del paquete listo para mpv, o `null` si la plataforma no lo
   /// necesita. Lanza si no se pudo preparar: sin certificados, mpv no

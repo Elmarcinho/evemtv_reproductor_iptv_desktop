@@ -25,15 +25,16 @@ abstract final class AppConfig {
     '%20y%20quiero%20informaci%C3%B3n',
   );
 
-  /// Versión mostrada y enviada como User-Agent. Debe coincidir con
-  /// `pubspec.yaml` (en la Fase 5 se lee con package_info_plus).
-  static const String version = '0.1.0';
+  /// Versión mostrada, enviada como User-Agent y comparada con la del aviso
+  /// de actualización. Debe coincidir con `pubspec.yaml` (lo comprueban
+  /// test/core/app_version_test.dart y el workflow de release).
+  static const String version = '1.0.0';
 
   /// User-Agent propio y neutral: no se imita a otros reproductores.
   static const String userAgent = 'EvemTv/$version';
 
   /// Versión de los términos de uso; si cambia, se vuelven a pedir.
-  static const String termsVersion = '2';
+  static const String termsVersion = '3';
 
   /// Repositorio público donde se publican las versiones (aviso de
   /// actualización, Fase 5).
