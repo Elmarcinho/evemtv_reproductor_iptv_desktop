@@ -52,6 +52,11 @@ Pendientes acordados para la Fase 5. Cada release debe repasar la sección
 - [ ] Probar el Keychain con el `.app` **release** firmado (hoy la prueba de
       CI usa la compilación de depuración; observación de la revisión de la
       Fase 1).
+- [ ] Linux: el AppImage debe salir de la compilación que enlaza
+      **mimalloc** (`linux/CMakeLists.txt`); sin él, la memoria crece con
+      cada película abierta (docs/decisiones.md §16). Revisar el paso
+      "Memoria tras cerrar el reproductor" del workflow en las tres
+      plataformas.
 - [ ] Linux: AppImage. Decidir si incluye libmpv (y, en ese caso, si ese
       libmpv encuentra los certificados del sistema o necesita
       `cacert.pem`, como Windows y macOS). Incluir el archivo `.desktop` y

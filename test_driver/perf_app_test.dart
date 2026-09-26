@@ -277,20 +277,21 @@ Future<void> _scenario(FlutterDriver driver, int pid, FakePanel panel) async {
       'hwdec=${await driver.requestData('hwdec')}',
     );
 
-    // E. ¿Crece la memoria con cada apertura? Mismo video 1080p, 5 veces.
+    // E. ¿Crece la memoria con cada apertura? Mismo video 1080p, 20 veces.
+    // Tras cerrar se esperan 6 s: media_kit destruye mpv 5 s después.
     final h264 = File('$assetsDir/perf_1080_h264.mp4');
     if (h264.existsSync()) {
       panel.video = h264;
       final after = <String>[];
-      for (var i = 0; i < 5; i++) {
+      for (var i = 0; i < 20; i++) {
         await driver.tap(find.text('Reproducir'), timeout: timeout);
-        await sleep(const Duration(seconds: 8));
+        await sleep(const Duration(seconds: 6));
         await driver.requestData('back');
-        await sleep(const Duration(seconds: 4));
+        await sleep(const Duration(seconds: 6));
         after.add(rssMb(pid).toStringAsFixed(0));
       }
       final line =
-          'PERF|$runLabel|E memoria tras cada cierre (5× 1080p)|'
+          'PERF|$runLabel|E memoria tras cada cierre (20× 1080p)|'
           '${after.join(' → ')} MB';
       print(line);
       File('$assetsDir/perf_results.txt')

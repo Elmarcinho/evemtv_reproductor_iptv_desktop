@@ -23,6 +23,9 @@ env:
   # Video de prueba (sintético) servido por HTTPS con certificado válido,
   # del commit exacto: prueba (b) de integration_test/playback_tls_test.dart.
   TLS_VALID_URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/integration_test/assets/tls_probe.mkv
+  # Video sintético para medir la memoria tras cerrar el reproductor
+  # (integration_test/player_memory_test.dart), del commit exacto.
+  MEMORY_VIDEO_URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/integration_test/assets/memory_probe.mp4
 
 jobs:
   analyze-test:
@@ -70,6 +73,14 @@ jobs:
           xvfb-run -a flutter test integration_test/playback_tls_test.dart
           -d linux --dart-define=TLS_VALID_URL=${{ env.TLS_VALID_URL }}
 
+      # 20 aperturas y cierres del reproductor: la memoria no debe crecer
+      # (números en las anotaciones del run).
+      - name: Memoria tras cerrar el reproductor
+        timeout-minutes: 12
+        run: >
+          xvfb-run -a flutter test integration_test/player_memory_test.dart
+          -d linux --dart-define=MEMORY_VIDEO_URL=${{ env.MEMORY_VIDEO_URL }}
+
   build-windows:
     name: Compilar Windows
     runs-on: windows-latest
@@ -99,6 +110,12 @@ jobs:
         run: >
           flutter test integration_test/playback_tls_test.dart -d windows
           --dart-define=TLS_VALID_URL=${{ env.TLS_VALID_URL }}
+
+      - name: Memoria tras cerrar el reproductor
+        timeout-minutes: 12
+        run: >
+          flutter test integration_test/player_memory_test.dart -d windows
+          --dart-define=MEMORY_VIDEO_URL=${{ env.MEMORY_VIDEO_URL }}
 
   build-macos:
     name: Compilar macOS
@@ -136,3 +153,9 @@ jobs:
         run: >
           flutter test integration_test/playback_tls_test.dart -d macos
           --dart-define=TLS_VALID_URL=${{ env.TLS_VALID_URL }}
+
+      - name: Memoria tras cerrar el reproductor
+        timeout-minutes: 12
+        run: >
+          flutter test integration_test/player_memory_test.dart -d macos
+          --dart-define=MEMORY_VIDEO_URL=${{ env.MEMORY_VIDEO_URL }}

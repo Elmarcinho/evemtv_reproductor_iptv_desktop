@@ -74,6 +74,11 @@ set_target_properties(${BINARY_NAME}
 # them to the application.
 include(flutter/generated_plugins.cmake)
 
+# Asignador de memoria mimalloc (lo compila media_kit_libs_linux). Con el
+# de glibc, la memoria de cada reproductor cerrado queda retenida y crece
+# con cada película que se abre (ver docs/decisiones.md §16).
+target_link_libraries(${BINARY_NAME} PRIVATE ${MIMALLOC_LIB})
+
 
 # === Installation ===
 # By default, "installing" just makes a relocatable bundle in the build

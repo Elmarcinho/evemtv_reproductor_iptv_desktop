@@ -690,9 +690,34 @@ conexión se corta en lugar de esperar la respuesta o el tiempo límite.
   La CPU que queda es la de la app (interfaz, copia al lienzo de Flutter,
   red, audio), no la decodificación. En Windows y macOS falta comprobarlo
   en equipos reales (checklist de la Fase 5).
-- **Memoria tras cerrar el reproductor:** no vuelve a bajar. Abrir y
-  cerrar 5 veces el mismo video 1080p la hizo crecer ~22 MB por vez
-  (503 → 591 MB): es una fuga, no memoria retenida que se estabiliza.
-  Queda pendiente de investigar (sospechosos: la textura de video de
-  media_kit_video en Linux o un reproductor que no se libera del todo).
-
+- **Memoria tras cerrar el reproductor (Linux): resuelta con mimalloc.**
+  - Síntoma: cada película abierta y cerrada dejaba memoria tomada; con 20
+    aperturas de un 1080p la app pasó de 496 a 631 MB y seguía subiendo.
+  - Descartado: la referencia de diagnóstico al último reproductor
+    (`MediaKitEngine.current`) ahora es débil; y `dispose` del Player (que
+    libera también el VideoController y su textura) se llama en todos los
+    caminos: volver/Esc y error (al cerrar la pantalla), cierre antes de
+    terminar de crearse, y cambio de sesión (se destruye el contenedor).
+  - Aislado con `test_driver/leak_bench.dart` (15 ciclos cada variante):
+    crece incluso **solo con el Player, sin textura** (8,4 MB por ciclo);
+    con la textura, 8,6 MB; decodificando por software, 31 MB. `malloc_trim`
+    devolvía buena parte: es el asignador de glibc reteniendo y
+    fragmentando la memoria de mpv/FFmpeg, no la textura ni nuestro
+    código. Es el problema conocido de media_kit en Linux
+    (media-kit/media-kit#68); su corrección recomendada es enlazar
+    **mimalloc**, que media_kit_libs_linux ya compila. La corrección de
+    fugas posterior a 1.2.6 (media-kit/media-kit#1446, sin publicar) es de
+    pocos bytes por llamada y no explica esto.
+  - Con mimalloc (`linux/CMakeLists.txt`): banco aislado 0,5–1,4 MB por
+    ciclo y estable; app completa, 20 aperturas: 390 → 394 MB. Tras cerrar
+    el reproductor la memoria vuelve a bajar (434 → 391 MB).
+  - Aviso: el autor de media_kit comentó (07/2026) que mimalloc provocaba un
+    cierre inesperado con Flutter 3.44.0. Con Flutter 3.47.5 no se reprodujo
+    (compilaciones de depuración, perfil y release, y todas las pruebas de
+    reproducción). Si al actualizar Flutter apareciera, quitar la línea de
+    `linux/CMakeLists.txt` y, como mitigación, reutilizar un único
+    reproductor en lugar de crear uno por película.
+  - Seguimiento en CI: `integration_test/player_memory_test.dart` abre y
+    cierra 20 veces un 720p en Linux, Windows y macOS y publica la memoria
+    tras cada cierre; falla si los últimos 10 ciclos crecen más de 6 MB por
+    ciclo (con glibc midió 9,0; con mimalloc, 0,6).

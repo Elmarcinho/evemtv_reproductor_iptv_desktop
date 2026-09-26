@@ -7,6 +7,7 @@ sistema). En CI: `.github/workflows/build.yml`.
 |---|---|
 | `secure_storage_test.dart` | Guardar, leer y borrar credenciales ficticias en el almacén seguro real (Keychain con firma ad-hoc, DPAPI, libsecret). |
 | `playback_tls_test.dart` | mpv tiene `tls-verify=yes`; rechaza un certificado autofirmado **sin enviar la ruta** (que llevaría credenciales); reproduce un HTTPS con certificado válido; y abrir una URL no la deja escrita en archivos temporales. |
+| `player_memory_test.dart` | Abre y cierra 20 veces el reproductor (mpv real, textura mostrada) con un 720p sintético y publica la memoria tras cada cierre; falla ante una fuga grosera (> 6 MB por ciclo). |
 
 ```bash
 flutter test integration_test -d linux     # necesita un llavero activo
@@ -17,6 +18,10 @@ flutter test integration_test/playback_tls_test.dart -d linux
 
 Todo es ficticio y existe solo para estas pruebas:
 
+- `assets/memory_probe.mp4`: video sintético 720p de 10 s (patrón de
+  prueba), para `player_memory_test.dart`; en CI se usa la URL del commit
+  exacto (`MEMORY_VIDEO_URL`). Regenerar:
+  `ffmpeg -f lavfi -i testsrc2=size=1280x720:rate=25 -f lavfi -i sine=frequency=330:sample_rate=22050 -t 10 -c:v libx264 -preset veryfast -b:v 350k -maxrate 400k -bufsize 800k -c:a aac -b:a 24k -movflags +faststart memory_probe.mp4`
 - `assets/tls_probe.mkv`: video sintético de 3 s (patrón de prueba y un
   tono), sin contenido de ningún proveedor. La prueba (b) lo descarga por
   HTTPS desde `raw.githubusercontent.com` (certificado válido); en CI se
@@ -60,3 +65,14 @@ PERF_ASSETS=/ruta/a/esa/carpeta PERF_LABEL=prueba \
 
 Solo Linux. La ventana de la app se abre durante unos minutos: conviene
 dejarla visible y no usar el equipo mientras mide.
+
+### Banco de memoria del reproductor (`test_driver/leak_bench.dart`)
+
+Abre y cierra el reproductor muchas veces en variantes aisladas (solo el
+Player; Player con la textura mostrada, con y sin decodificación por
+hardware) y anota la memoria tras cada cierre y tras `malloc_trim`:
+
+```bash
+flutter run --profile -d linux -t test_driver/leak_bench.dart \
+  --dart-define=LEAK_VIDEO=/ruta/perf_1080_h264.mp4 --dart-define=LEAK_OUT=/ruta/salida.txt
+```

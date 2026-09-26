@@ -72,13 +72,18 @@ class MediaKitEngine implements PlaybackEngine {
       await player.dispose();
       throw StateError('mpv no activó la verificación TLS');
     }
-    return current = MediaKitEngine._(player);
+    final engine = MediaKitEngine._(player);
+    _current = WeakReference(engine);
+    return engine;
   }
 
   /// Último reproductor creado y aún abierto. Solo para diagnóstico y
-  /// medición (test_driver/perf_app.dart); la app no lo usa.
+  /// medición (test_driver/perf_app.dart); la app no lo usa. Referencia
+  /// DÉBIL: nunca retiene un reproductor que la app ya soltó.
+  static WeakReference<MediaKitEngine>? _current;
+
   @visibleForTesting
-  static MediaKitEngine? current;
+  static MediaKitEngine? get current => _current?.target;
 
   /// Decodificador por hardware que mpv está usando ahora (`vaapi`,
   /// `d3d11va`, `videotoolbox`…), o `no` si decodifica por software.
@@ -133,7 +138,7 @@ class MediaKitEngine implements PlaybackEngine {
 
   @override
   Future<void> dispose() {
-    if (identical(current, this)) current = null;
+    if (identical(current, this)) _current = null;
     return player.dispose();
   }
 }
