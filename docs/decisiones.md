@@ -721,12 +721,23 @@ conexión se corta en lugar de esperar la respuesta o el tiempo límite.
     cierra 20 veces un 720p en Linux, Windows y macOS y publica la memoria
     tras cada cierre; falla si los últimos 10 ciclos crecen más de 6 MB por
     ciclo (con glibc midió 9,0; con mimalloc, 0,6).
-    Primeras mediciones en CI: Linux (software, sin GPU) 3,3–3,7 MB por
-    ciclo; Windows estable (baja al final). En el runner de macOS la app
-    se detiene al abrir un video con textura (dentro de `open`,
-    probablemente por la VM sin GPU; sin acceso a los registros no se pudo
-    confirmar), así que allí se mide solo el Player. La reproducción con
-    textura en macOS queda en la prueba manual de la Fase 5.
+    Mediciones en CI: Linux (software, sin GPU) 1,6–3,7 MB por ciclo;
+    Windows estable (baja al final); macOS, solo el Player, 0,4.
+  - **macOS en CI, causa confirmada:** con la textura, la app se cierra al
+    abrir el video. El registro del sistema (que el workflow ahora guarda y
+    resume si el paso falla) muestra `media_kit_video/OpenGLHelpers.swift:25:
+    Fatal error: Unexpectedly found nil while unwrapping an Optional value`.
+    Esa línea pide a macOS un formato OpenGL **acelerado por hardware**
+    (`kCGLPFAAccelerated`) y fuerza el resultado (`pixelFormat!`): la VM del
+    runner no tiene ese renderizador, macOS devuelve nulo y la app se cae.
+    No es un fallo de nuestro código ni una fuga. En un Mac real con GPU
+    existe ese formato; pero **cualquier Mac sin OpenGL acelerado** (otras
+    máquinas virtuales, algunos escritorios remotos) sufriría el mismo
+    cierre. Mitigación posible: reportarlo a media_kit y proponer que, si
+    falla, reintente sin `kCGLPFAAccelerated` (renderizador por software) en
+    vez de cerrar la app; mientras tanto, la prueba obligatoria en un Mac
+    real queda en el checklist de la Fase 5. (No quedó informe `.ips`: el
+    motivo sale del registro del sistema.)
 
 ## 17. Carpeta de datos y ediciones (Fase 4.5)
 

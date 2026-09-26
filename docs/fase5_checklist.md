@@ -27,8 +27,9 @@ Pendientes acordados para la Fase 5. Cada release debe repasar la sección
       películas y varios canales seguidos (al menos 10 de cada uno, con
       pantalla completa y volviendo al catálogo), sin cierres inesperados ni
       pantallas negras, y con la memoria estable (Monitor de Actividad). No
-      se publica sin esta prueba: en el runner de macOS de CI no se puede
-      reproducir con textura.
+      se publica sin esta prueba: en el runner de macOS de CI la textura de
+      video no funciona (sin OpenGL acelerado la app se cierra en
+      media_kit_video; docs/decisiones.md §16).
 - [ ] **Probar los reproductores a mano con escalado de pantalla 125 % y
       150 %** (Windows: *Configuración → Pantalla → Escala*; macOS:
       *Pantallas → resolución "Más espacio/Texto más grande"*; GNOME:

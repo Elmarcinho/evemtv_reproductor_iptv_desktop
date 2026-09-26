@@ -27,10 +27,11 @@ const String videoUrl = String.fromEnvironment(
 const int cycles = 20;
 
 /// Con textura (VideoController + Video, como en la app) o solo el Player.
-/// En el runner de macOS de GitHub la app se detiene al abrir un video con
-/// textura (se corta dentro de `open`; probablemente por la VM sin GPU, no
-/// se pudo confirmar sin los registros). Allí se mide solo el Player, que es
-/// donde estaba la fuga en Linux. La textura en macOS se prueba a mano.
+/// En el runner de macOS de GitHub se mide solo el Player: la textura de
+/// media_kit_video pide un formato OpenGL acelerado por hardware, la VM no
+/// lo tiene y la app se cierra (fatal error en OpenGLHelpers.swift:25).
+/// La fuga de Linux estaba en el Player, así que la medición sigue sirviendo;
+/// la textura en macOS se prueba en un Mac real.
 const bool withTexture = bool.fromEnvironment(
   'MEMORY_TEXTURE',
   defaultValue: true,

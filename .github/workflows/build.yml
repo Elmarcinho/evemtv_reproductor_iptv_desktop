@@ -154,10 +154,11 @@ jobs:
           flutter test integration_test/playback_tls_test.dart -d macos
           --dart-define=TLS_VALID_URL=${{ env.TLS_VALID_URL }}
 
-      # Con textura, como en la app. Si falla, se guardan los informes de
-      # cierre de macOS y la salida completa (artefacto) y se resumen como
-      # anotaciones, para distinguir un cierre real de la app de un límite
-      # de la máquina virtual.
+      # Solo el Player: la textura de media_kit_video exige OpenGL acelerado
+      # por hardware y la VM de GitHub no lo tiene (la app se cierra en
+      # OpenGLHelpers.swift; ver docs/decisiones.md §16). La textura en macOS
+      # se prueba en un Mac real (checklist de la Fase 5). Si el paso falla,
+      # se guardan informes de cierre, registro del sistema y salida completa.
       - name: Memoria tras cerrar el reproductor
         id: memoria_macos
         timeout-minutes: 12
@@ -166,6 +167,7 @@ jobs:
           set -o pipefail
           flutter test integration_test/player_memory_test.dart -d macos \
             --dart-define=MEMORY_VIDEO_URL=${{ env.MEMORY_VIDEO_URL }} \
+            --dart-define=MEMORY_TEXTURE=false \
             2>&1 | tee memoria_macos.log
 
       - name: Diagnóstico del fallo de memoria (macOS)
