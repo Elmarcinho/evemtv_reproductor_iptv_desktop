@@ -146,8 +146,9 @@ class HomeScreen extends ConsumerWidget {
 ///
 /// - **Sin nada a medio ver:** las secciones y, debajo, las novedades de
 ///   películas y series lado a lado, grandes y con su ficha breve.
-/// - **Con algo a medio ver:** "Seguir viendo" pasa al área principal y las
-///   novedades a una columna compacta a la derecha.
+/// - **Con algo a medio ver:** el mismo arreglo, con "Seguir viendo" (una
+///   fila de tarjetas más chicas) entre las secciones y los carruseles, que
+///   se achican para que todo entre en la ventana sin desplazar.
 ///
 /// El cambio de un arreglo al otro se anima con un fundido.
 class _HomeBody extends ConsumerWidget {
@@ -198,20 +199,21 @@ class _HomeBody extends ConsumerWidget {
           );
         } else if (hasContinue) {
           layout = 'seguir-viendo';
-          body = Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          // Secciones a lo ancho, "Seguir viendo" y los tres carruseles
+          // (alineados con las secciones), todo en la ventana y sin
+          // desplazar. Si falta alto, primero se compactan las secciones y
+          // "Seguir viendo", y los carruseles se achican hasta un mínimo;
+          // solo si ni así entra (ventanas muy bajas) la página se desplaza.
+          final fit = _ContinueFit.of(constraints.maxHeight);
+          body = ListView(
+            physics: fit.fits ? const NeverScrollableScrollPhysics() : null,
             children: [
-              Expanded(
-                child: ListView(
-                  children: [
-                    const SizedBox(height: tilesHeight, child: _SectionTiles()),
-                    const SizedBox(height: 36),
-                    const ContinueWatchingRow(),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 40),
-              _FeaturedColumn(height: constraints.maxHeight),
+              if (fit.spare > 0) SizedBox(height: fit.spare / 2),
+              SizedBox(height: fit.tiles, child: const _SectionTiles()),
+              SizedBox(height: fit.gap),
+              ContinueWatchingRow(cardWidth: fit.continueCard),
+              SizedBox(height: fit.gap),
+              _Carousels(cardHeight: fit.cardHeight),
             ],
           );
         } else {
@@ -234,30 +236,13 @@ class _HomeBody extends ConsumerWidget {
               constraints.maxHeight -
               (tilesHeight + sectionsGap + cardHeight + carouselChrome);
           body = ListView(
+            // Si entra, la página no se mueve con la rueda del mouse.
+            physics: spare >= 0 ? const NeverScrollableScrollPhysics() : null,
             children: [
               if (spare > 0) SizedBox(height: spare / 2),
               const SizedBox(height: tilesHeight, child: _SectionTiles()),
               const SizedBox(height: sectionsGap),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: FeaturedHero(
-                      kind: ContentKind.movie,
-                      cardHeight: cardHeight,
-                    ),
-                  ),
-                  const SizedBox(width: _SectionTiles.gap),
-                  Expanded(
-                    child: FeaturedHero(
-                      kind: ContentKind.series,
-                      cardHeight: cardHeight,
-                    ),
-                  ),
-                  const SizedBox(width: _SectionTiles.gap),
-                  Expanded(child: FeaturedHero(cardHeight: cardHeight)),
-                ],
-              ),
+              _Carousels(cardHeight: cardHeight),
             ],
           );
         }
@@ -275,28 +260,85 @@ class _HomeBody extends ConsumerWidget {
   }
 }
 
-/// Novedades compactas a la derecha: películas arriba y series abajo, con
-/// las tarjetas del alto que permite la ventana.
-class _FeaturedColumn extends StatelessWidget {
-  const _FeaturedColumn({required this.height});
+/// Tamaños del inicio con "Seguir viendo" para un alto dado: el primer
+/// arreglo en que los carruseles no bajan de su mínimo.
+class _ContinueFit {
+  const _ContinueFit({
+    required this.tiles,
+    required this.continueCard,
+    required this.gap,
+    required this.cardHeight,
+    required this.spare,
+  });
 
-  final double height;
+  final double tiles;
+  final double continueCard;
+  final double gap;
+  final double cardHeight;
 
-  /// Título + barra de avance + separación de cada carrusel.
-  static const double chrome = 44 + StackedCarousel.progressHeight + 16;
+  /// Alto que sobra (se reparte arriba y abajo); negativo si no entra.
+  final double spare;
+
+  bool get fits => spare >= 0;
+
+  static const double _carouselChrome =
+      44 + StackedCarousel.progressHeight + FeaturedHero.infoHeight;
+
+  /// Mínimo de las tarjetas de los carruseles.
+  static const double minCard = 220;
+
+  static _ContinueFit of(double height) {
+    // De más holgado a más compacto: alto de las secciones, ancho de las
+    // tarjetas de "Seguir viendo" y separación.
+    const tiers = [
+      (tiles: 150.0, card: 150.0, gap: 24.0),
+      (tiles: 150.0, card: 120.0, gap: 24.0),
+      (tiles: 130.0, card: 120.0, gap: 20.0),
+      (tiles: 110.0, card: 110.0, gap: 16.0),
+    ];
+    late _ContinueFit fit;
+    for (final t in tiers) {
+      final fixed =
+          t.tiles +
+          2 * t.gap +
+          ContinueWatchingRow.heightFor(t.card) +
+          _carouselChrome;
+      final card = (height - fixed).clamp(minCard, 400.0);
+      fit = _ContinueFit(
+        tiles: t.tiles,
+        continueCard: t.card,
+        gap: t.gap,
+        cardHeight: card,
+        spare: height - (fixed + card),
+      );
+      if (fit.fits) return fit;
+    }
+    return fit;
+  }
+}
+
+/// Los tres carruseles, uno por columna, alineados con las secciones:
+/// películas nuevas, series nuevas y mejor valoradas.
+class _Carousels extends StatelessWidget {
+  const _Carousels({required this.cardHeight});
+
+  final double cardHeight;
 
   @override
   Widget build(BuildContext context) {
-    final cardHeight = ((height - 2 * chrome) / 2).clamp(240.0, 420.0);
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          FeaturedCarousel(kind: ContentKind.movie, cardHeight: cardHeight),
-          const SizedBox(height: 16),
-          FeaturedCarousel(kind: ContentKind.series, cardHeight: cardHeight),
-        ],
-      ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: FeaturedHero(kind: ContentKind.movie, cardHeight: cardHeight),
+        ),
+        const SizedBox(width: _SectionTiles.gap),
+        Expanded(
+          child: FeaturedHero(kind: ContentKind.series, cardHeight: cardHeight),
+        ),
+        const SizedBox(width: _SectionTiles.gap),
+        Expanded(child: FeaturedHero(cardHeight: cardHeight)),
+      ],
     );
   }
 }
@@ -600,7 +642,9 @@ class _SectionTile extends ConsumerWidget {
             // En tarjetas angostas (ventanas chicas): icono más chico y sin
             // la flecha, para que el nombre y la cantidad siempre entren.
             final narrow = constraints.maxWidth < 330;
-            final iconBox = narrow ? 48.0 : 76.0;
+            // Compactas (inicio con "Seguir viendo" en ventanas bajas).
+            final short = constraints.maxHeight < 130;
+            final iconBox = narrow ? 48.0 : (short ? 60.0 : 76.0);
             return Stack(
               fit: StackFit.expand,
               children: [

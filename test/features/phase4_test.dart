@@ -572,6 +572,90 @@ void main() {
       await tester.runAsync(db.close);
     });
 
+    testWidgets('seguir viendo: una tarjeta por serie (el último episodio) '
+        'y "Quitar" saca la serie entera', (tester) async {
+      WatchProgress episode(
+        String id,
+        int number,
+        int minute, {
+        String? serie,
+      }) => WatchProgress(
+        kind: ProgressKind.episode,
+        itemId: id,
+        title: 'Serie Ficticia',
+        position: const Duration(minutes: 5),
+        duration: const Duration(minutes: 40),
+        // Más reciente cuanto mayor el minuto.
+        updatedAt: DateTime(2026, 9, 1, 12, minute),
+        seriesId: serie ?? 's1',
+        season: 1,
+        episode: number,
+        episodeTitle: 'Capítulo $number',
+      );
+      await tester.runAsync(() async {
+        await DriftProfileRepository(db)
+            .create(name: 'A', type: SourceType.xtream);
+        final repo = DriftWatchProgressRepository(db);
+        for (final p in [
+          episode('e4', 4, 1),
+          episode('e6', 6, 2),
+          episode('e7', 7, 3),
+          episode('x1', 1, 4, serie: 's2'),
+          WatchProgress(
+            kind: ProgressKind.movie,
+            itemId: 'm1',
+            title: 'Película a medias',
+            position: const Duration(minutes: 30),
+            duration: const Duration(hours: 2),
+            updatedAt: DateTime(2026, 9, 1, 12),
+          ),
+        ]) {
+          await repo.save(1, p);
+        }
+      });
+      await pumpApp(tester, const ContinueWatchingRow());
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pumpAndSettle();
+      // s1 solo con su último episodio (el 7), s2 y la película.
+      expect(find.textContaining('Capítulo 7'), findsOneWidget);
+      expect(find.textContaining('Capítulo 6'), findsNothing);
+      expect(find.textContaining('Capítulo 4'), findsNothing);
+      expect(find.textContaining('Capítulo 1'), findsOneWidget);
+      expect(find.text('Película a medias'), findsWidgets);
+
+      // Quitar la tarjeta de s1 no hace reaparecer el episodio 6.
+      final cards = find.byTooltip('Opciones');
+      expect(cards, findsNWidgets(3));
+      final s1Menu = find.descendant(
+        of: find
+            .ancestor(
+              of: find.textContaining('Capítulo 7'),
+              matching: find.byType(Column),
+            )
+            .first,
+        matching: find.byTooltip('Opciones'),
+      );
+      await tester.tap(s1Menu);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Quitar de Seguir viendo'));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Capítulo 7'), findsNothing);
+      expect(find.textContaining('Capítulo 6'), findsNothing);
+      expect(find.textContaining('Capítulo 4'), findsNothing);
+      expect(find.textContaining('Capítulo 1'), findsOneWidget);
+      final left = await tester.runAsync(
+        () => DriftWatchProgressRepository(db).watchRecent(1).first,
+      );
+      expect(left!.map((p) => p.itemId).toSet(), {'x1', 'm1'});
+      await tester.pumpWidget(const SizedBox());
+      await tester.runAsync(db.close);
+    });
+
     testWidgets('seguir viendo: tarjeta, retomar y quitar', (tester) async {
       await tester.runAsync(() async {
         await DriftProfileRepository(db)

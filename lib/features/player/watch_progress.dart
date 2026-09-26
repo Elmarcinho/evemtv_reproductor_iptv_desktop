@@ -19,11 +19,29 @@ final allWatchProgressProvider = StreamProvider<List<WatchProgress>>((ref) {
       .watchRecent(profileId, limit: 500);
 }, dependencies: [sessionContextProvider]);
 
-/// Fila "Seguir viendo" del inicio.
+/// Fila "Seguir viendo" del inicio: las películas a medias y, de cada
+/// serie, solo el último episodio visto (el más reciente), no todos.
 final continueWatchingProvider = Provider<List<WatchProgress>>((ref) {
   final all = ref.watch(allWatchProgressProvider).value ?? const [];
-  return all.take(20).toList();
+  return continueWatchingOf(all);
 }, dependencies: [allWatchProgressProvider]);
+
+/// Máximo de tarjetas en "Seguir viendo".
+const int continueWatchingLimit = 10;
+
+/// [all] viene con los más recientes primero: el primer episodio que
+/// aparece de cada serie es el último que se vio.
+List<WatchProgress> continueWatchingOf(List<WatchProgress> all) {
+  final seenSeries = <String>{};
+  final cards = <WatchProgress>[];
+  for (final p in all) {
+    final seriesId = p.kind == ProgressKind.episode ? p.seriesId : null;
+    if (seriesId != null && !seenSeries.add(seriesId)) continue;
+    cards.add(p);
+    if (cards.length == continueWatchingLimit) break;
+  }
+  return cards;
+}
 
 /// Progreso de una película o episodio concreto, o `null`.
 final progressForProvider =
@@ -74,6 +92,25 @@ class WatchProgressService {
       await _repository.remove(profileId, kind, id);
     } on Object catch (e) {
       AppLogger.w('No se pudo quitar el progreso', e);
+    }
+  }
+
+  /// Quita una tarjeta de "Seguir viendo". Si es de una serie, quita todos
+  /// sus episodios guardados en [all]; si no, la tarjeta volvería a
+  /// aparecer con un episodio anterior.
+  Future<void> removeCard(WatchProgress card, List<WatchProgress> all) async {
+    final seriesId = card.kind == ProgressKind.episode ? card.seriesId : null;
+    if (seriesId == null) return remove(card.kind, card.itemId);
+    final episodes = [
+      card,
+      for (final p in all)
+        if (p.kind == ProgressKind.episode &&
+            p.seriesId == seriesId &&
+            p.itemId != card.itemId)
+          p,
+    ];
+    for (final e in episodes) {
+      await remove(e.kind, e.itemId);
     }
   }
 

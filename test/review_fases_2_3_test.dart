@@ -334,6 +334,40 @@ http://s.example.com/43.mp4
     });
   });
 
+  group('portada de la serie en el detalle', () {
+    test('sin póster, se toma "cover" del detalle', () {
+      final d = XtreamVodParser.seriesDetail(
+        const SeriesItem(id: '1', name: 'X', categoryId: '9', year: 2026),
+        jsonDecode('{"info": {"cover": "http://img.example.com/c.jpg"}}'),
+      );
+      expect(d.series.posterUrl, 'http://img.example.com/c.jpg');
+      expect(d.series.categoryId, '9');
+      expect(d.series.year, 2026);
+    });
+
+    test('con póster, se conserva el de la lista', () {
+      final d = XtreamVodParser.seriesDetail(
+        const SeriesItem(
+          id: '1',
+          name: 'X',
+          posterUrl: 'http://img.example.com/lista.jpg',
+        ),
+        jsonDecode('{"info": {"cover": "http://img.example.com/c.jpg"}}'),
+      );
+      expect(d.series.posterUrl, 'http://img.example.com/lista.jpg');
+    });
+
+    test('portada rara o ausente: sin póster, sin romper', () {
+      for (final info in ['{}', '{"cover": 5}', '{"cover": "javascript:x"}']) {
+        final d = XtreamVodParser.seriesDetail(
+          const SeriesItem(id: '1', name: 'X'),
+          jsonDecode('{"info": $info}'),
+        );
+        expect(d.series.posterUrl, isNull, reason: info);
+      }
+    });
+  });
+
   group('10. lista de listas sin "season": no mezcla temporadas', () {
     const series = SeriesItem(id: '1', name: 'X');
 

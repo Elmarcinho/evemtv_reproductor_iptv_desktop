@@ -159,8 +159,24 @@ abstract final class XtreamVodParser {
         ),
     ];
 
+    // La serie puede llegar sin póster (abierta desde el catálogo local,
+    // que no guarda URLs): se toma la portada del detalle.
+    final cover =
+        series.posterUrl ??
+        httpUrl(JsonRead.string(info['cover'])) ??
+        httpUrl(JsonRead.string(info['cover_big']));
     return SeriesDetail(
-      series: series,
+      series: cover == series.posterUrl
+          ? series
+          : SeriesItem(
+              id: series.id,
+              name: series.name,
+              posterUrl: cover,
+              rating: series.rating,
+              categoryId: series.categoryId,
+              year: series.year,
+              added: series.added,
+            ),
       seasons: seasons,
       plot: JsonRead.string(info['plot']),
       genre: JsonRead.string(info['genre']),

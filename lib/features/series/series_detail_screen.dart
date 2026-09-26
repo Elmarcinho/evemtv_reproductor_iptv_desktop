@@ -6,9 +6,11 @@ import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/date_format.dart';
 import '../../core/widgets/state_views.dart';
+import '../../domain/entities/catalog.dart';
 import '../../domain/entities/favorite.dart';
 import '../../domain/entities/vod.dart';
 import '../../domain/entities/watch_progress.dart';
+import '../catalog/catalog_images.dart';
 import '../catalog/catalog_providers.dart';
 import '../catalog/detail_layout.dart';
 import '../catalog/related.dart';
@@ -70,7 +72,18 @@ class _SeriesDetailScreenState extends ConsumerState<SeriesDetailScreen> {
 
     return DetailLayout(
       title: series.name,
-      posterUrl: series.posterUrl,
+      posterUrl:
+          series.posterUrl ??
+          data?.series.posterUrl ??
+          ref
+              .watch(
+                catalogImageProvider((
+                  kind: ContentKind.series,
+                  categoryId: series.categoryId,
+                  id: series.id,
+                )),
+              )
+              .value,
       backdropUrl: data?.backdropUrl,
       icon: Icons.video_library_outlined,
       loading: detail.isLoading,

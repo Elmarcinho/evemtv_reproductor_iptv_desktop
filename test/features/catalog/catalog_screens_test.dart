@@ -13,6 +13,7 @@ import 'package:evemtv/domain/entities/vod.dart';
 import 'package:evemtv/features/auth/application/session.dart';
 import 'package:evemtv/features/catalog/related.dart';
 import 'package:evemtv/features/home/promo_banner.dart';
+import 'package:evemtv/features/images/poster.dart';
 import 'package:evemtv/features/movies/movie_detail_screen.dart';
 import 'package:evemtv/features/movies/movies_screen.dart';
 import 'package:evemtv/features/player/vod_player_screen.dart';
@@ -86,28 +87,28 @@ class _CatalogSource extends FakeSource {
     serie,
   ];
 
+  /// La serie que devuelve el detalle (con la portada que traiga el panel).
+  static SeriesItem detailSeries = serie;
+
   @override
-  Future<SeriesDetail> seriesDetail(SeriesItem series) async =>
-      const SeriesDetail(
-        series: serie,
-        plot: 'Trama ficticia.',
-        seasons: [
-          Season(
-            number: 1,
-            episodes: [
-              Episode(id: 'a', season: 1, number: 1, title: 'Piloto'),
-              Episode(id: 'b', season: 1, number: 2, title: 'Segundo'),
-            ],
-          ),
-          Season(
-            number: 2,
-            name: 'Temporada final',
-            episodes: [
-              Episode(id: 'c', season: 2, number: 1, title: 'Regreso'),
-            ],
-          ),
+  Future<SeriesDetail> seriesDetail(SeriesItem series) async => SeriesDetail(
+    series: detailSeries,
+    plot: 'Trama ficticia.',
+    seasons: const [
+      Season(
+        number: 1,
+        episodes: [
+          Episode(id: 'a', season: 1, number: 1, title: 'Piloto'),
+          Episode(id: 'b', season: 1, number: 2, title: 'Segundo'),
         ],
-      );
+      ),
+      Season(
+        number: 2,
+        name: 'Temporada final',
+        episodes: [Episode(id: 'c', season: 2, number: 1, title: 'Regreso')],
+      ),
+    ],
+  );
 }
 
 void main() {
@@ -316,6 +317,32 @@ void main() {
     expect(playable.index, 2);
     expect(playable.next, isNull);
     expect(playable.subtitle, 'T2 · E1 · Regreso');
+  });
+
+  group('póster de la ficha abierta sin póster (carrusel, búsqueda, '
+      'favoritos: la base local no guarda URLs)', () {
+    String? posterShown(WidgetTester tester) =>
+        tester.widget<Poster>(find.byType(Poster).first).url;
+
+    testWidgets('película: se busca en su categoría', (tester) async {
+      await pump(
+        tester,
+        '${AppRoutes.movies}/detail',
+        extra: const VodItem(id: '2', name: 'Película Dos', categoryId: 'e'),
+      );
+      expect(posterShown(tester), 'http://img.example.com/2.jpg');
+    });
+
+    testWidgets('serie: se usa la portada del detalle', (tester) async {
+      _CatalogSource.detailSeries = const SeriesItem(
+        id: '700',
+        name: 'Serie Ficticia',
+        posterUrl: 'http://img.example.com/700.jpg',
+      );
+      addTearDown(() => _CatalogSource.detailSeries = serie);
+      await pump(tester, AppRoutes.seriesDetail, extra: serie);
+      expect(posterShown(tester), 'http://img.example.com/700.jpg');
+    });
   });
 
   testWidgets('"Ver desde el principio" abre el primer episodio', (

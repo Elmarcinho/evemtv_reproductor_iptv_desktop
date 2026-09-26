@@ -21,8 +21,10 @@ APPDIR="$TRABAJO/EvemTv.AppDir"
 
 # El AppImage debe salir de la compilación que enlaza mimalloc: sin él, la
 # memoria crece con cada película (docs/decisiones.md §16).
-if ! nm -D --defined-only "$BUNDLE/evemtv" 2>/dev/null | grep -q ' mi_malloc$' &&
-   ! nm --defined-only "$BUNDLE/evemtv" 2>/dev/null | grep -q ' mi_malloc$'; then
+# (Se guarda la salida de nm antes de buscar: con pipefail, `grep -q`
+# cierra la tubería al encontrarlo y nm falla por SIGPIPE.)
+simbolos=$( (nm --defined-only "$BUNDLE/evemtv"; nm -D --defined-only "$BUNDLE/evemtv") 2>/dev/null || true)
+if ! grep -q ' mi_malloc$' <<< "$simbolos"; then
   echo "ERROR: el ejecutable no incluye mimalloc (revisa linux/CMakeLists.txt)." >&2
   exit 1
 fi
@@ -114,6 +116,9 @@ ln -sf usr/share/icons/hicolor/256x256/apps/com.evemtv.player.png "$APPDIR/com.e
 ln -sf com.evemtv.player.png "$APPDIR/.DirIcon"
 
 SALIDA_APPIMAGE="$SALIDA/EvemTv-$VERSION-linux-x86_64.AppImage"
+# Se borra antes (no se sobrescribe): si el anterior está abierto, falla
+# con "Text file busy"; borrado, la app abierta sigue usando su copia.
+rm -f "$SALIDA_APPIMAGE"
 ARCH=x86_64 "$HERRAMIENTAS/appimagetool" --no-appstream \
   --runtime-file "$HERRAMIENTAS/runtime-x86_64" \
   "$APPDIR" "$SALIDA_APPIMAGE"

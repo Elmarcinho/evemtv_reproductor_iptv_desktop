@@ -9,6 +9,7 @@ import 'package:evemtv/domain/entities/catalog.dart';
 import 'package:evemtv/domain/entities/watch_progress.dart';
 import 'package:evemtv/domain/repositories/settings_repository.dart';
 import 'package:evemtv/features/auth/application/session.dart';
+import 'package:evemtv/features/home/continue_watching_row.dart';
 import 'package:evemtv/features/home/featured.dart';
 import 'package:evemtv/features/home/featured_carousel.dart';
 import 'package:evemtv/features/home/home_screen.dart';
@@ -130,7 +131,7 @@ void main() {
 
   testWidgets(
     'sin "Seguir viendo": novedades grandes con su ficha; con algo a medio '
-    'ver, pasan a la derecha',
+    'ver, "Seguir viendo" entre las secciones y los carruseles',
     (tester) async {
       // Se cierra en pumpHome (addTearDown).
       // ignore: close_sinks
@@ -229,12 +230,142 @@ void main() {
       ]);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
       expect(find.text('Seguir viendo'), findsOneWidget);
-      expect(find.byType(FeaturedHero), findsNothing);
-      expect(find.byType(FeaturedCarousel), findsNWidgets(2));
+      // Mismo arreglo: los tres carruseles siguen alineados bajo las
+      // secciones, sin columna a la derecha.
+      expect(find.byType(FeaturedCarousel), findsNothing);
+      expect(find.byType(FeaturedHero), findsNWidgets(3));
+      for (final (i, section) in ['En vivo', 'Películas', 'Series'].indexed) {
+        final tile = tester.getRect(
+          find.ancestor(of: find.text(section), matching: find.byType(Card)),
+        );
+        final hero = tester.getRect(find.byType(FeaturedHero).at(i));
+        expect(hero.left, closeTo(tile.left, 1), reason: section);
+        expect(hero.right, closeTo(tile.right, 1), reason: section);
+      }
+      // "Seguir viendo" entre las secciones y los carruseles, y todo
+      // entra en 1920×1080 sin desplazar (sobre la firma del pie).
+      final continueTop = tester.getRect(find.text('Seguir viendo')).top;
+      final tilesBottom = tester
+          .getRect(
+            find.ancestor(
+              of: find.text('En vivo'),
+              matching: find.byType(Card),
+            ),
+          )
+          .bottom;
+      expect(continueTop, greaterThan(tilesBottom));
+      expect(
+        tester.getRect(find.byType(FeaturedHero).first).top,
+        greaterThan(continueTop),
+      );
+      expect(
+        tester.getRect(find.byType(FeaturedHero).first).bottom,
+        lessThanOrEqualTo(
+          tester.getRect(find.text('Desarrollado por Godebol')).top,
+        ),
+      );
+
+      // Tope de 10 tarjetas; si no entran todas, flechas para desplazar.
+      progress.add([
+        for (var i = 0; i < 14; i++)
+          WatchProgress(
+            kind: ProgressKind.movie,
+            itemId: 'm$i',
+            title: 'Película a medias $i',
+            position: const Duration(minutes: 30),
+            duration: const Duration(hours: 2),
+            updatedAt: DateTime(2026, 1, 1, 0, 59 - i),
+          ),
+      ]);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      final row = find.byType(ContinueWatchingRow);
+      final list = tester.widget<ListView>(
+        find.descendant(of: row, matching: find.byType(ListView)),
+      );
+      expect(list.childrenDelegate.estimatedChildCount, 19, reason: '10 + 9');
+      // En 1920 de ancho entran las 10: sin flechas.
+      expect(find.byTooltip('Más'), findsNothing);
+      tester.view.physicalSize = const Size(1280, 800);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byTooltip('Anteriores'), findsNothing);
+      expect(find.byTooltip('Más'), findsOneWidget);
+      await tester.tap(find.byTooltip('Más'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Anteriores'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
     },
   );
+
+  testWidgets('con "Seguir viendo" el inicio no se desplaza: si falta alto, '
+      'se compacta', (tester) async {
+    // Se cierra en pumpHome (addTearDown).
+    // ignore: close_sinks
+    final progress = await pumpHome(tester);
+    progress.add([
+      WatchProgress(
+        kind: ProgressKind.movie,
+        itemId: 'm9',
+        title: 'Película a medias',
+        position: const Duration(minutes: 30),
+        duration: const Duration(hours: 2),
+        updatedAt: DateTime(2026),
+      ),
+    ]);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    double tilesHeight() => tester
+        .getRect(
+          find.ancestor(of: find.text('En vivo'), matching: find.byType(Card)),
+        )
+        .height;
+    ScrollPhysics? physics() => tester
+        .widget<ListView>(
+          find
+              .ancestor(
+                of: find.byType(ContinueWatchingRow),
+                matching: find.byType(ListView),
+              )
+              .last,
+        )
+        .physics;
+
+    void expectAllVisible(Size size) => expect(
+      tester.getRect(find.byType(FeaturedHero).first).bottom,
+      lessThanOrEqualTo(
+        tester.getRect(find.text('Desarrollado por Godebol')).top,
+      ),
+      reason: '$size: todo a la vista, sobre la firma del pie',
+    );
+
+    // Pantalla 1080p sin barra de título, y ventana maximizada en 1080p
+    // con la barra de título de Linux (la del usuario): nunca se desplaza;
+    // en la segunda las secciones se compactan un poco.
+    for (final (size, tiles) in [
+      (const Size(1920, 1080), 150.0),
+      (const Size(1920, 1032), 130.0),
+    ]) {
+      tester.view.physicalSize = size;
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(physics(), isA<NeverScrollableScrollPhysics>(), reason: '$size');
+      expect(tilesHeight(), closeTo(tiles, 1), reason: '$size');
+      expectAllVisible(size);
+    }
+    // Ventana muy baja (1280×720): ni compactado entra; solo ahí se
+    // desplaza, con todo al mínimo.
+    const small = Size(1280, 720);
+    tester.view.physicalSize = small;
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(physics(), isNot(isA<NeverScrollableScrollPhysics>()));
+    expect(tilesHeight(), closeTo(110, 1));
+    await tester.pumpWidget(const SizedBox());
+  });
 
   testWidgets('nada arranca resaltado; una flecha entra con el teclado', (
     tester,

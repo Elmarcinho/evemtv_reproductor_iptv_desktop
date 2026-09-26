@@ -127,6 +127,10 @@ class FeaturedHero extends ConsumerStatefulWidget {
   /// Alto del título y los datos debajo de la pila.
   static const double infoHeight = 84;
 
+  /// Ancho mínimo del título y los datos (pueden ser más anchos que la
+  /// tarjeta del frente).
+  static const double minTextWidth = 280;
+
   @override
   ConsumerState<FeaturedHero> createState() => _FeaturedHeroState();
 }
@@ -156,6 +160,16 @@ class _FeaturedHeroState extends ConsumerState<FeaturedHero> {
           0.0,
           (maxW - g.widthFor(h)).clamp(0.0, double.infinity),
         );
+        // Título y datos centrados en la tarjeta del frente, pero con
+        // ancho propio: con tarjetas chicas (inicio con "Seguir viendo")
+        // no entrarían en el ancho de la tarjeta.
+        final center = left + behindW + cardW / 2;
+        final textW = maxW < FeaturedHero.minTextWidth
+            ? maxW
+            : (cardW < FeaturedHero.minTextWidth
+                  ? FeaturedHero.minTextWidth
+                  : cardW);
+        final textLeft = (center - textW / 2).clamp(0.0, maxW - textW);
         final title = switch (view) {
           _Ready(:final title) => title,
           _ => loadingTitle,
@@ -164,46 +178,50 @@ class _FeaturedHeroState extends ConsumerState<FeaturedHero> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: EdgeInsets.only(left: left + behindW),
+              padding: EdgeInsets.only(left: textLeft),
               child: SizedBox(
-                width: cardW,
+                width: textW,
                 child: Text(
                   title,
                   textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
             ),
             const SizedBox(height: 12),
-            Padding(
-              padding: EdgeInsets.only(left: left),
-              child: switch (view) {
-                _Ready(:final items) => Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    StackedCarousel(
-                      items: items,
-                      cardHeight: h,
-                      geometry: g,
-                      showCaption: false,
-                      onChanged: (i) => setState(() => _index = i),
-                      onOpen: (entry) => openFeatured(context, entry),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.only(left: behindW),
-                      child: SizedBox(
-                        width: cardW,
-                        height: FeaturedHero.infoHeight,
-                        child: _HeroInfo(
-                          item: items[_index.clamp(0, items.length - 1)],
-                        ),
-                      ),
-                    ),
-                  ],
+            ...switch (view) {
+              _Ready(:final items) => [
+                Padding(
+                  padding: EdgeInsets.only(left: left),
+                  child: StackedCarousel(
+                    items: items,
+                    cardHeight: h,
+                    geometry: g,
+                    showCaption: false,
+                    onChanged: (i) => setState(() => _index = i),
+                    onOpen: (entry) => openFeatured(context, entry),
+                  ),
                 ),
-                _ => CarouselSkeleton(cardHeight: h, geometry: g),
-              },
-            ),
+                Padding(
+                  padding: EdgeInsets.only(left: textLeft),
+                  child: SizedBox(
+                    width: textW,
+                    height: FeaturedHero.infoHeight,
+                    child: _HeroInfo(
+                      item: items[_index.clamp(0, items.length - 1)],
+                    ),
+                  ),
+                ),
+              ],
+              _ => [
+                Padding(
+                  padding: EdgeInsets.only(left: left),
+                  child: CarouselSkeleton(cardHeight: h, geometry: g),
+                ),
+              ],
+            },
           ],
         );
       },

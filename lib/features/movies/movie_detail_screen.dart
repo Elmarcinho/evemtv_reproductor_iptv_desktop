@@ -5,9 +5,11 @@ import 'package:go_router/go_router.dart';
 import '../../core/router/app_router.dart';
 import '../../core/utils/date_format.dart';
 import '../../core/widgets/state_views.dart';
+import '../../domain/entities/catalog.dart';
 import '../../domain/entities/favorite.dart';
 import '../../domain/entities/vod.dart';
 import '../../domain/entities/watch_progress.dart';
+import '../catalog/catalog_images.dart';
 import '../catalog/catalog_providers.dart';
 import '../catalog/detail_layout.dart';
 import '../catalog/related.dart';
@@ -43,7 +45,20 @@ class MovieDetailScreen extends ConsumerWidget {
 
     return DetailLayout(
       title: item.name,
-      posterUrl: item.posterUrl,
+      // Abierta desde el catálogo local (carrusel, búsqueda, favoritos) la
+      // película llega sin póster: se busca en su categoría mientras carga
+      // el detalle, que también puede traerlo.
+      posterUrl:
+          item.posterUrl ??
+          ref
+              .watch(
+                catalogImageProvider((
+                  kind: ContentKind.movie,
+                  categoryId: movie.categoryId,
+                  id: movie.id,
+                )),
+              )
+              .value,
       backdropUrl: data?.backdropUrl,
       icon: Icons.movie_outlined,
       loading: detail.isLoading,

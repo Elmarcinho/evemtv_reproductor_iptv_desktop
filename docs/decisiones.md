@@ -397,6 +397,10 @@ Solo compila y prueba; el empaquetado y la publicación son de la Fase 5.
   con menos de 30 s no se guarda. Al pasar el 95 % (o faltar menos de 90 s)
   se quita y, en series, queda listo el siguiente episodio. Al reabrir se
   retoma 5 s antes, con un botón "Desde el principio".
+- **Fichas abiertas desde la base local** (carrusel, búsqueda, favoritos,
+  "seguir viendo") llegan sin póster: la base no guarda URLs. La ficha lo
+  busca en la categoría del elemento mientras carga el detalle, y en series
+  toma además la portada del detalle (`info.cover`).
 - **Caché de pósters en disco:** sí conviene (cada apertura volvía a
   descargar miles de imágenes). Archivos nombrados con HMAC-SHA256 de la URL
   y una clave aleatoria por perfil en el almacén seguro: en disco no queda
@@ -539,8 +543,17 @@ conexión se corta en lugar de esperar la respuesta o el tiempo límite.
     la tarjeta del frente, el título de la sección y los datos quedan
     centrados; las de atrás asoman a la izquierda. Un clic en la tarjeta
     abre la ficha.
-  - Con algo a medio ver: "Seguir viendo" ocupa el área principal y las
-    novedades pasan a una columna compacta a la derecha.
+  - Con algo a medio ver: el mismo arreglo, con "Seguir viendo" entre las
+    secciones y los carruseles (antes iba en dos columnas: dejaba un hueco
+    abajo y recortaba la de la derecha). **Nunca se desplaza** si entra:
+    si falta alto se compacta por pasos (secciones 150 → 130 → 110 px,
+    tarjetas de "Seguir viendo" 150 → 120 → 110 px, carruseles hasta 220 px).
+    Solo en ventanas muy bajas (p. ej. 1280×720), donde ni así entra, la
+    página se desplaza. Una ventana maximizada en 1080p con barra de título
+    queda con secciones de 130 px.
+  - "Seguir viendo": hasta 10 tarjetas, **una por serie** (su último
+    episodio visto); si no entran, flechas ‹ ›. "Quitar" en una serie saca
+    todos sus episodios (si no, volvería con uno anterior).
   - Hasta saber cuál corresponde se muestran solo las secciones, y el cambio
     se anima con un fundido: no se ve un arreglo y enseguida el otro.
 - **Novedades ("estrenos recién agregados"):** carruseles de tarjetas
