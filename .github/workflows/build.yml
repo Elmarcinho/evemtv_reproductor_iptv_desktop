@@ -177,6 +177,12 @@ jobs:
           for dir in ~/Library/Logs/DiagnosticReports /Library/Logs/DiagnosticReports; do
             find "$dir" -name '*.ips' -mmin -30 -exec cp {} diagnostico/ \; 2>/dev/null || true
           done
+          # Registro del sistema sobre la app (motivo de terminación, Metal,
+          # sandbox) y la GPU que ve la máquina virtual.
+          log show --last 20m --style compact \
+            --predicate 'process CONTAINS "EvemTv" OR eventMessage CONTAINS "EvemTv" OR eventMessage CONTAINS "com.evemtv.player"' \
+            > diagnostico/registro_sistema.txt 2>&1 || true
+          system_profiler SPDisplaysDataType > diagnostico/gpu.txt 2>&1 || true
           ls -la diagnostico
           python3 .github/scripts/resumir_cierres_macos.py diagnostico memoria_macos.log
 

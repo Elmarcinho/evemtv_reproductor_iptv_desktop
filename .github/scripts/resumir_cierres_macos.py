@@ -65,6 +65,23 @@ def main() -> None:
         )
     for ruta in informes[-3:]:
         anotar("error", "macOS: informe de cierre", resumir_ips(ruta))
+    gpu = os.path.join(carpeta, "gpu.txt")
+    if os.path.exists(gpu):
+        with open(gpu, encoding="utf-8", errors="replace") as f:
+            anotar("warning", "macOS: GPU de la máquina", f.read())
+    registro = os.path.join(carpeta, "registro_sistema.txt")
+    if os.path.exists(registro):
+        with open(registro, encoding="utf-8", errors="replace") as f:
+            lineas = f.readlines()
+        claves = ("terminat", "exit", "kill", "sandbox", "deny", "metal",
+                  "gpu", "crash", "abort", "jetsam", "signal", "error")
+        relevantes = [l for l in lineas if any(k in l.lower() for k in claves)]
+        anotar(
+            "error",
+            "macOS: registro del sistema (relevante)",
+            "".join(relevantes[-60:]) or "(sin líneas relevantes)",
+        )
+        anotar("warning", "macOS: registro del sistema (final)", "".join(lineas[-40:]))
     if os.path.exists(log):
         with open(log, encoding="utf-8", errors="replace") as f:
             ultimas = f.readlines()[-40:]
