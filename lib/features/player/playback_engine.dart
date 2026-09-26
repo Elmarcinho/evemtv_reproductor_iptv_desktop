@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -71,7 +72,26 @@ class MediaKitEngine implements PlaybackEngine {
       await player.dispose();
       throw StateError('mpv no activó la verificación TLS');
     }
-    return MediaKitEngine._(player);
+    return current = MediaKitEngine._(player);
+  }
+
+  /// Último reproductor creado y aún abierto. Solo para diagnóstico y
+  /// medición (test_driver/perf_app.dart); la app no lo usa.
+  @visibleForTesting
+  static MediaKitEngine? current;
+
+  /// Decodificador por hardware que mpv está usando ahora (`vaapi`,
+  /// `d3d11va`, `videotoolbox`…), o `no` si decodifica por software.
+  Future<String> hwdecCurrent() =>
+      (player.platform! as NativePlayer).getProperty('hwdec-current');
+
+  /// Códec y tamaño del video en reproducción, para diagnóstico.
+  Future<String> videoInfo() async {
+    final native = player.platform! as NativePlayer;
+    final codec = await native.getProperty('video-codec');
+    final w = await native.getProperty('video-params/w');
+    final h = await native.getProperty('video-params/h');
+    return '$codec ${w}x$h';
   }
 
   @override
@@ -112,7 +132,10 @@ class MediaKitEngine implements PlaybackEngine {
   Future<void> seek(Duration position) => player.seek(position);
 
   @override
-  Future<void> dispose() => player.dispose();
+  Future<void> dispose() {
+    if (identical(current, this)) current = null;
+    return player.dispose();
+  }
 }
 
 /// Salida de video. `hwdec: auto-safe` (recomendado por mpv): solo prueba

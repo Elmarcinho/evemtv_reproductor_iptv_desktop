@@ -6,9 +6,11 @@ import 'dart:io';
 
 import 'package:drift/native.dart';
 import 'package:evemtv/app.dart';
+import 'package:evemtv/core/router/app_router.dart';
 import 'package:evemtv/data/providers.dart';
 import 'package:evemtv/data/storage/app_database.dart';
 import 'package:evemtv/features/images/app_images.dart';
+import 'package:evemtv/features/player/playback_engine.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_driver/driver_extension.dart';
@@ -21,12 +23,21 @@ import '../test/helpers/fakes.dart' show FakeSecureStorage;
 /// si algo se redibuja en reposo).
 var _frames = 0;
 
+late final ProviderContainer _container;
+
 Future<void> main() async {
   enableFlutterDriverExtension(
     handler: (message) async {
       switch (message) {
         case 'frames':
           return '$_frames';
+        case 'hwdec':
+          final engine = MediaKitEngine.current;
+          if (engine == null) return 'sin reproductor';
+          return '${await engine.hwdecCurrent()} · '
+              '${await engine.videoInfo()}';
+        case 'back':
+          _container.read(appRouterProvider).pop();
         case 'lifecycle':
           return '${WidgetsBinding.instance.lifecycleState}';
         case 'minimize':
@@ -59,17 +70,17 @@ Future<void> main() async {
   final db = AppDatabase(
     NativeDatabase.createInBackground(File('${data.path}/perf.sqlite')),
   );
+  _container = ProviderContainer(
+    retry: (_, _) => null,
+    overrides: [
+      appDatabaseProvider.overrideWithValue(db),
+      secureStorageProvider.overrideWithValue(FakeSecureStorage()),
+      imageCacheRootProvider.overrideWithValue(
+        () async => Directory('${data.path}/img'),
+      ),
+    ],
+  );
   runApp(
-    ProviderScope(
-      retry: (_, _) => null,
-      overrides: [
-        appDatabaseProvider.overrideWithValue(db),
-        secureStorageProvider.overrideWithValue(FakeSecureStorage()),
-        imageCacheRootProvider.overrideWithValue(
-          () async => Directory('${data.path}/img'),
-        ),
-      ],
-      child: const EvemTvApp(),
-    ),
+    UncontrolledProviderScope(container: _container, child: const EvemTvApp()),
   );
 }

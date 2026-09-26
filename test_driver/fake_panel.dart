@@ -16,7 +16,9 @@ const int vodCategories = 60;
 class FakePanel {
   FakePanel(this.video, this.poster, this.backdrop);
 
-  final File video;
+  /// Video que se sirve para cualquier película (se puede cambiar entre
+  /// una reproducción y otra).
+  File video;
   final List<int> poster;
   final List<int> backdrop;
   late final HttpServer server;

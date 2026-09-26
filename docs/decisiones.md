@@ -673,3 +673,26 @@ conexión se corta en lugar de esperar la respuesta o el tiempo límite.
   ventana vuelve sin foco (GNOME no deja que un programa se la dé) y los
   carruseles se pausan, como se pidió.
 
+### Decodificación por hardware (mpv)
+
+- `hwdec=auto-safe` (ver `createVideoController`): mpv usa solo los
+  decodificadores por hardware que considera estables (VA-API en Linux,
+  D3D11VA en Windows, VideoToolbox en macOS) y, si no hay, sigue por
+  software. Comprobado en Linux leyendo `hwdec-current` durante la
+  reproducción (servidor ficticio, Ryzen 7 3700U / Radeon Vega, Wayland):
+
+  | Video | `hwdec-current` | CPU (1 núcleo) |
+  |---|---|---|
+  | 720p H.264 | `vaapi` | 30–31 % |
+  | 1080p H.264 | `vaapi` | 30–37 % |
+  | 1080p HEVC | `vaapi` | 31–37 % |
+
+  La CPU que queda es la de la app (interfaz, copia al lienzo de Flutter,
+  red, audio), no la decodificación. En Windows y macOS falta comprobarlo
+  en equipos reales (checklist de la Fase 5).
+- **Memoria tras cerrar el reproductor:** no vuelve a bajar. Abrir y
+  cerrar 5 veces el mismo video 1080p la hizo crecer ~22 MB por vez
+  (503 → 591 MB): es una fuga, no memoria retenida que se estabiliza.
+  Queda pendiente de investigar (sospechosos: la textura de video de
+  media_kit_video en Linux o un reproductor que no se libera del todo).
+

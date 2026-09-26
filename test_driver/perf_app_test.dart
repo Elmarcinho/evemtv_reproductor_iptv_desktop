@@ -41,6 +41,7 @@ Future<void> measure(
   String phase,
   Duration duration, [
   Future<void> Function()? during,
+  String note = '',
 ]) async {
   final frames0 = int.parse(await driver.requestData('frames'));
   final cpu0 = cpuSeconds(pid);
@@ -62,7 +63,8 @@ Future<void> measure(
       'PERF|$runLabel|$phase|cpu=${cpu.toStringAsFixed(1)}%|'
       'rss=${rssMb(pid).toStringAsFixed(0)}MB|pico=${peak.toStringAsFixed(0)}MB|'
       'cuadros/s=${(frames / seconds).toStringAsFixed(1)}|'
-      'duración=${seconds.toStringAsFixed(1)}s';
+      'duración=${seconds.toStringAsFixed(1)}s'
+      '${note.isEmpty ? '' : '|$note'}';
   print(line);
   File('$assetsDir/perf_results.txt')
       .writeAsStringSync('$line\n', mode: FileMode.append);
@@ -231,14 +233,68 @@ Future<void> _scenario(FlutterDriver driver, int pid, FakePanel panel) async {
         firstMatchOnly: true,
       ),
     );
-    step('C reproducir');
-    await driver.tap(find.text('Reproducir'), timeout: timeout);
-    await sleep(const Duration(seconds: 8));
+    // C. Reproducción: 720p y 1080p H.264, y 1080p HEVC. Cada una ~21 s
+    // (menos de 30 s: no se guarda "seguir viendo" y el botón sigue siendo
+    // "Reproducir").
+    final videos = {
+      'C reproducción 720p H.264': 'perf_video.mp4',
+      'C2 reproducción 1080p H.264': 'perf_1080_h264.mp4',
+      'C3 reproducción 1080p HEVC': 'perf_1080_hevc.mp4',
+    };
+    var first = true;
+    for (final MapEntry(key: phase, value: file) in videos.entries) {
+      final path = File('$assetsDir/$file');
+      if (!path.existsSync()) continue;
+      panel.video = path;
+      if (!first) {
+        await driver.requestData('back');
+        await sleep(const Duration(seconds: 3));
+      }
+      first = false;
+      step(phase);
+      await driver.tap(find.text('Reproducir'), timeout: timeout);
+      await sleep(const Duration(seconds: 6));
+      final hw = await driver.requestData('hwdec');
+      await measure(
+        driver,
+        pid,
+        phase,
+        const Duration(seconds: 15),
+        null,
+        'hwdec=$hw',
+      );
+    }
+
+    // D. Tras cerrar el reproductor: ¿se libera la memoria del video?
+    await driver.requestData('back');
+    await sleep(const Duration(seconds: 10));
     await measure(
       driver,
       pid,
-      'C reproducción 720p',
-      const Duration(seconds: 20),
+      'D ficha tras cerrar el reproductor',
+      const Duration(seconds: 10),
+      null,
+      'hwdec=${await driver.requestData('hwdec')}',
     );
+
+    // E. ¿Crece la memoria con cada apertura? Mismo video 1080p, 5 veces.
+    final h264 = File('$assetsDir/perf_1080_h264.mp4');
+    if (h264.existsSync()) {
+      panel.video = h264;
+      final after = <String>[];
+      for (var i = 0; i < 5; i++) {
+        await driver.tap(find.text('Reproducir'), timeout: timeout);
+        await sleep(const Duration(seconds: 8));
+        await driver.requestData('back');
+        await sleep(const Duration(seconds: 4));
+        after.add(rssMb(pid).toStringAsFixed(0));
+      }
+      final line =
+          'PERF|$runLabel|E memoria tras cada cierre (5× 1080p)|'
+          '${after.join(' → ')} MB';
+      print(line);
+      File('$assetsDir/perf_results.txt')
+          .writeAsStringSync('$line\n', mode: FileMode.append);
+    }
   }
 }
