@@ -721,3 +721,9 @@ conexión se corta en lugar de esperar la respuesta o el tiempo límite.
     cierra 20 veces un 720p en Linux, Windows y macOS y publica la memoria
     tras cada cierre; falla si los últimos 10 ciclos crecen más de 6 MB por
     ciclo (con glibc midió 9,0; con mimalloc, 0,6).
+    Primeras mediciones en CI: Linux (software, sin GPU) 3,3–3,7 MB por
+    ciclo; Windows estable (baja al final). En el runner de macOS la app
+    se detiene al abrir un video con textura (dentro de `open`,
+    probablemente por la VM sin GPU; sin acceso a los registros no se pudo
+    confirmar), así que allí se mide solo el Player. La reproducción con
+    textura en macOS queda en la prueba manual de la Fase 5.

@@ -36,6 +36,9 @@ Pendientes acordados para la Fase 5. Cada release debe repasar la sección
       - mini reproductor de En vivo y paso a pantalla grande;
       - al menos una vez en la ventana mínima (800×450) y maximizada en
         1366×768 al 150 % (911×512 lógicos).
+      - **en un Mac real**: abrir y cerrar varias películas seguidas (en el
+        runner de macOS de CI la app se detiene al abrir un video con
+        textura; hay que descartar que pase en equipos reales).
 - [ ] **Comprobar la decodificación por hardware en Windows y macOS**
       (en Linux ya se comprobó: `vaapi`). Leer `hwdec-current` durante una
       reproducción 1080p H.264 y HEVC (`MediaKitEngine.hwdecCurrent()`, que

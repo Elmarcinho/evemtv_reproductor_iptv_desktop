@@ -26,6 +26,16 @@ const String videoUrl = String.fromEnvironment(
 
 const int cycles = 20;
 
+/// Con textura (VideoController + Video, como en la app) o solo el Player.
+/// En el runner de macOS de GitHub la app se detiene al abrir un video con
+/// textura (se corta dentro de `open`; probablemente por la VM sin GPU, no
+/// se pudo confirmar sin los registros). Allí se mide solo el Player, que es
+/// donde estaba la fuga en Linux. La textura en macOS se prueba a mano.
+const bool withTexture = bool.fromEnvironment(
+  'MEMORY_TEXTURE',
+  defaultValue: true,
+);
+
 /// Crecimiento promedio por ciclo (últimos 10) a partir del cual se
 /// considera fuga grosera. Con el asignador de glibc en Linux se midieron
 /// ~9 MB por ciclo con 1080p; con mimalloc, menos de 1,5 MB.
@@ -57,14 +67,22 @@ void main() {
     final hwdec = <String>{};
     for (var i = 0; i < cycles; i++) {
       final engine = await MediaKitEngine.create();
-      final controller = createVideoController(engine.player);
-      await tester.pumpWidget(
-        Directionality(
-          textDirection: TextDirection.ltr,
-          child: Video(controller: controller),
-        ),
-      );
-      if (i == 0) stage('reproductor y textura creados');
+      if (withTexture) {
+        final controller = createVideoController(engine.player);
+        await tester.pumpWidget(
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Video(controller: controller),
+          ),
+        );
+      }
+      if (i == 0) {
+        stage(
+          withTexture
+              ? 'reproductor y textura creados'
+              : 'reproductor creado (sin textura)',
+        );
+      }
       await engine.open(Uri.parse(videoUrl));
       if (i == 0) stage('video abierto');
       await waitReal(tester, const Duration(seconds: 4));
@@ -82,6 +100,7 @@ void main() {
     final lastTen = after.sublist(cycles - 10);
     final perCycle = (lastTen.last - lastTen.first) / 9;
     final summary =
+        '${withTexture ? 'con textura' : 'solo Player'} | '
         'hwdec=${hwdec.join('/')} | tras cada cierre: '
         '${after.map((m) => m.toStringAsFixed(0)).join(', ')} MB | '
         'últimos 10: ${perCycle.toStringAsFixed(1)} MB/ciclo';
