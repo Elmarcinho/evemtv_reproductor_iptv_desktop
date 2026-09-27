@@ -481,6 +481,19 @@ class DriftCatalogCache implements CatalogCache {
   }
 
   @override
+  Future<Set<String>> itemIds(int profileId, ContentKind kind) async {
+    final rows =
+        await (_db.selectOnly(_db.catalogItems)
+              ..addColumns([_db.catalogItems.itemId])
+              ..where(
+                _db.catalogItems.profileId.equals(profileId) &
+                    _db.catalogItems.kind.equalsValue(kind),
+              ))
+            .get();
+    return {for (final r in rows) r.read(_db.catalogItems.itemId)!};
+  }
+
+  @override
   Future<Set<String>> adultItemIds(int profileId, ContentKind kind) async {
     final rows =
         await (_db.selectOnly(_db.catalogItems)

@@ -137,6 +137,24 @@ class LivePlaybackController extends ChangeNotifier {
     return _openChannel(_index);
   }
 
+  /// Deja en la lista de navegación solo los canales que cumplen [keep]
+  /// (p. ej. al volver a bloquear el contenido adulto), sin cortar el canal
+  /// actual. Devuelve `false` si el canal actual no cumple (hay que
+  /// detener la reproducción); entonces la lista no cambia.
+  bool restrictChannels(bool Function(LiveChannel channel) keep) {
+    if (!keep(channel)) return false;
+    final current = channel;
+    final kept = [
+      for (final c in _channels)
+        if (keep(c)) c,
+    ];
+    if (kept.length == _channels.length) return true;
+    _channels = List.unmodifiable(kept);
+    _index = kept.indexOf(current);
+    notifyListeners();
+    return true;
+  }
+
   Future<void> nextChannel() => _openChannel((_index + 1) % channels.length);
 
   Future<void> previousChannel() =>

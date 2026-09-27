@@ -692,6 +692,43 @@ void main() {
       await finish(tester, c);
     });
 
+    for (final (caso, failing)
+        in <(String, ResponseBody Function(RequestOptions))>[
+          ('error 500', (o) => ResponseBody.fromString('', 500)),
+          (
+            'sin conexión',
+            (o) => throw DioException.connectionError(
+              requestOptions: o,
+              reason: 'x',
+            ),
+          ),
+          ('respuesta rara', (o) => ResponseBody.fromString('<html>', 200)),
+        ]) {
+      testWidgets('aviso obligatorio válido y después el servidor falla '
+          '($caso): al vencer el plazo no se bloquea; solo una respuesta '
+          'válida lo confirma', (tester) async {
+        final c = await pump(tester, obligatoria);
+        expect(
+          find.textContaining('Debes actualizar antes del'),
+          findsOneWidget,
+        );
+        http.handler = failing;
+        now = now.add(UpdateConfig.gracePeriod + const Duration(hours: 1));
+        await tester.pump(
+          UpdateConfig.gracePeriod + const Duration(minutes: 1),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Actualización necesaria'), findsNothing);
+        await expectAppUsable(tester);
+        // El servidor vuelve y confirma: recién ahí, bloqueo.
+        http.handler = (_) => withDate(obligatoria);
+        unawaited(c.read(updateProvider.notifier).check());
+        await tester.pumpAndSettle();
+        expect(find.text('Actualización necesaria'), findsOneWidget);
+        await finish(tester, c);
+      });
+    }
+
     testWidgets('al día: no se muestra nada', (tester) async {
       final c = await pump(tester, '{"ultima_version":"1.0.0"}');
       expect(find.text('Descargar'), findsNothing);

@@ -1,11 +1,15 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../../domain/entities/catalog.dart';
 import '../../domain/entities/live.dart';
 import '../auth/application/session.dart';
 import '../home/account_info_controller.dart';
+import '../live/live_providers.dart';
+import '../parental/parental.dart';
 import 'live_playback_controller.dart';
 import 'media_engine_provider.dart';
 import 'playback_engine.dart';
@@ -47,6 +51,10 @@ class LivePlayerNotifier extends Notifier<LivePlayerState> {
 
   @override
   LivePlayerState build() {
+    // Control parental: al volver a bloquear (o al ocultar una categoría),
+    // se quitan de la lista de navegación los canales ocultos y, si el
+    // actual lo está, se detiene.
+    ref.listen(parentalProvider, (_, parental) => _applyParental(parental));
     ref.onDispose(() {
       final creating = _creating;
       _creating = null;
@@ -91,6 +99,35 @@ class LivePlayerNotifier extends Notifier<LivePlayerState> {
     }
   }
 
+  void _applyParental(ParentalState parental) {
+    final playback = state.handle?.playback;
+    if (playback == null) return;
+    final keep = keepPlayingAfterParental(
+      parental,
+      ref.read(liveCategoriesAllProvider).value,
+      playback,
+    );
+    if (!keep) unawaited(stop());
+  }
+
+  /// Aplica el control parental al reproductor en curso: quita de su lista
+  /// de navegación (flechas arriba/abajo) los canales ocultos. Devuelve
+  /// `false` si hay que detener la reproducción: el canal actual está oculto
+  /// o no se conocen las categorías para saberlo (ante la duda, se detiene).
+  @visibleForTesting
+  static bool keepPlayingAfterParental(
+    ParentalState parental,
+    List<ContentCategory>? categories,
+    LivePlaybackController playback,
+  ) {
+    if (parental.unlocked) return true;
+    if (categories == null) return false;
+    final hidden = hiddenCategoryIds(parental, ContentKind.live, categories);
+    return playback.restrictChannels(
+      (c) => !c.adult && !hidden.contains(c.categoryId),
+    );
+  }
+
   /// Detiene y libera el reproductor (p. ej. al volver a bloquear el
   /// contenido adulto con un canal de adultos sonando).
   Future<void> stop() async {
@@ -126,7 +163,12 @@ class LivePlayerNotifier extends Notifier<LivePlayerState> {
 final livePlayerProvider =
     NotifierProvider.autoDispose<LivePlayerNotifier, LivePlayerState>(
       LivePlayerNotifier.new,
-      dependencies: [contentSourceProvider, accountInfoProvider],
+      dependencies: [
+        contentSourceProvider,
+        accountInfoProvider,
+        parentalProvider,
+        liveCategoriesAllProvider,
+      ],
     );
 
 /// Canal que suena en el reproductor compartido, o `null` si todavía no se

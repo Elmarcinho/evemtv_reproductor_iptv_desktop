@@ -950,10 +950,15 @@ comprueba que coincidan y el workflow de release rechaza un tag que no sea
   imposibles y las "corrige" (`Sat, 99 Sep 2026` pasa a 08/12/2026), así que
   no se usa. Si el encabezado falta, tiene otro formato o una fecha
   imposible, se trata como ausente: no hay plazo ni bloqueo (solo el aviso
-  informativo). Con la app abierta, el vencimiento se programa por
-  tiempo transcurrido desde esa fecha, y cada consulta (cada 12 h) la
-  vuelve a tomar del servidor. Una primera detección guardada con una fecha
-  posterior a la del servidor no alarga el plazo.
+  informativo). Con la app abierta, al vencer el plazo (medido por tiempo
+  transcurrido desde esa fecha) **no se bloquea con la respuesta vieja**:
+  se vuelve a consultar, y solo una respuesta coherente con fecha
+  posterior al plazo bloquea. Si en ese momento el servidor falla (error,
+  sin conexión, respuesta rara), la app sigue funcionando. Un bloqueo ya
+  confirmado en esta ejecución no se levanta por un fallo posterior (sí
+  bajando `minima`); al reabrir sin respuesta no hay bloqueo. Una primera
+  detección guardada con una fecha posterior a la del servidor no alarga
+  el plazo.
 - **Plazo vencido:** pantalla de bloqueo que tapa la app, sin cerrar ni
   teclado ni mouse para lo de abajo, con **Descargar**, instrucciones de
   instalación del sistema (SmartScreen, *Abrir igualmente*, permiso de
@@ -1075,3 +1080,23 @@ favoritos ni al cambiar de canal con las flechas.
   a 60 minutos.
 - Los contadores de la pantalla de inicio (p. ej. "18.473 películas")
   siguen contando todo el catálogo; no muestran contenido.
+- **Revisión (Codex):**
+  - Si no se puede guardar un cambio (PIN nuevo, restablecer a 0000,
+    ocultar o volver a mostrar una categoría), se informa con un mensaje
+    claro y queda lo anterior: nunca se da por hecho un cambio que no se
+    guardó. (El PIN vive en la base local, no en el almacén seguro; el
+    almacén seguro solo se lee para comparar la contraseña IPTV.)
+  - El reproductor en vivo (mini reproductor y pantalla completa) escucha
+    el control parental: al volver a bloquear u ocultar una categoría,
+    quita los canales ocultos de su lista de navegación (flechas
+    arriba/abajo) y, si el canal actual está oculto (o no se conocen las
+    categorías para saberlo), se detiene.
+  - Ante la duda, oculto: mientras esté bloqueado, un favorito o una
+    entrada de "Seguir viendo" que no se puede comprobar en el catálogo
+    local (sin categoría, o categoría o elemento que no están, p. ej. antes
+    de la primera descarga o sin conexión) no se muestra.
+  - Los diálogos del PIN se abren en el navegador principal, por encima
+    del contenedor de la sesión: se les da el contenedor de la sesión que
+    los abrió (todas sus acciones van a ese perfil) y se cierran solos si
+    esa sesión termina (cambio de cuenta o cierre de sesión). Además, el
+    controlador no aplica nada si su sesión ya terminó.

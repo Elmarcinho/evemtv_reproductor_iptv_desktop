@@ -450,6 +450,9 @@ void main() {
             sessionProvider.overrideWith(FixedSession.new),
             sessionContextProvider.overrideWithValue(testSessionContext()),
             contentSourceProvider.overrideWithValue(source ?? _CatalogSource()),
+            // El control parental se prueba aparte (sin catálogo local
+            // ocultaría "Seguir viendo").
+            ...parentalTestOverrides(),
           ],
           child: MaterialApp.router(
             theme: AppTheme.dark(),

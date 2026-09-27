@@ -87,6 +87,8 @@ class HiddenContent {
   const HiddenContent({
     this.categories = const {},
     this.adultItems = const {},
+    this.knownCategories = const {},
+    this.knownItems = const {},
     this.active = true,
   });
 
@@ -103,6 +105,23 @@ class HiddenContent {
   /// Elementos marcados como de adultos por el panel, por tipo (aunque su
   /// categoría no lo sea).
   final Map<ContentKind, Set<String>> adultItems;
+
+  /// Categorías y elementos que están en el catálogo local, por tipo: lo
+  /// guardado (favoritos, "Seguir viendo") que no esté aquí no se puede
+  /// comprobar.
+  final Map<ContentKind, Set<String>> knownCategories;
+  final Map<ContentKind, Set<String>> knownItems;
+
+  /// Para lo guardado (favoritos, "Seguir viendo"): además de lo oculto,
+  /// ante la duda se oculta lo que no se puede comprobar (sin categoría, o
+  /// con una categoría o un elemento que no están en el catálogo local,
+  /// p. ej. antes de la primera descarga).
+  bool hidesSaved(ContentKind kind, String id, {String? categoryId}) =>
+      active &&
+      (categoryId == null ||
+          !(knownCategories[kind]?.contains(categoryId) ?? false) ||
+          !(knownItems[kind]?.contains(id) ?? false) ||
+          hidesItem(kind, id, categoryId: categoryId));
 
   bool hidesCategory(ContentKind kind, String? categoryId) =>
       active &&

@@ -6,6 +6,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/category_list.dart';
 import '../../domain/entities/catalog.dart';
 import '../../domain/entities/live.dart';
+import '../auth/application/session.dart';
 import 'parental.dart';
 
 /// Texto de una espera: "1 minuto", "2 minutos", "45 segundos".
@@ -31,7 +32,58 @@ String? parentalErrorText(ParentalResult result, {String what = 'PIN'}) =>
         'Demasiados intentos fallidos. Espera ${waitText(remaining)} y '
             'vuelve a intentarlo.',
       ParentalInvalidPin() => 'El PIN nuevo debe tener 4 números.',
+      ParentalSaveFailed() =>
+        'No se pudo guardar el cambio. Todo queda como estaba (el PIN '
+            'anterior sigue vigente). Inténtalo de nuevo.',
+      ParentalSessionClosed() =>
+        'La sesión de esta cuenta se cerró: no se aplicó ningún cambio.',
     };
+
+/// Abre un diálogo **atado a la sesión que lo abrió**: los diálogos viven
+/// en el navegador principal, fuera del contenedor de la sesión, así que se
+/// les da ese contenedor (sus acciones van siempre al perfil de esa sesión)
+/// y se cierran solos si la sesión termina (cambio de cuenta o cierre de
+/// sesión). Devuelve `null` si se cerró así.
+Future<T?> showSessionDialog<T>(BuildContext context, WidgetBuilder builder) {
+  final container = ProviderScope.containerOf(context, listen: false);
+  final lifetime = container.read(sessionContextProvider).lifetime;
+  if (!lifetime.isActive) return Future.value();
+  return showDialog<T>(
+    context: context,
+    builder: (dialogContext) => UncontrolledProviderScope(
+      container: container,
+      child: _SessionBound(lifetime: lifetime, child: builder(dialogContext)),
+    ),
+  );
+}
+
+/// Cierra su diálogo cuando termina la sesión.
+class _SessionBound extends StatefulWidget {
+  const _SessionBound({required this.lifetime, required this.child});
+
+  final SessionLifetime lifetime;
+  final Widget child;
+
+  @override
+  State<_SessionBound> createState() => _SessionBoundState();
+}
+
+class _SessionBoundState extends State<_SessionBound> {
+  @override
+  void initState() {
+    super.initState();
+    widget.lifetime.cancelToken.whenCancel.then((_) {
+      if (!mounted) return;
+      final route = ModalRoute.of(context);
+      if (route != null && route.isActive) {
+        Navigator.of(context).removeRoute(route);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
 
 /// Botón del pie de las categorías: "Contenido adulto" (con candado) pide
 /// el PIN para mostrarlo; desbloqueado, "Bloquear de nuevo".
@@ -77,9 +129,9 @@ Future<void> unlockAdultContent(BuildContext context, WidgetRef ref) async {
   );
   if (!ok || !context.mounted) return;
   if (outcome case ParentalOk(suggestChangePin: true)) {
-    final change = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
+    final change = await showSessionDialog<bool>(
+      context,
+      (context) => AlertDialog(
         title: const Text('Cambia el PIN'),
         content: const Text(
           'Tu PIN todavía es 0000, el que viene de fábrica. Cualquiera '
@@ -113,9 +165,9 @@ Future<void> blockCategory(
   ContentKind kind,
   ContentCategory category,
 ) async {
-  final confirm = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
+  final confirm = await showSessionDialog<bool>(
+    context,
+    (context) => AlertDialog(
       title: const Text('Ocultar categoría'),
       content: Text(
         '«${category.name}» se ocultará junto con el contenido para '
@@ -135,7 +187,16 @@ Future<void> blockCategory(
     ),
   );
   if (confirm == true) {
-    await ref.read(parentalProvider.notifier).blockCategory(kind, category.id);
+    final saved = await ref
+        .read(parentalProvider.notifier)
+        .blockCategory(kind, category.id);
+    if (!saved && context.mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo ocultar la categoría. Inténtalo de nuevo.'),
+        ),
+      );
+    }
   }
 }
 
@@ -164,9 +225,9 @@ Future<bool> showChangePinDialog(
   WidgetRef ref, {
   String? knownPin,
 }) async {
-  final ok = await showDialog<bool>(
-    context: context,
-    builder: (context) => _ChangePinDialog(knownPin: knownPin),
+  final ok = await showSessionDialog<bool>(
+    context,
+    (context) => _ChangePinDialog(knownPin: knownPin),
   );
   if (ok == true && context.mounted) {
     ScaffoldMessenger.maybeOf(context)
@@ -177,9 +238,9 @@ Future<bool> showChangePinDialog(
 
 /// "Olvidé mi PIN": con la contraseña de la cuenta IPTV, vuelve a 0000.
 Future<bool> showResetPinDialog(BuildContext context, WidgetRef ref) async {
-  final ok = await showDialog<bool>(
-    context: context,
-    builder: (context) => _SecretDialog(
+  final ok = await showSessionDialog<bool>(
+    context,
+    (context) => _SecretDialog(
       title: 'Olvidé mi PIN',
       message:
           'Escribe la contraseña de tu cuenta IPTV (la que usaste para '
@@ -209,9 +270,9 @@ Future<bool> showPinDialog(
   required String message,
   required Future<ParentalResult> Function(String pin) action,
 }) async {
-  final ok = await showDialog<bool>(
-    context: context,
-    builder: (context) => _SecretDialog(
+  final ok = await showSessionDialog<bool>(
+    context,
+    (context) => _SecretDialog(
       title: title,
       message: message,
       label: 'PIN',

@@ -18,6 +18,7 @@ import 'package:evemtv/domain/entities/vod.dart';
 import 'package:evemtv/domain/entities/watch_progress.dart';
 import 'package:evemtv/domain/parental/adult_content.dart';
 import 'package:evemtv/domain/repositories/credential_store.dart';
+import 'package:evemtv/domain/repositories/parental_repository.dart';
 import 'package:evemtv/features/auth/application/session.dart';
 import 'package:evemtv/features/catalog/catalog_providers.dart';
 import 'package:evemtv/features/favorites/favorites.dart';
@@ -25,6 +26,8 @@ import 'package:evemtv/features/live/live_providers.dart';
 import 'package:evemtv/features/parental/parental.dart';
 import 'package:evemtv/features/parental/parental_widgets.dart';
 import 'package:evemtv/features/parental/pin_hash.dart';
+import 'package:evemtv/features/player/live_playback_controller.dart';
+import 'package:evemtv/features/player/live_player_provider.dart';
 import 'package:evemtv/features/player/watch_progress.dart';
 import 'package:evemtv/features/search/catalog_sync.dart';
 import 'package:flutter/material.dart';
@@ -32,10 +35,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../helpers/fakes.dart';
-import '../player/live_playback_controller_test.dart' show FakeSource;
+import '../player/live_playback_controller_test.dart'
+    show FakeEngine, FakeSource;
 
 /// Catálogo ficticio con contenido de adultos por marca y por nombre.
 class _AdultSource extends FakeSource {
+  /// Sin conexión: el catálogo no se puede descargar.
+  bool offline = false;
+
+  void _check() {
+    if (offline) throw StateError('sin conexión (simulado)');
+  }
+
   static const liveCategories_ = [
     ContentCategory(id: 'c1', name: 'Deportes'),
     ContentCategory(id: 'c2', name: 'XXX Adultos'),
@@ -53,19 +64,28 @@ class _AdultSource extends FakeSource {
   ];
 
   @override
-  Future<List<ContentCategory>> liveCategories() async => liveCategories_;
+  Future<List<ContentCategory>> liveCategories() async {
+    _check();
+    return liveCategories_;
+  }
 
   @override
-  Future<List<LiveChannel>> liveChannels({String? categoryId}) async => [
-    for (final c in channels)
-      if (categoryId == null || c.categoryId == categoryId) c,
-  ];
+  Future<List<LiveChannel>> liveChannels({String? categoryId}) async {
+    _check();
+    return [
+      for (final c in channels)
+        if (categoryId == null || c.categoryId == categoryId) c,
+    ];
+  }
 
   @override
-  Future<List<ContentCategory>> vodCategories() async => const [
-    ContentCategory(id: 'm1', name: 'Estrenos'),
-    ContentCategory(id: 'm2', name: 'Adultos +18'),
-  ];
+  Future<List<ContentCategory>> vodCategories() async {
+    _check();
+    return const [
+      ContentCategory(id: 'm1', name: 'Estrenos'),
+      ContentCategory(id: 'm2', name: 'Adultos +18'),
+    ];
+  }
 
   static final movies = [
     VodItem(
@@ -90,16 +110,22 @@ class _AdultSource extends FakeSource {
   ];
 
   @override
-  Future<List<VodItem>> vodItems({String? categoryId}) async => [
-    for (final m in movies)
-      if (categoryId == null || m.categoryId == categoryId) m,
-  ];
+  Future<List<VodItem>> vodItems({String? categoryId}) async {
+    _check();
+    return [
+      for (final m in movies)
+        if (categoryId == null || m.categoryId == categoryId) m,
+    ];
+  }
 
   @override
-  Future<List<ContentCategory>> seriesCategories() async => const [
-    ContentCategory(id: 's1', name: 'Drama'),
-    ContentCategory(id: 's2', name: 'Erótico'),
-  ];
+  Future<List<ContentCategory>> seriesCategories() async {
+    _check();
+    return const [
+      ContentCategory(id: 's1', name: 'Drama'),
+      ContentCategory(id: 's2', name: 'Erótico'),
+    ];
+  }
 
   static const series = [
     SeriesItem(id: '21', name: 'Serie Familiar', categoryId: 's1'),
@@ -107,10 +133,30 @@ class _AdultSource extends FakeSource {
   ];
 
   @override
-  Future<List<SeriesItem>> seriesItems({String? categoryId}) async => [
-    for (final s in series)
-      if (categoryId == null || s.categoryId == categoryId) s,
-  ];
+  Future<List<SeriesItem>> seriesItems({String? categoryId}) async {
+    _check();
+    return [
+      for (final s in series)
+        if (categoryId == null || s.categoryId == categoryId) s,
+    ];
+  }
+}
+
+/// Control parental en la base, con escrituras que pueden fallar.
+class _FlakyRepository implements ParentalRepository {
+  _FlakyRepository(this.inner);
+
+  final ParentalRepository inner;
+  bool failWrites = false;
+
+  @override
+  Future<ParentalRecord> read(int profileId) => inner.read(profileId);
+
+  @override
+  Future<void> write(int profileId, ParentalRecord record) {
+    if (failWrites) throw StateError('disco lleno (simulado)');
+    return inner.write(profileId, record);
+  }
 }
 
 class _Credentials implements CredentialStore {
@@ -308,6 +354,7 @@ void main() {
     late ProviderContainer root;
     late DateTime now;
     late _AdultSource source;
+    late _FlakyRepository repo;
 
     setUp(() async {
       db = AppDatabase(
@@ -320,9 +367,11 @@ void main() {
           .create(name: 'Cuenta 1', type: SourceType.xtream);
       now = DateTime.utc(2026, 9, 26, 12);
       source = _AdultSource();
+      repo = _FlakyRepository(DriftParentalRepository(db));
       root = ProviderContainer.test(
         overrides: [
           appDatabaseProvider.overrideWithValue(db),
+          parentalRepositoryProvider.overrideWithValue(repo),
           parentalClockProvider.overrideWithValue(() => now),
           credentialStoreProvider.overrideWithValue(
             _Credentials(
@@ -343,15 +392,19 @@ void main() {
 
     /// Contenedor de una sesión nueva del mismo perfil, con el catálogo
     /// local ya descargado.
-    Future<ProviderContainer> session() async {
+    Future<ProviderContainer> session({
+      bool sync = true,
+      SessionLifetime? lifetime,
+    }) async {
       final session = FixedSession().build()!;
       final c = sessionContainerFor(
         root,
         session,
+        lifetime: lifetime,
         overrides: [contentSourceProvider.overrideWithValue(source)],
       );
       addTearDown(c.dispose);
-      await c.read(catalogSyncProvider.notifier).sync(force: true);
+      if (sync) await c.read(catalogSyncProvider.notifier).sync(force: true);
       // Lee lo guardado del control parental.
       c.read(parentalProvider);
       await Future<void>.delayed(Duration.zero);
@@ -819,5 +872,254 @@ void main() {
       expect(find.text('Contenido adulto'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
     });
+
+    test('si no se puede guardar el PIN nuevo, se informa y queda el '
+        'anterior (también al restablecer y al ocultar categorías)', () async {
+      final c = await session();
+      final parental = c.read(parentalProvider.notifier);
+      expect(await parental.changePin('0000', '4821'), isA<ParentalOk>());
+
+      repo.failWrites = true;
+      final failed = await parental.changePin('4821', '1357');
+      expect(failed, isA<ParentalSaveFailed>());
+      expect(parentalErrorText(failed), contains('PIN anterior sigue vigente'));
+      expect(
+        await parental.resetPinWithPassword('claveDemo'),
+        isA<ParentalSaveFailed>(),
+      );
+      expect(c.read(parentalProvider).defaultPin, isFalse);
+      expect(await parental.blockCategory(ContentKind.live, 'c4'), isFalse);
+      expect(c.read(parentalProvider).blocked, isEmpty);
+      repo.failWrites = false;
+
+      expect(await parental.unlock('1357'), isA<ParentalWrong>());
+      expect(await parental.unlock('0000'), isA<ParentalWrong>());
+      expect(await parental.unlock('4821'), isA<ParentalOk>());
+    });
+
+    test(
+      'sin datos del catálogo local (antes de la primera descarga), '
+      'favoritos y "Seguir viendo" se ocultan mientras esté bloqueado',
+      () async {
+        await DriftFavoritesRepository(db).add(
+          1,
+          Favorite(
+            kind: FavoriteKind.live,
+            itemId: '1',
+            name: 'Fútbol Ficticio',
+            categoryId: 'c1',
+            addedAt: DateTime(2026),
+          ),
+        );
+        await DriftWatchProgressRepository(db).save(
+          1,
+          WatchProgress(
+            kind: ProgressKind.movie,
+            itemId: '11',
+            title: 'Película Familiar',
+            categoryId: 'm1',
+            position: const Duration(minutes: 5),
+            duration: const Duration(hours: 1),
+            updatedAt: DateTime(2026),
+          ),
+        );
+        source.offline = true;
+        final c = await session(sync: false);
+        final subs = [
+          c.listen(continueWatchingProvider, (_, _) {}),
+          c.listen(favoritesProvider(FavoriteKind.live), (_, _) {}),
+        ];
+        addTearDown(() {
+          for (final sub in subs) {
+            sub.close();
+          }
+        });
+        Future<void> settle() async {
+          for (var i = 0; i < 50; i++) {
+            if (c.read(allWatchProgressProvider).value?.isNotEmpty ?? false) {
+              break;
+            }
+            await Future<void>.delayed(const Duration(milliseconds: 10));
+          }
+          await c.read(hiddenContentProvider.future);
+        }
+
+        await settle();
+        expect(c.read(continueWatchingProvider), isEmpty);
+        expect(
+          await c.read(favoritesProvider(FavoriteKind.live).future),
+          isEmpty,
+        );
+        // Desbloqueado se ven; tras descargar el catálogo, también bloqueado.
+        await c.read(parentalProvider.notifier).unlock('0000');
+        await settle();
+        expect(c.read(continueWatchingProvider), hasLength(1));
+        expect(
+          await c.read(favoritesProvider(FavoriteKind.live).future),
+          hasLength(1),
+        );
+        c.read(parentalProvider.notifier).lock();
+        source.offline = false;
+        await c.read(catalogSyncProvider.notifier).sync(force: true);
+        await settle();
+        expect(c.read(continueWatchingProvider), hasLength(1));
+        expect(
+          await c.read(favoritesProvider(FavoriteKind.live).future),
+          hasLength(1),
+        );
+      },
+    );
+
+    test('una operación de una sesión que ya terminó no se aplica', () async {
+      final lifetime = SessionLifetime();
+      final c = await session(lifetime: lifetime);
+      final parental = c.read(parentalProvider.notifier);
+      lifetime.close();
+      expect(
+        await parental.changePin('0000', '4821'),
+        isA<ParentalSessionClosed>(),
+      );
+      expect(await parental.unlock('0000'), isA<ParentalSessionClosed>());
+      expect(
+        await parental.resetPinWithPassword('claveDemo'),
+        isA<ParentalSessionClosed>(),
+      );
+      expect(await parental.blockCategory(ContentKind.live, 'c4'), isFalse);
+      final stored = await repo.read(1);
+      expect(stored.pinHash, isNull);
+      expect(stored.blocked, isEmpty);
+      expect(stored.failedAttempts, 0);
+    });
+
+    testWidgets('los diálogos se abren sobre la app (fuera del contenedor '
+        'de la sesión), actúan en esa sesión y se cierran si termina', (
+      tester,
+    ) async {
+      final lifetime = SessionLifetime();
+      late ProviderContainer c;
+      await tester.runAsync(() async => c = await session(lifetime: lifetime));
+      // Como en la app: el navegador (y los diálogos) están por encima del
+      // contenedor de la sesión.
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: root,
+          child: MaterialApp(
+            home: UncontrolledProviderScope(
+              container: c,
+              child: Scaffold(
+                body: Consumer(
+                  builder: (context, ref, _) => Column(
+                    children: [
+                      TextButton(
+                        onPressed: () => showChangePinDialog(context, ref),
+                        child: const Text('abrir cambio'),
+                      ),
+                      TextButton(
+                        onPressed: () => unlockAdultContent(context, ref),
+                        child: const Text('abrir pin'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      Future<void> settle() async {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      // Cambiar el PIN desde el diálogo funciona (usa el contenedor de la
+      // sesión que lo abrió).
+      await tester.tap(find.text('abrir cambio'));
+      await tester.pumpAndSettle();
+      final fields = find.byType(TextField);
+      await tester.enterText(fields.at(0), '0000');
+      await tester.enterText(fields.at(1), '4821');
+      await tester.enterText(fields.at(2), '4821');
+      await tester.tap(find.text('Guardar'));
+      await settle();
+      expect(find.text('Cambiar PIN'), findsNothing);
+      final stored = await tester.runAsync(() => repo.read(1));
+      expect(PinHash.verify('4821', stored!.pinHash!), isTrue);
+
+      // "Olvidé mi PIN" desde el diálogo del PIN también.
+      await tester.tap(find.text('abrir pin'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Olvidé mi PIN'));
+      await tester.pumpAndSettle();
+      expect(find.text('Contraseña de la cuenta'), findsOneWidget);
+
+      // Termina la sesión (cambio de cuenta): los dos diálogos se cierran.
+      lifetime.close();
+      await settle();
+      expect(find.text('Contraseña de la cuenta'), findsNothing);
+      expect(find.text('Contenido adulto'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    });
+  });
+
+  test('al volver a bloquear, el reproductor quita los canales ocultos de '
+      'las flechas y se detiene si el actual está oculto', () {
+    LivePlaybackController player(int index) => LivePlaybackController(
+      engine: FakeEngine(),
+      source: FakeSource(),
+      channels: _AdultSource.channels,
+      initialIndex: index,
+      allowedFormats: const [],
+    );
+    const locked = ParentalState(loaded: true);
+    const categories = _AdultSource.liveCategories_;
+
+    // Canal actual visible: sigue, y la lista solo tiene visibles.
+    final a = player(0);
+    expect(
+      LivePlayerNotifier.keepPlayingAfterParental(locked, categories, a),
+      isTrue,
+    );
+    expect(a.channels.map((c) => c.id), ['1', '4']);
+    expect(a.channel.id, '1');
+    expect(a.index, 0);
+
+    // Canal actual oculto (categoría de adultos o marcado): se detiene.
+    for (final i in [1, 2, 4, 5]) {
+      expect(
+        LivePlayerNotifier.keepPlayingAfterParental(
+          locked,
+          categories,
+          player(i),
+        ),
+        isFalse,
+        reason: _AdultSource.channels[i].name,
+      );
+    }
+    // Categoría ocultada a mano mientras suena otro canal.
+    final b = player(0);
+    const manual = ParentalState(
+      loaded: true,
+      blocked: {(kind: ContentKind.live, id: 'c4')},
+    );
+    LivePlayerNotifier.keepPlayingAfterParental(manual, categories, b);
+    expect(b.channels.map((c) => c.id), ['1']);
+    // Sin las categorías no se puede saber: ante la duda, se detiene.
+    expect(
+      LivePlayerNotifier.keepPlayingAfterParental(locked, null, player(0)),
+      isFalse,
+    );
+    // Desbloqueado: nada cambia.
+    final d = player(1);
+    expect(
+      LivePlayerNotifier.keepPlayingAfterParental(
+        const ParentalState(unlocked: true),
+        categories,
+        d,
+      ),
+      isTrue,
+    );
+    expect(d.channels, hasLength(6));
   });
 }

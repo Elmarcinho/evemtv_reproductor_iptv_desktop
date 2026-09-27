@@ -63,4 +63,7 @@ abstract interface class CatalogCache {
 
   /// Ids de los elementos de [kind] que el panel marcó como de adultos.
   Future<Set<String>> adultItemIds(int profileId, ContentKind kind);
+
+  /// Ids de todos los elementos de [kind] guardados.
+  Future<Set<String>> itemIds(int profileId, ContentKind kind);
 }

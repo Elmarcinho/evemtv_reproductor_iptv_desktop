@@ -40,12 +40,12 @@ final continueWatchingProvider = Provider<List<WatchProgress>>((ref) {
 /// `true` si el control parental oculta esta entrada de "Seguir viendo"
 /// (película o serie de adultos, o de una categoría oculta).
 bool hidesProgress(HiddenContent hidden, WatchProgress p) => switch (p.kind) {
-  ProgressKind.movie => hidden.hidesItem(
+  ProgressKind.movie => hidden.hidesSaved(
     ContentKind.movie,
     p.itemId,
     categoryId: p.categoryId,
   ),
-  ProgressKind.episode => hidden.hidesItem(
+  ProgressKind.episode => hidden.hidesSaved(
     ContentKind.series,
     p.seriesId ?? '',
     categoryId: p.categoryId,

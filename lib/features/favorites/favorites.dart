@@ -33,7 +33,9 @@ final favoritesProvider = StreamProvider.family<List<Favorite>, FavoriteKind>((
       .map(
         (list) => [
           for (final f in list)
-            if (!hidden.hidesItem(
+            // Ante la duda (sin datos en el catálogo local para saber si
+            // es de adultos), oculto mientras el control esté bloqueado.
+            if (!hidden.hidesSaved(
               contentKind,
               f.itemId,
               categoryId: f.categoryId,

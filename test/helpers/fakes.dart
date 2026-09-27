@@ -285,9 +285,9 @@ class InMemoryParentalRepository implements ParentalRepository {
       records[profileId] = record;
 }
 
-/// Control parental para tests que no lo prueban: en memoria, bloqueado y
-/// sin nada marcado como de adultos en el catálogo local (sin base).
+/// Control parental para tests que no lo prueban: en memoria y sin nada
+/// oculto (sin base; lo prueba test/features/parental/).
 List<Override> parentalTestOverrides() => [
   parentalRepositoryProvider.overrideWithValue(InMemoryParentalRepository()),
-  hiddenContentProvider.overrideWith((ref) async => const HiddenContent()),
+  hiddenContentProvider.overrideWith((ref) async => HiddenContent.none),
 ];

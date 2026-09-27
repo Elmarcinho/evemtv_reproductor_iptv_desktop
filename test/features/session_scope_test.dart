@@ -185,6 +185,9 @@ void main() {
             testDio(FakeHttpAdapter((_) => jsonBody('{}'))),
           ),
           tempImageCacheRoot(),
+          // Sin catálogo local: el control parental (probado aparte)
+          // ocultaría todo "Seguir viendo".
+          ...parentalTestOverrides(),
         ],
       );
       root.read(sessionProvider.notifier).start(_sessionFor(1));

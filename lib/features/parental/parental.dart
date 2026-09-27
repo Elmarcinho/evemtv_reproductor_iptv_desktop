@@ -82,6 +82,18 @@ class ParentalInvalidPin extends ParentalResult {
   const ParentalInvalidPin();
 }
 
+/// No se pudo guardar el cambio: queda lo anterior (el PIN anterior sigue
+/// vigente).
+class ParentalSaveFailed extends ParentalResult {
+  const ParentalSaveFailed();
+}
+
+/// La sesión que abrió la operación ya terminó (se cambió de cuenta o se
+/// cerró sesión): no se aplica nada, ni en ese perfil ni en otro.
+class ParentalSessionClosed extends ParentalResult {
+  const ParentalSessionClosed();
+}
+
 @immutable
 class ParentalState {
   const ParentalState({
@@ -140,15 +152,22 @@ final parentalClockProvider = Provider<DateTime Function()>(
 );
 
 class ParentalController extends Notifier<ParentalState> {
+  /// Perfil y vida de la sesión, fijos: una operación empezada en esta
+  /// sesión nunca escribe en otro perfil, y si la sesión terminó no escribe.
   late int _profileId;
+  late SessionLifetime _lifetime;
   Future<void>? _loading;
+
+  bool get _alive => ref.mounted && _lifetime.isActive;
 
   ParentalRepository get _repo => ref.read(parentalRepositoryProvider);
   DateTime _now() => ref.read(parentalClockProvider)().toUtc();
 
   @override
   ParentalState build() {
-    _profileId = ref.watch(sessionContextProvider).profileId;
+    final ctx = ref.watch(sessionContextProvider);
+    _profileId = ctx.profileId;
+    _lifetime = ctx.lifetime;
     _loading = null;
     Future.microtask(() {
       if (ref.mounted) unawaited(_ensureLoaded());
@@ -175,7 +194,8 @@ class ParentalController extends Notifier<ParentalState> {
   /// Muestra el contenido adulto si el PIN es correcto.
   Future<ParentalResult> unlock(String pin) async {
     final result = await _checkPin(pin);
-    if (result is ParentalOk && ref.mounted) {
+    if (result is ParentalOk) {
+      if (!_alive) return const ParentalSessionClosed();
       state = state.copyWith(unlocked: true);
       AppLogger.event('parental.unlock', const {});
       return ParentalOk(
@@ -196,13 +216,16 @@ class ParentalController extends Notifier<ParentalState> {
     state = state.copyWith(suggestionDismissed: true);
   }
 
-  /// Bloquea una categoría a mano (no pide PIN).
-  Future<void> blockCategory(ContentKind kind, String categoryId) async {
+  /// Bloquea una categoría a mano (no pide PIN). `false` si no se pudo
+  /// guardar (no cambia nada).
+  Future<bool> blockCategory(ContentKind kind, String categoryId) async {
     await _ensureLoaded();
+    if (!_alive) return false;
     final blocked = {...state.blocked, (kind: kind, id: categoryId)};
-    await _save((r) => r.copyWith(blocked: blocked));
-    if (ref.mounted) state = state.copyWith(blocked: blocked);
+    if (!await _save((r) => r.copyWith(blocked: blocked))) return false;
+    if (_alive) state = state.copyWith(blocked: blocked);
     AppLogger.event('parental.block_category', {'kind': kind});
+    return true;
   }
 
   /// Quita el bloqueo manual de una categoría: pide el PIN.
@@ -213,9 +236,12 @@ class ParentalController extends Notifier<ParentalState> {
   ) async {
     final result = await _checkPin(pin);
     if (result is! ParentalOk) return result;
+    if (!_alive) return const ParentalSessionClosed();
     final blocked = {...state.blocked}..remove((kind: kind, id: categoryId));
-    await _save((r) => r.copyWith(blocked: blocked));
-    if (ref.mounted) state = state.copyWith(blocked: blocked);
+    if (!await _save((r) => r.copyWith(blocked: blocked))) {
+      return const ParentalSaveFailed();
+    }
+    if (_alive) state = state.copyWith(blocked: blocked);
     AppLogger.event('parental.unblock_category', {'kind': kind});
     return const ParentalOk();
   }
@@ -225,10 +251,14 @@ class ParentalController extends Notifier<ParentalState> {
     if (!ParentalConfig.isValidPin(next)) return const ParentalInvalidPin();
     final result = await _checkPin(current);
     if (result is! ParentalOk) return result;
+    if (!_alive) return const ParentalSessionClosed();
     // PBKDF2 con 20 000 rondas: unas decenas de milisegundos.
     final hash = PinHash.create(next);
-    await _save((r) => r.copyWith(pinHash: hash));
-    if (ref.mounted) {
+    // Si no se guarda, el PIN anterior sigue vigente y se informa.
+    if (!await _save((r) => r.copyWith(pinHash: hash))) {
+      return const ParentalSaveFailed();
+    }
+    if (_alive) {
       state = state.copyWith(defaultPin: false, suggestionDismissed: true);
     }
     AppLogger.event('parental.pin_changed', const {});
@@ -240,7 +270,14 @@ class ParentalController extends Notifier<ParentalState> {
   /// fallidos cuentan igual que los del PIN.
   Future<ParentalResult> resetPinWithPassword(String password) async {
     await _ensureLoaded();
-    final record = await _repo.read(_profileId);
+    if (!_alive) return const ParentalSessionClosed();
+    final ParentalRecord record;
+    try {
+      record = await _repo.read(_profileId);
+    } on Object catch (e) {
+      AppLogger.w('No se pudo leer el control parental', e);
+      return const ParentalSaveFailed();
+    }
     final wait = _waitFor(record);
     if (wait != null) return ParentalWait(wait);
     var ok = false;
@@ -258,11 +295,18 @@ class ParentalController extends Notifier<ParentalState> {
       AppLogger.w('No se pudo leer la cuenta para restablecer el PIN', e);
     }
     if (!ok) return _fail(record);
-    await _repo.write(
-      _profileId,
-      record.copyWith(clearPin: true, failedAttempts: 0, clearLock: true),
-    );
-    if (ref.mounted) state = state.copyWith(defaultPin: true);
+    if (!_alive) return const ParentalSessionClosed();
+    try {
+      await _repo.write(
+        _profileId,
+        record.copyWith(clearPin: true, failedAttempts: 0, clearLock: true),
+      );
+    } on Object catch (e) {
+      // El PIN anterior sigue vigente.
+      AppLogger.w('No se pudo restablecer el PIN', e);
+      return const ParentalSaveFailed();
+    }
+    if (_alive) state = state.copyWith(defaultPin: true);
     AppLogger.event('parental.pin_reset', const {});
     return const ParentalOk();
   }
@@ -280,7 +324,15 @@ class ParentalController extends Notifier<ParentalState> {
   /// Comprueba el PIN y lleva la cuenta de intentos fallidos.
   Future<ParentalResult> _checkPin(String pin) async {
     await _ensureLoaded();
-    final record = await _repo.read(_profileId);
+    if (!_alive) return const ParentalSessionClosed();
+    final ParentalRecord record;
+    try {
+      record = await _repo.read(_profileId);
+    } on Object catch (e) {
+      // Sin poder leer el PIN guardado no se desbloquea nada.
+      AppLogger.w('No se pudo leer el control parental', e);
+      return const ParentalSaveFailed();
+    }
     final wait = _waitFor(record);
     if (wait != null) return ParentalWait(wait);
     final stored = record.pinHash;
@@ -292,10 +344,7 @@ class ParentalController extends Notifier<ParentalState> {
         : PinHash.verify(pin, stored);
     if (!ok) return _fail(record);
     if (record.failedAttempts != 0 || record.lockedUntil != null) {
-      await _repo.write(
-        _profileId,
-        record.copyWith(failedAttempts: 0, clearLock: true),
-      );
+      await _save((r) => r.copyWith(failedAttempts: 0, clearLock: true));
     }
     return const ParentalOk();
   }
@@ -315,9 +364,8 @@ class ParentalController extends Notifier<ParentalState> {
   Future<ParentalResult> _fail(ParentalRecord record) async {
     final failures = record.failedAttempts + 1;
     final wait = ParentalConfig.waitAfter(failures);
-    await _repo.write(
-      _profileId,
-      record.copyWith(
+    await _save(
+      (r) => r.copyWith(
         failedAttempts: failures,
         lockedUntil: wait == Duration.zero ? null : _now().add(wait),
         clearLock: wait == Duration.zero,
@@ -328,12 +376,17 @@ class ParentalController extends Notifier<ParentalState> {
     return ParentalWrong(attemptsLeft: ParentalConfig.freeAttempts - failures);
   }
 
-  Future<void> _save(ParentalRecord Function(ParentalRecord) change) async {
+  /// Guarda un cambio sobre lo último guardado. `false` si falló (y
+  /// entonces no cambió nada) o si la sesión ya terminó.
+  Future<bool> _save(ParentalRecord Function(ParentalRecord) change) async {
+    if (!_alive) return false;
     try {
       final record = await _repo.read(_profileId);
       await _repo.write(_profileId, change(record));
+      return true;
     } on Object catch (e) {
       AppLogger.w('No se pudo guardar el control parental', e);
+      return false;
     }
   }
 }
@@ -359,13 +412,18 @@ final hiddenContentProvider = FutureProvider<HiddenContent>(
     final cache = ref.watch(catalogCacheProvider);
     final categories = <ContentKind, Set<String>>{};
     final adultItems = <ContentKind, Set<String>>{};
+    final knownCategories = <ContentKind, Set<String>>{};
+    final knownItems = <ContentKind, Set<String>>{};
     for (final kind in ContentKind.values) {
       try {
+        final all = await cache.categories(profileId, kind);
+        knownCategories[kind] = {for (final c in all) c.id};
         categories[kind] = {
-          for (final c in await cache.categories(profileId, kind))
+          for (final c in all)
             if (parental.isBlockedCategory(kind, c)) c.id,
         };
         adultItems[kind] = await cache.adultItemIds(profileId, kind);
+        knownItems[kind] = await cache.itemIds(profileId, kind);
       } on Object catch (e) {
         AppLogger.w('No se pudo calcular el contenido oculto', e);
       }
@@ -376,7 +434,12 @@ final hiddenContentProvider = FutureProvider<HiddenContent>(
           if (b.kind == kind) b.id,
       };
     }
-    return HiddenContent(categories: categories, adultItems: adultItems);
+    return HiddenContent(
+      categories: categories,
+      adultItems: adultItems,
+      knownCategories: knownCategories,
+      knownItems: knownItems,
+    );
   },
   dependencies: [parentalProvider, sessionContextProvider, catalogSyncProvider],
 );

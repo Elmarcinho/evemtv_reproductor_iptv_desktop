@@ -417,14 +417,18 @@ class UpdateController extends Notifier<UpdateState> {
     );
     _deadlineTimer?.cancel();
     if (deadline != null && !locked) {
-      // Si la app sigue abierta cuando vence el plazo, se bloquea. El
-      // temporizador mide tiempo transcurrido (no la hora del equipo),
-      // desde la fecha que dio el servidor.
-      _deadlineTimer = Timer(deadline.difference(serverNow!), () {
-        if (ref.mounted && state.info?.forced == true) {
-          state = state.copyWith(locked: true);
-        }
-      });
+      // Si la app sigue abierta cuando vence el plazo, NO se bloquea con
+      // la respuesta vieja: se vuelve a consultar, y solo una respuesta
+      // coherente con fecha del servidor posterior al plazo bloquea. Si el
+      // servidor falla en ese momento (caído, sin conexión, respuesta
+      // rara), la app sigue funcionando. Unos segundos de margen por si el
+      // reloj del servidor va levemente atrás.
+      _deadlineTimer = Timer(
+        deadline.difference(serverNow!) + const Duration(seconds: 5),
+        () {
+          if (ref.mounted) unawaited(check());
+        },
+      );
     }
   }
 
