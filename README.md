@@ -6,7 +6,7 @@ Compatible con servidores que usan la API de Xtream Codes y con listas M3U/M3U8.
 > EvemTv es solo un reproductor: **no incluye listas, canales ni contenido**.
 > Cada usuario es responsable del servicio y del contenido al que accede.
 
-Estado: **Fase 5** (versión 1.0.0: instaladores para las tres plataformas).
+Estado: **versión 1.0.1** publicada (Fases 0 a 5 y el control parental de la Fase 6; pendientes de la Fase 6: EPG en grilla y catch-up).
 Descarga: **[evemtv.godebol.com](https://evemtv.godebol.com)** · instalación: [`docs/instalacion.md`](docs/instalacion.md). Ver [`CLAUDE.md`](CLAUDE.md) para la especificación completa.
 
 ## Requisitos
