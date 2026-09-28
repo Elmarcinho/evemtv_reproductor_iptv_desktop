@@ -19,12 +19,8 @@ class TermsScreen extends ConsumerWidget {
         'que accedas, y de contar con los derechos para verlo.',
     'Tus credenciales se guardan solo en el almacén seguro de este equipo y '
         'nunca se envían a nadie.',
-    'Para estadísticas de uso, una vez al día la app envía el sistema '
-        'operativo, un identificador de esta instalación y una huella de la '
-        'cuenta (un código calculado a partir de tu usuario y del servidor), '
-        'nunca tu usuario ni tu contraseña.',
-    'Al abrirse, la app consulta si hay una versión nueva, sin enviar datos '
-        'de tu cuenta.',
+    'La app envía una estadística de uso al día, sin tu usuario ni tu '
+        'contraseña.',
   ];
 
   @override

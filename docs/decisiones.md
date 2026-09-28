@@ -827,9 +827,14 @@ restricciones ni el conteo condiciona nada.
   leer el usuario, pero **no es anónimo en sentido estricto**: es el mismo
   para la misma cuenta en cualquier equipo y, como los nombres de usuario y
   los hosts se pueden adivinar, quien conozca una cuenta y su servidor
-  puede comprobar si esa cuenta usa la app. Por eso los términos lo
-  describen como "una huella de la cuenta calculada a partir de tu usuario
-  y del servidor", sin llamarlo anónimo.
+  puede comprobar si esa cuenta usa la app. Por eso los términos nunca lo
+  llaman anónimo.
+- **Texto en los términos (versión 4, a pedido del dueño del proyecto,
+  más corto):** *"La app envía una estadística de uso al día, sin tu
+  usuario ni tu contraseña."* Sigue informado antes de enviar nada (el
+  conteo espera a que se acepten los términos); el detalle está aquí y en
+  el código abierto del repositorio. La versión 3 lo describía completo
+  (sistema operativo, id de la instalación y huella de la cuenta).
 
 
 ## 19. Instaladores, release y aviso de actualización (Fase 5)
@@ -997,9 +1002,10 @@ comprueba que coincidan y el workflow de release rechaza un tag que no sea
   haya cerrado, y si no dice "Tienes la última versión" o que no se pudo
   consultar) y enlace a la página de descarga.
   Sale de `AppConfig.version`, así que cambia sola con cada release.
-- Los términos (versión 3) lo mencionan. Todavía no hay pantalla de Ajustes:
-  el interruptor para desactivar el aviso normal queda pendiente para
-  cuando exista (el de la versión mínima no se podrá desactivar).
+- Los términos (desde la versión 4) ya no lo mencionan: la consulta no
+  envía datos de la cuenta ni de la instalación. Queda pendiente un
+  interruptor en Ajustes para desactivar el aviso normal (el de la versión
+  mínima no se podrá desactivar).
 
 ### Nombres fijos y página de descarga
 

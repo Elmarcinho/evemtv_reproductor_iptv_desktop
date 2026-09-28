@@ -145,7 +145,8 @@ lib/
   tokens (`/live/***/***/123.m3u8`).
 - Sin telemetría ni analytics, salvo un conteo de uso mínimo una vez al día
   (sistema operativo, id de la instalación y una huella de la cuenta; nunca
-  usuario ni contraseña), informado en los términos. Ver `docs/decisiones.md` §18.
+  usuario ni contraseña), informado en los términos ("una estadística de uso
+  al día"). Ver `docs/decisiones.md` §18.
 - El aviso de actualización consulta `godebol.com/api/evemtv/version` sin
   datos de la cuenta, y solo abre descargas de `github.com/Elmarcinho`,
   `godebol.com` o `evemtv.godebol.com` (`docs/decisiones.md` §19).
