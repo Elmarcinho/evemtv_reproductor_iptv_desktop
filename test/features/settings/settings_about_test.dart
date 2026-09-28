@@ -124,14 +124,13 @@ void main() {
       await finish(tester, d);
     });
 
-    testWidgets('abre la guía y la página de descarga (enlaces permitidos)', (
-      tester,
-    ) async {
+    testWidgets('abre la página de descarga (enlace permitido); sin guía '
+        'de instalación', (tester) async {
       final c = await pump(tester);
-      await tester.tap(find.text('Guía de instalación'));
+      expect(find.text('Guía de instalación'), findsNothing);
       await tester.tap(find.text('Página de descarga'));
-      expect(opened, [UpdateConfig.installGuide, UpdateConfig.downloadPage]);
-      expect(opened.every(isTrustedDownload), isTrue);
+      expect(opened, [UpdateConfig.downloadPage]);
+      expect(isTrustedDownload(UpdateConfig.downloadPage), isTrue);
       await finish(tester, c);
     });
   });

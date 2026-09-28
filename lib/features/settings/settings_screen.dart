@@ -222,7 +222,8 @@ class _BlockedTile extends ConsumerWidget {
   }
 }
 
-/// "Acerca de EvemTv": versión instalada, buscar actualizaciones y enlaces.
+/// "Acerca de EvemTv": versión instalada, buscar actualizaciones y la
+/// página de descarga.
 class _AboutSection extends ConsumerStatefulWidget {
   const _AboutSection();
 
@@ -313,10 +314,6 @@ class _AboutSectionState extends ConsumerState<_AboutSection> {
                         )
                       : const Icon(Icons.system_update_alt_rounded),
                   label: const Text('Buscar actualizaciones'),
-                ),
-                TextButton(
-                  onPressed: () => _open(UpdateConfig.installGuide),
-                  child: const Text('Guía de instalación'),
                 ),
                 TextButton(
                   onPressed: () => _open(UpdateConfig.downloadPage),

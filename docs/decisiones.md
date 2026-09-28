@@ -995,7 +995,7 @@ comprueba que coincidan y el workflow de release rechaza un tag que no sea
   Ajustes → **Acerca de EvemTv**, con **Buscar actualizaciones** (consulta
   en el momento; si hay versión nueva vuelve a mostrar el aviso aunque se
   haya cerrado, y si no dice "Tienes la última versión" o que no se pudo
-  consultar) y enlaces a la guía de instalación y a la página de descarga.
+  consultar) y enlace a la página de descarga.
   Sale de `AppConfig.version`, así que cambia sola con cada release.
 - Los términos (versión 3) lo mencionan. Todavía no hay pantalla de Ajustes:
   el interruptor para desactivar el aviso normal queda pendiente para
