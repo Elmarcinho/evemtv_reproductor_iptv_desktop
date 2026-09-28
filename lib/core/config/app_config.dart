@@ -28,7 +28,7 @@ abstract final class AppConfig {
   /// Versión mostrada, enviada como User-Agent y comparada con la del aviso
   /// de actualización. Debe coincidir con `pubspec.yaml` (lo comprueban
   /// test/core/app_version_test.dart y el workflow de release).
-  static const String version = '1.0.1';
+  static const String version = '1.0.2';
 
   /// User-Agent propio y neutral: no se imita a otros reproductores.
   static const String userAgent = 'EvemTv/$version';
