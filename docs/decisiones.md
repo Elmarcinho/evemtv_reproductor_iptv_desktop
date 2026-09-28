@@ -829,12 +829,16 @@ restricciones ni el conteo condiciona nada.
   los hosts se pueden adivinar, quien conozca una cuenta y su servidor
   puede comprobar si esa cuenta usa la app. Por eso los términos nunca lo
   llaman anónimo.
-- **Texto en los términos (versión 4, a pedido del dueño del proyecto,
-  más corto):** *"La app envía una estadística de uso al día, sin tu
-  usuario ni tu contraseña."* Sigue informado antes de enviar nada (el
-  conteo espera a que se acepten los términos); el detalle está aquí y en
-  el código abierto del repositorio. La versión 3 lo describía completo
-  (sistema operativo, id de la instalación y huella de la cuenta).
+- **Dónde se informa (a pedido del dueño del proyecto):** ya no en los
+  términos (versión 4), porque un aviso de "solo enviamos esto" en la
+  bienvenida genera desconfianza, sino en **Ajustes → Acerca de EvemTv →
+  Privacidad** (`AppConfig.privacyNote`), con el detalle exacto: sistema
+  operativo, un código de esta instalación y un código de la cuenta
+  calculado a partir del usuario y del servidor; nunca usuario,
+  contraseña ni lo que se ve; y la consulta de versión. No se esconde: el
+  texto está en la app y el detalle aquí y en el código abierto. El envío
+  sigue esperando a que se acepten los términos. (La versión 3 de los
+  términos lo describía completo.)
 
 
 ## 19. Instaladores, release y aviso de actualización (Fase 5)
@@ -1002,8 +1006,8 @@ comprueba que coincidan y el workflow de release rechaza un tag que no sea
   haya cerrado, y si no dice "Tienes la última versión" o que no se pudo
   consultar) y enlace a la página de descarga.
   Sale de `AppConfig.version`, así que cambia sola con cada release.
-- Los términos (desde la versión 4) ya no lo mencionan: la consulta no
-  envía datos de la cuenta ni de la instalación. Queda pendiente un
+- Se informa en Ajustes → Acerca de EvemTv → Privacidad (ya no en los
+  términos): la consulta no envía datos de la cuenta ni de la instalación. Queda pendiente un
   interruptor en Ajustes para desactivar el aviso normal (el de la versión
   mínima no se podrá desactivar).
 

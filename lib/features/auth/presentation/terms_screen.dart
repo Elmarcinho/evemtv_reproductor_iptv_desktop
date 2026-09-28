@@ -19,8 +19,6 @@ class TermsScreen extends ConsumerWidget {
         'que accedas, y de contar con los derechos para verlo.',
     'Tus credenciales se guardan solo en el almacén seguro de este equipo y '
         'nunca se envían a nadie.',
-    'La app envía una estadística de uso al día, sin tu usuario ni tu '
-        'contraseña.',
   ];
 
   @override

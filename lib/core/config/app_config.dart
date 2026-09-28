@@ -33,6 +33,20 @@ abstract final class AppConfig {
   /// User-Agent propio y neutral: no se imita a otros reproductores.
   static const String userAgent = 'EvemTv/$version';
 
+  /// Texto de Ajustes → Acerca de EvemTv → Privacidad: qué envía la app
+  /// (conteo de uso, docs/decisiones.md §18, y consulta de versión, §19).
+  /// Debe describir exactamente lo que se envía.
+  static const String privacyNote =
+      'Tus credenciales se guardan solo en el almacén seguro de este equipo '
+      'y nunca se envían a nadie.\n\n'
+      'Una vez al día la app envía una estadística de uso para saber cuántas '
+      'personas la usan: el sistema operativo, un código de esta instalación '
+      'y un código de la cuenta calculado a partir del usuario y del '
+      'servidor (con él no se puede leer ninguno de los dos). Nunca envía '
+      'tu usuario, tu contraseña ni lo que ves.\n\n'
+      'Al abrirse, la app consulta si hay una versión nueva, sin enviar '
+      'datos de tu cuenta.';
+
   /// Versión de los términos de uso; si cambia, se vuelven a pedir.
   static const String termsVersion = '4';
 

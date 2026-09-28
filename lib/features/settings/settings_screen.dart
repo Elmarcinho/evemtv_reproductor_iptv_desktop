@@ -325,6 +325,18 @@ class _AboutSectionState extends ConsumerState<_AboutSection> {
               const SizedBox(height: 12),
               Text(_result!, style: secondary),
             ],
+            const SizedBox(height: 24),
+            const Divider(height: 1),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                const Icon(Icons.privacy_tip_outlined, size: 20),
+                const SizedBox(width: 8),
+                Text('Privacidad', style: text.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(AppConfig.privacyNote, style: secondary),
           ],
         ),
       ),

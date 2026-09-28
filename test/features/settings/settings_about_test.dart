@@ -7,6 +7,7 @@ import 'package:evemtv/core/logging/app_logger.dart';
 import 'package:evemtv/core/widgets/developer_credit.dart';
 import 'package:evemtv/data/providers.dart';
 import 'package:evemtv/features/auth/application/session.dart';
+import 'package:evemtv/features/auth/presentation/terms_screen.dart';
 import 'package:evemtv/features/home/promo_banner.dart';
 import 'package:evemtv/features/settings/settings_screen.dart';
 import 'package:evemtv/features/update/update_check.dart';
@@ -89,6 +90,33 @@ void main() {
       await search(tester);
       expect(find.text('Tienes la última versión.'), findsOneWidget);
       await finish(tester, c);
+    });
+
+    testWidgets('Privacidad: dice qué envía la app, y nada de eso está en '
+        'los términos', (tester) async {
+      final c = await pump(tester);
+      expect(find.text('Privacidad'), findsOneWidget);
+      expect(find.text(AppConfig.privacyNote), findsOneWidget);
+      for (final part in [
+        'una estadística de uso',
+        'sistema operativo',
+        'código de esta instalación',
+        'código de la cuenta',
+        'Nunca envía tu usuario, tu contraseña',
+        'consulta si hay una versión nueva',
+      ]) {
+        expect(AppConfig.privacyNote, contains(part));
+      }
+      await finish(tester, c);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [...parentalTestOverrides()],
+          child: const MaterialApp(home: TermsScreen()),
+        ),
+      );
+      expect(find.textContaining('estadística'), findsNothing);
+      expect(find.textContaining('versión nueva'), findsNothing);
+      expect(find.text('Acepto y continúo'), findsOneWidget);
     });
 
     testWidgets('versión nueva: vuelve a mostrar el aviso aunque se haya '
