@@ -391,4 +391,82 @@ void main() {
     final repo = DriftParentalRepository(migrated);
     expect((await repo.read(1)).pinHash, isNull);
   });
+
+  test('migración interrumpida (versión 5 con las columnas y la tabla de '
+      'la 6 ya creadas): se completa sin error y conserva los datos', () async {
+    final dir = Directory.systemTemp.createTempSync('evemtv_db_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/db.sqlite');
+
+    final v6 = AppDatabase(NativeDatabase(file));
+    await DriftProfileRepository(v6).create(name: 'A', type: SourceType.xtream);
+    await DriftCatalogCache(v6).replace(1, ContentKind.movie, const [], const [
+      CatalogEntry(kind: ContentKind.movie, id: '1', name: 'Película'),
+    ]);
+    await v6.close();
+    // Como quedó la base del caso real: todo lo de la 6, pero la versión
+    // anotada sigue en 5.
+    final reopened = AppDatabase(
+      NativeDatabase(
+        file,
+        setup: (raw) => raw.execute('PRAGMA user_version = 5;'),
+      ),
+    );
+    addTearDown(reopened.close);
+    final profiles = await DriftProfileRepository(reopened).watchAll().first;
+    expect(profiles.single.name, 'A');
+    expect(
+      (await DriftCatalogCache(
+        reopened,
+      ).search(1, 'pelicula')).byKind[ContentKind.movie],
+      hasLength(1),
+    );
+    expect((await DriftParentalRepository(reopened).read(1)).pinHash, isNull);
+    final v = await reopened.customSelect('PRAGMA user_version').getSingle();
+    expect(v.data.values.single, 6);
+  });
+
+  test('una migración que falla a mitad no deja la base a medias', () async {
+    final dir = Directory.systemTemp.createTempSync('evemtv_db_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/db.sqlite');
+    final v6 = AppDatabase(NativeDatabase(file));
+    await DriftProfileRepository(v6).create(name: 'A', type: SourceType.xtream);
+    await v6.close();
+    // Base v5 en la que la migración falla después de agregar las
+    // columnas (falta la tabla catalog_sync): se tiene que deshacer entera.
+    final broken = AppDatabase(
+      NativeDatabase(
+        file,
+        setup: (raw) {
+          raw.execute('ALTER TABLE catalog_items DROP COLUMN adult;');
+          raw.execute('ALTER TABLE catalog_categories DROP COLUMN adult;');
+          raw.execute('DROP TABLE parental_settings;');
+          raw.execute('DROP TABLE catalog_sync;');
+          raw.execute('PRAGMA user_version = 5;');
+        },
+      ),
+    );
+    await expectLater(broken.customSelect('SELECT 1').get(), throwsA(anything));
+    await broken.close();
+    // Se mira la base tal como quedó (antes de otro intento de migrar).
+    int? version;
+    List<Object?>? columns;
+    final check = AppDatabase(
+      NativeDatabase(
+        file,
+        setup: (raw) {
+          version = raw.userVersion;
+          columns = [
+            for (final r in raw.select('PRAGMA table_info(catalog_items)'))
+              r['name'],
+          ];
+        },
+      ),
+    );
+    await expectLater(check.customSelect('SELECT 1').get(), throwsA(anything));
+    await check.close();
+    expect(version, 5);
+    expect(columns, isNot(contains('adult')), reason: 'se deshizo todo');
+  });
 }

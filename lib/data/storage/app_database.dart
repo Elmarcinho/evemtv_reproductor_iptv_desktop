@@ -187,44 +187,83 @@ class AppDatabase extends _$AppDatabase {
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
-    onUpgrade: (m, from, to) async {
-      if (from < 2) {
-        await m.createTable(favorites);
-      } else if (from < 3) {
-        // Recrea la tabla: se descarta la columna image_url (y sus URLs) y
-        // se agrega category_id. Los favoritos se conservan.
-        await m.alterTable(
-          TableMigration(favorites, newColumns: [favorites.categoryId]),
-        );
-      }
-      if (from < 4) {
-        await m.createTable(catalogCategories);
-        await m.createTable(catalogItems);
-        await m.createTable(catalogSync);
-        await m.createTable(watchProgressEntries);
-      } else {
-        if (from < 5) {
-          await m.addColumn(catalogItems, catalogItems.added);
-        }
-        if (from < 6) {
-          await m.addColumn(catalogItems, catalogItems.adult);
-          await m.addColumn(catalogCategories, catalogCategories.adult);
-        }
-        // El catálogo guardado no tiene los datos nuevos (fechas, marca de
-        // adultos): se borra la marca de actualización para que se vuelva a
-        // descargar al abrir la sesión.
-        await customStatement('DELETE FROM catalog_sync');
-      }
-      if (from < 6) {
-        await m.createTable(parentalSettings);
-      }
-    },
+    // Todo en una transacción: si algo falla (o se corta) a mitad, se
+    // deshace entero y la próxima apertura vuelve a intentarlo desde la
+    // versión anterior. Además cada paso comprueba si ya estaba hecho, por
+    // si una versión anterior de la app dejó una migración a medias (drift
+    // anota la versión nueva recién al final).
+    onUpgrade: (m, from, to) => transaction(() => _upgrade(m, from)),
     // Necesario para que funcione el borrado en cascada por perfil.
     beforeOpen: (details) async {
       await customStatement('PRAGMA foreign_keys = ON');
       await customStatement(createSearchIndex);
     },
   );
+
+  Future<void> _upgrade(Migrator m, int from) async {
+    if (from < 2) {
+      await _createTableIfMissing(m, favorites);
+    } else if (from < 3) {
+      // Recrea la tabla: se descarta la columna image_url (y sus URLs) y
+      // se agrega category_id. Los favoritos se conservan.
+      await m.alterTable(
+        TableMigration(favorites, newColumns: [favorites.categoryId]),
+      );
+    }
+    if (from < 4) {
+      await _createTableIfMissing(m, catalogCategories);
+      await _createTableIfMissing(m, catalogItems);
+      await _createTableIfMissing(m, catalogSync);
+      await _createTableIfMissing(m, watchProgressEntries);
+    } else {
+      if (from < 5) {
+        await _addColumnIfMissing(m, catalogItems, catalogItems.added);
+      }
+      if (from < 6) {
+        await _addColumnIfMissing(m, catalogItems, catalogItems.adult);
+        await _addColumnIfMissing(
+          m,
+          catalogCategories,
+          catalogCategories.adult,
+        );
+      }
+      // El catálogo guardado no tiene los datos nuevos (fechas, marca de
+      // adultos): se borra la marca de actualización para que se vuelva a
+      // descargar al abrir la sesión.
+      await customStatement('DELETE FROM catalog_sync');
+    }
+    if (from < 6) {
+      await _createTableIfMissing(m, parentalSettings);
+    }
+  }
+
+  Future<bool> _hasTable(String name) async {
+    final rows = await customSelect(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+      variables: [Variable.withString(name)],
+    ).get();
+    return rows.isNotEmpty;
+  }
+
+  Future<void> _createTableIfMissing(
+    Migrator m,
+    TableInfo<Table, dynamic> table,
+  ) async {
+    if (!await _hasTable(table.actualTableName)) await m.createTable(table);
+  }
+
+  Future<void> _addColumnIfMissing(
+    Migrator m,
+    TableInfo<Table, dynamic> table,
+    GeneratedColumn<Object> column,
+  ) async {
+    final rows = await customSelect(
+      'SELECT name FROM pragma_table_info(?)',
+      variables: [Variable.withString(table.actualTableName)],
+    ).get();
+    final exists = rows.any((r) => r.data['name'] == column.name);
+    if (!exists) await m.addColumn(table, column);
+  }
 
   /// En la carpeta de soporte de la app (no en Documentos, que el usuario
   /// ve y sincroniza).

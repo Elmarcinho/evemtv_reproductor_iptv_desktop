@@ -1050,6 +1050,16 @@ favoritos ni al cambiar de canal con las flechas.
   "Seguir viendo" y favoritos se filtran con `hiddenContentProvider`
   (categorías ocultas y elementos marcados, de la base local). Mientras no
   se sabe qué ocultar, "Seguir viendo" queda vacía: ante la duda, oculto.
+- **Migraciones atómicas y tolerantes** (después de la 1.0.0): drift no
+  envuelve la migración en una transacción y anota la versión nueva recién
+  al final; si la app se cierra o algo falla a mitad, la base quedaba con
+  los cambios hechos y la versión vieja, y la siguiente apertura fallaba
+  ("duplicate column name", pantalla "Ocurrió un error inesperado"). Pasó
+  en un equipo de pruebas con una base de las versiones de desarrollo.
+  Ahora la migración va en una transacción (todo o nada) y cada paso
+  comprueba si ya estaba hecho (columna o tabla existente), así una base
+  que quedó a medias se completa sola. Las instalaciones nuevas de la
+  1.0.0 no se ven afectadas (crean la base directo en la versión 6).
 - **Base local v6:** columna `adult` en `catalog_items` y
   `catalog_categories`; al migrar se fuerza a descargar de nuevo el
   catálogo (para tener la marca). Nueva tabla `parental_settings` por
