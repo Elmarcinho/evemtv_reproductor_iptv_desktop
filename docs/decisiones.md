@@ -1014,9 +1014,9 @@ comprueba que coincidan y el workflow de release rechaza un tag que no sea
   `GITHUB_TOKEN` no dispara otros workflows por sí solo).
 - **Solo se despliega un commit comprobado:** `pages.yml` se lanza cuando
   "Compilar" termina bien en `main` (evento `workflow_run`) y arma la
-  página desde ese mismo commit. Lanzada a mano (o por `release.yml`),
-  primero verifica que "Compilar" haya pasado en el commit; si no, no
-  despliega (el siguiente "Compilar" exitoso la vuelve a publicar).
+  página desde ese mismo commit. Lanzada a mano (o por `release.yml`, que
+  corre a la par de "Compilar"), espera a que "Compilar" termine en ese
+  commit (hasta 60 min) y solo despliega si pasó.
 - `evemtv.godebol.com` entra en la lista de enlaces que abre el aviso de
   actualización (ningún otro subdominio de `godebol.com`).
 

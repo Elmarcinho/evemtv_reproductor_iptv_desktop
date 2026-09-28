@@ -45,18 +45,33 @@ jobs:
         with:
           ref: ${{ env.SHA }}
 
-      # Lanzamiento manual: "Compilar" debe haber pasado en este commit.
+      # Lanzamiento manual (o desde release.yml, que corre a la par de
+      # "Compilar"): "Compilar" debe pasar en este commit. Si todavía está
+      # corriendo, se espera (hasta 60 min); si falló o no existe, no se
+      # despliega.
       - name: Comprobaciones del commit
         if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ok=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml \
-            --commit "$SHA" --event push --status success --json databaseId -q 'length')
-          if [[ "${ok:-0}" -lt 1 ]]; then
-            echo "::error title=Página de descarga::\"Compilar\" no pasó en ${SHA:0:7}: no se despliega."
-            exit 1
-          fi
+          for _ in $(seq 120); do
+            estado=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml \
+              --commit "$SHA" --event push --json status,conclusion \
+              -q 'map(select(.status == "completed") | .conclusion) as $c
+                  | if ($c | index("success")) then "ok"
+                    elif (length > ($c | length)) then "corriendo"
+                    elif length == 0 then "ninguno"
+                    else "fallo" end')
+            case "$estado" in
+              ok) exit 0 ;;
+              corriendo) sleep 30 ;;
+              *)
+                echo "::error title=Página de descarga::\"Compilar\" no pasó en ${SHA:0:7} ($estado): no se despliega."
+                exit 1 ;;
+            esac
+          done
+          echo "::error title=Página de descarga::\"Compilar\" no terminó a tiempo en ${SHA:0:7}."
+          exit 1
 
       - name: Armar
         env:
