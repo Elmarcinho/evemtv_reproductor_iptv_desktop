@@ -3,14 +3,17 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/config/app_config.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../domain/entities/catalog.dart';
 import '../../domain/entities/live.dart';
 import '../catalog/catalog_providers.dart';
+import '../home/promo_banner.dart';
 import '../live/live_providers.dart';
 import '../parental/parental.dart';
 import '../parental/parental_widgets.dart';
+import '../update/update_check.dart';
 
 /// Ajustes de la cuenta. Por ahora, el control parental; es la base para
 /// futuras opciones.
@@ -57,7 +60,14 @@ class SettingsScreen extends ConsumerWidget {
                       Center(
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 720),
-                          child: const _ParentalSection(),
+                          child: const Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _ParentalSection(),
+                              SizedBox(height: 24),
+                              _AboutSection(),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -207,6 +217,119 @@ class _BlockedTile extends ConsumerWidget {
       trailing: TextButton(
         onPressed: () => unblockCategory(context, ref, kind, categoryId, name),
         child: const Text('Volver a mostrar'),
+      ),
+    );
+  }
+}
+
+/// "Acerca de EvemTv": versión instalada, buscar actualizaciones y enlaces.
+class _AboutSection extends ConsumerStatefulWidget {
+  const _AboutSection();
+
+  @override
+  ConsumerState<_AboutSection> createState() => _AboutSectionState();
+}
+
+class _AboutSectionState extends ConsumerState<_AboutSection> {
+  bool _checking = false;
+  String? _result;
+
+  Future<void> _check() async {
+    setState(() {
+      _checking = true;
+      _result = null;
+    });
+    final outcome = await ref.read(updateProvider.notifier).check(manual: true);
+    if (!mounted) return;
+    setState(() {
+      _checking = false;
+      _result = switch (outcome) {
+        UpdateCheckOutcome.available =>
+          'Hay una versión nueva: mira el aviso abajo a la derecha.',
+        UpdateCheckOutcome.upToDate => 'Tienes la última versión.',
+        UpdateCheckOutcome.noAnswer =>
+          'No se pudo consultar ahora. Revisa tu conexión e inténtalo más '
+              'tarde.',
+        UpdateCheckOutcome.disabled =>
+          'La búsqueda de actualizaciones solo funciona en la app instalada.',
+      };
+    });
+  }
+
+  Future<void> _open(Uri url) async {
+    var opened = false;
+    try {
+      opened = await ref.read(externalLinkProvider)(url);
+    } on Object {
+      opened = false;
+    }
+    if (!opened && mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text('No se pudo abrir el navegador. Visita $url')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final secondary = text.bodyMedium?.copyWith(color: AppColors.textSecondary);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.info_outline_rounded),
+                const SizedBox(width: 12),
+                Text('Acerca de ${AppConfig.appName}', style: text.titleLarge),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Versión ${AppConfig.version}',
+              style: text.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Reproductor IPTV. Desarrollado por ${AppConfig.developer}.',
+              style: secondary,
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                FilledButton.tonalIcon(
+                  onPressed: _checking ? null : _check,
+                  icon: _checking
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.system_update_alt_rounded),
+                  label: const Text('Buscar actualizaciones'),
+                ),
+                TextButton(
+                  onPressed: () => _open(UpdateConfig.installGuide),
+                  child: const Text('Guía de instalación'),
+                ),
+                TextButton(
+                  onPressed: () => _open(UpdateConfig.downloadPage),
+                  child: const Text('Página de descarga'),
+                ),
+              ],
+            ),
+            if (_result != null) ...[
+              const SizedBox(height: 12),
+              Text(_result!, style: secondary),
+            ],
+          ],
+        ),
       ),
     );
   }

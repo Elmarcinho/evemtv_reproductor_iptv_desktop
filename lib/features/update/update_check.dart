@@ -33,6 +33,9 @@ abstract final class UpdateConfig {
     'https://github.com/${AppConfig.githubRepo}/releases/latest',
   );
 
+  /// Página de descarga (GitHub Pages).
+  static final Uri downloadPage = Uri.parse('https://evemtv.godebol.com');
+
   /// Guía de instalación para usuarios (enlace visible en el bloqueo).
   static final Uri installGuide = Uri.parse(
     'https://github.com/${AppConfig.githubRepo}/blob/main/docs/instalacion.md',
@@ -356,6 +359,21 @@ class UpdateState {
   );
 }
 
+/// Resultado de una consulta de actualización.
+enum UpdateCheckOutcome {
+  /// Hay una versión nueva: el aviso ya se muestra.
+  available,
+
+  /// La instalada es la última.
+  upToDate,
+
+  /// El servidor no respondió (o respondió algo que no sirve).
+  noAnswer,
+
+  /// Consulta desactivada (compilaciones de depuración sin URL de prueba).
+  disabled,
+}
+
 class UpdateController extends Notifier<UpdateState> {
   Timer? _timer;
   Timer? _deadlineTimer;
@@ -384,14 +402,21 @@ class UpdateController extends Notifier<UpdateState> {
   /// El plazo de la versión mínima se mide con la fecha del servidor
   /// (encabezado `Date`), nunca con el reloj del equipo; sin esa fecha, el
   /// aviso es solo informativo.
-  Future<void> check() async {
+  ///
+  /// Con [manual] (botón "Buscar actualizaciones" de Ajustes) el aviso se
+  /// vuelve a mostrar aunque se haya cerrado antes.
+  Future<UpdateCheckOutcome> check({bool manual = false}) async {
+    if (ref.read(updateEndpointProvider) == null) {
+      return UpdateCheckOutcome.disabled;
+    }
     final answer = await ref.read(updateCheckerProvider).check();
-    if (!ref.mounted || answer == null) return;
+    if (!ref.mounted) return UpdateCheckOutcome.noAnswer;
+    if (answer == null) return UpdateCheckOutcome.noAnswer;
     var info = answer.info;
     if (info == null) {
       _deadlineTimer?.cancel();
       state = const UpdateState();
-      return;
+      return UpdateCheckOutcome.upToDate;
     }
     final serverNow = answer.serverDate;
     DateTime? deadline;
@@ -401,7 +426,7 @@ class UpdateController extends Notifier<UpdateState> {
         info = info.withoutMinimum();
       } else {
         deadline = await _deadlineFor(info.minimum!, serverNow);
-        if (!ref.mounted) return;
+        if (!ref.mounted) return UpdateCheckOutcome.noAnswer;
       }
     }
     final locked = deadline != null && !serverNow!.isBefore(deadline);
@@ -411,7 +436,7 @@ class UpdateController extends Notifier<UpdateState> {
         state.info?.latest == info.latest && state.info?.forced == info.forced;
     state = UpdateState(
       info: info,
-      dismissed: same && state.dismissed,
+      dismissed: !manual && same && state.dismissed,
       deadline: deadline,
       locked: locked,
     );
@@ -430,6 +455,7 @@ class UpdateController extends Notifier<UpdateState> {
         },
       );
     }
+    return UpdateCheckOutcome.available;
   }
 
   /// Fecha límite: primera vez que se vio esta mínima (fecha del servidor)

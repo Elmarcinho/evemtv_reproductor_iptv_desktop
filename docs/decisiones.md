@@ -990,6 +990,13 @@ comprueba que coincidan y el workflow de release rechaza un tag que no sea
   salvo `--dart-define=UPDATE_CHECK_URL=http://127.0.0.1:18080/…`.
 - Versiones comparadas por número (`1.10.0 > 1.9.0`); tolera `v1.2`,
   `1.2.3+4` y campos raros sin romper nada.
+- **Versión a la vista:** al pie de las pantallas principales ("EvemTv
+  1.0.1 · Desarrollado por Godebol", también en cuentas y login) y en
+  Ajustes → **Acerca de EvemTv**, con **Buscar actualizaciones** (consulta
+  en el momento; si hay versión nueva vuelve a mostrar el aviso aunque se
+  haya cerrado, y si no dice "Tienes la última versión" o que no se pudo
+  consultar) y enlaces a la guía de instalación y a la página de descarga.
+  Sale de `AppConfig.version`, así que cambia sola con cada release.
 - Los términos (versión 3) lo mencionan. Todavía no hay pantalla de Ajustes:
   el interruptor para desactivar el aviso normal queda pendiente para
   cuando exista (el de la versión mínima no se podrá desactivar).

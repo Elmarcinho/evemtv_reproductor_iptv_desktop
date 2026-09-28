@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../config/app_config.dart';
 import '../theme/app_theme.dart';
 
-/// Firma "Desarrollado por …" al pie de las pantallas principales.
+/// Firma con la versión ("EvemTv 1.0.1 · Desarrollado por …") al pie de
+/// las pantallas principales.
 class DeveloperCredit extends StatelessWidget {
   const DeveloperCredit({super.key});
 
@@ -17,10 +18,15 @@ class DeveloperCredit extends StatelessWidget {
       top: false,
       child: Padding(
         padding: const EdgeInsets.only(bottom: 10),
-        child: Text(
-          'Desarrollado por ${AppConfig.developer}',
-          textAlign: TextAlign.center,
-          style: style,
+        // "EvemTv 1.0.1 · Desarrollado por Godebol": la versión a la vista
+        // también sin entrar a una cuenta (cuentas, login e inicio).
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('${AppConfig.appName} ${AppConfig.version} · ', style: style),
+            Text('Desarrollado por ${AppConfig.developer}', style: style),
+          ],
         ),
       ),
     );
